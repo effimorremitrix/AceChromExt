@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "ACE Helper",
+  "version": "0.1.0",
+  "description": "Fills U.S. Customs ACE/AES export filing forms from a local spreadsheet, with an F2 calculator for numeric fields. You review and submit.",
+  "minimum_chrome_version": "114",
+  "action": {
+    "default_title": "ACE Helper",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "serviceWorker.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://ace.cbp.dhs.gov/*",
+    "https://aesdirect.cbp.dhs.gov/*",
+    "https://*.cbp.dhs.gov/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://ace.cbp.dhs.gov/*",
+        "https://aesdirect.cbp.dhs.gov/*",
+        "https://*.cbp.dhs.gov/*"
+      ],
+      "js": [
+        "aceContent.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'none'"
+  }
+}

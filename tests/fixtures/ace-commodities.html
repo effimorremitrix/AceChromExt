@@ -1,0 +1,76 @@
+<!--
+  Mock ACE "Step 3: Commodities -> Line Details" screen.
+
+  This is NOT captured from the live portal: it is a stand-in that uses the
+  placeholder ids from src/ace/mappings/commodities.ts so the detector, writer,
+  and filler can be tested without ACE. Replace it with a real captured
+  snippet when the live DOM is available (see docs/ACE-MAPPING.md).
+-->
+<div id="filing">
+  <ul class="nav-tabs">
+    <li><a href="#step1">Step 1: Shipment</a></li>
+    <li><a href="#step2">Step 2: Parties</a></li>
+    <li class="active"><a href="#step3">Step 3: Commodities</a></li>
+    <li><a href="#step4">Step 4: Transportation</a></li>
+  </ul>
+
+  <h2>Commodity Line Details</h2>
+
+  <div data-section="commodityLine">
+    <label for="exportInformationCode">Export Information Code</label>
+    <select id="exportInformationCode" name="exportInformationCode">
+      <option value="">-- select --</option>
+      <option value="OS">OS - All other exports</option>
+      <option value="HH">HH - Household goods</option>
+    </select>
+
+    <label for="scheduleBNumber">Schedule B/HTS Number</label>
+    <input type="text" id="scheduleBNumber" name="scheduleBNumber" maxlength="12" />
+
+    <label for="commodityDescription">Commodity Description</label>
+    <input type="text" id="commodityDescription" name="commodityDescription" maxlength="45" />
+
+    <label for="quantity1">Quantity 1</label>
+    <input type="text" id="quantity1" name="quantity1" />
+
+    <label for="unitOfMeasure1">Unit of Measure 1</label>
+    <select id="unitOfMeasure1" name="unitOfMeasure1">
+      <option value="">-- select --</option>
+      <option value="KG">KG - Kilograms</option>
+      <option value="NO">NO - Number</option>
+    </select>
+
+    <label for="quantity2">Quantity 2</label>
+    <input type="text" id="quantity2" name="quantity2" />
+
+    <label for="unitOfMeasure2">Unit of Measure 2</label>
+    <select id="unitOfMeasure2" name="unitOfMeasure2">
+      <option value="">-- select --</option>
+      <option value="NO">NO - Number</option>
+    </select>
+
+    <label for="originOfGoods">Origin of Goods</label>
+    <select id="originOfGoods" name="originOfGoods">
+      <option value="">-- select --</option>
+      <option value="D">D - Domestic</option>
+      <option value="F">F - Foreign</option>
+    </select>
+
+    <label for="valueOfGoods">Value of Goods</label>
+    <input type="text" id="valueOfGoods" name="valueOfGoods" />
+
+    <label for="shippingWeight">Shipping Weight</label>
+    <input type="text" id="shippingWeight" name="shippingWeight" />
+
+    <label for="eccn">ECCN</label>
+    <input type="text" id="eccn" name="eccn" />
+
+    <label for="licenseCode">License Code</label>
+    <select id="licenseCode" name="licenseCode">
+      <option value="">-- select --</option>
+      <option value="C33">C33 - License Exception</option>
+    </select>
+
+    <button type="button" id="saveLine">Save Line</button>
+  </div>
+</div>

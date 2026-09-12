@@ -1,0 +1,31 @@
+<!--
+  Same screen with none of the ids/names the mappings expect: only visible
+  labels. Exercises the label-text fallback strategy.
+-->
+<div id="filing">
+  <div class="wizard-step active">Step 3: Commodities</div>
+  <h3>Line Details</h3>
+
+  <table>
+    <tr>
+      <td><label for="f-a91">Schedule B/HTS Number</label></td>
+      <td><input type="text" id="f-a91" class="ng-pristine" /></td>
+    </tr>
+    <tr>
+      <td><label for="f-b42">Commodity Description</label></td>
+      <td><input type="text" id="f-b42" /></td>
+    </tr>
+    <tr>
+      <td><label for="f-c17">Quantity 1</label></td>
+      <td><input type="text" id="f-c17" /></td>
+    </tr>
+    <tr>
+      <td><label for="f-d55">Shipping Weight</label></td>
+      <td><input type="text" id="f-d55" /></td>
+    </tr>
+    <tr>
+      <td><label for="f-e09">Value of Goods</label></td>
+      <td><input type="text" id="f-e09" disabled /></td>
+    </tr>
+  </table>
+</div>
