@@ -1,0 +1,36 @@
+<!--
+  Mock ACE "Step 1: Shipment" screen. Placeholder ids, as above.
+-->
+<div id="filing">
+  <ul class="nav-tabs">
+    <li class="active"><a href="#step1">Step 1: Shipment</a></li>
+    <li><a href="#step3">Step 3: Commodities</a></li>
+  </ul>
+
+  <h2>Shipment Information</h2>
+
+  <div data-section="shipment">
+    <label for="shipmentReferenceNumber">Shipment Reference Number</label>
+    <input type="text" id="shipmentReferenceNumber" name="shipmentReferenceNumber" maxlength="17" />
+
+    <label for="estimatedExportDate">Date of Export</label>
+    <input type="text" id="estimatedExportDate" name="estimatedExportDate" />
+
+    <label for="poNumber">PO Number</label>
+    <input type="text" id="poNumber" name="poNumber" />
+
+    <label for="countryOfUltimateDestination">Country of Ultimate Destination</label>
+    <select id="countryOfUltimateDestination" name="countryOfUltimateDestination">
+      <option value="">-- select --</option>
+      <option value="IL">Israel</option>
+      <option value="CA">Canada</option>
+    </select>
+
+    <label for="inCoTerms">INCO Terms</label>
+    <select id="inCoTerms" name="inCoTerms">
+      <option value="">-- select --</option>
+      <option value="CIF">CIF</option>
+      <option value="FOB">FOB</option>
+    </select>
+  </div>
+</div>

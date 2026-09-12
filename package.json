@@ -1,0 +1,31 @@
+{
+  "name": "ace-helper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ACE Helper - Chrome extension that reduces manual data entry when preparing U.S. Customs ACE/AES export filings.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:watch": "node scripts/build.mjs --watch",
+    "template": "node scripts/generate-template.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "npm run typecheck && npm run test && npm run template && npm run build",
+    "icons": "node scripts/generate-icons.mjs",
+    "smoke": "node tests/e2e/smoke.mjs"
+  },
+  "dependencies": {
+    "xlsx": "0.18.5"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.1.25",
+    "@types/node": "22.18.1",
+    "esbuild": "0.25.10",
+    "jsdom": "26.1.0",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4",
+    "playwright-core": "1.49.1"
+  }
+}
