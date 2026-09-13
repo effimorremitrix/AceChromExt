@@ -259,7 +259,7 @@ first if you want the trail.
 | Highlight duration | 6000 ms | how long ACE fields stay tinted |
 | Dispatch blur after writing | on | helps ACE fields that validate on blur |
 | Treat unit-less weights as kilograms | on | off makes a unit-less weight a warning |
-| Developer mode | off | adds the Diagnostics tab and console logging |
+| Developer mode | off | verbose field-detection detail and console logging. The Diagnostics tab itself is always available |
 
 ## 6. Clearing data
 
@@ -274,7 +274,7 @@ it is held in session memory and never written to disk.
 | "No ACE tab detected" | ACE is not open, or the tab was loaded before the extension. Reload the ACE tab. |
 | "The ACE page could not be identified" | You are on a page the detector does not recognise (a landing page, a modal, an iframe). Navigate to a filing step and press refresh. |
 | Both Fill buttons disabled | Same as above; the page must be identified first. |
-| Many warnings saying a field was not found | Expected until the ACE selectors are verified. Turn on Developer mode and follow `docs/ACE-MAPPING.md`. |
+| Many warnings saying a field was not found | Expected until the ACE selectors are verified. Open **Diagnostics**, capture the real selectors (`docs/ACE-MAPPING.md`), and paste them into **ACE selectors** - no rebuild needed. |
 | A field is filled with the wrong value | Check the yellow note in the preview: the value was probably transformed. Fix the spreadsheet, re-import. |
 | F2 does nothing | The focus must be in a text/number input. It is ignored on dropdowns, dates, and read-only fields. |
 | ACE clears the value straight after filling | ACE's own validation rejected it. The summary reports "ACE did not keep the value". |

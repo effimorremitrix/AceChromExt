@@ -270,8 +270,14 @@ network API appears in any shipped file.
 
 ### Import
 
-Panel -> **Import** -> choose the `.xlsx`. It is parsed in the browser. Nothing
-is uploaded.
+Panel -> **Import** -> choose the `.xlsx`, or drag it onto the panel from the
+folder the export window named. It is parsed in the browser. Nothing is
+uploaded.
+
+The extension cannot watch that folder and pick the file up on its own: doing so
+needs a native messaging host, which is a much larger thing to install and a
+much larger thing to trust than a drag. So the workflow is: export writes the
+file and tells you where, you drag it in. Two actions.
 
 ### Overview
 

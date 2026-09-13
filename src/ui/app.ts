@@ -610,6 +610,7 @@ function renderImport(): HTMLElement {
   });
 
   section.append(el('label', { className: 'field' }, [el('span', { text: 'Workbook (.xlsx)' }), fileInput]));
+  section.append(buildDropZone());
 
   const templateLink = el('a', {
     className: 'link',
@@ -658,6 +659,52 @@ function renderImport(): HTMLElement {
   }
 
   return section;
+}
+
+/**
+ * Drag the workbook onto the panel instead of walking the file picker to it.
+ *
+ * A Chrome extension cannot watch the folder the companion writes into - that
+ * would need a native messaging host, which is a much larger thing to install
+ * and a much larger thing to trust. Dropping the file is the honest way to cut
+ * the step down: the export window tells you where it wrote the file, and this
+ * is one drag from there.
+ *
+ * The file is read exactly as a picked one is: same reader, same source
+ * registry, nothing uploaded.
+ */
+function buildDropZone(): HTMLElement {
+  const zone = el('div', { className: 'dropzone', attrs: { id: 'dropzone' } }, [
+    el('span', { text: 'or drag ' }),
+    el('code', { text: 'ACE_Invoice_<number>.xlsx' }),
+    el('span', { text: ' here from the folder the export window named' }),
+  ]);
+
+  const stop = (event: DragEvent): void => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  zone.addEventListener('dragover', (event) => {
+    stop(event as DragEvent);
+    zone.classList.add('dropzone-over');
+  });
+  zone.addEventListener('dragleave', (event) => {
+    stop(event as DragEvent);
+    zone.classList.remove('dropzone-over');
+  });
+  zone.addEventListener('drop', (event) => {
+    stop(event as DragEvent);
+    zone.classList.remove('dropzone-over');
+    const file = (event as DragEvent).dataTransfer?.files?.[0];
+    if (!file) {
+      setStatus('That drop carried no file.', 'warn');
+      return;
+    }
+    void onFileChosen(file);
+  });
+
+  return zone;
 }
 
 function renderNotes(notes: MapperNote[]): HTMLElement {

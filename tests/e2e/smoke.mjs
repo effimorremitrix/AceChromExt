@@ -220,6 +220,8 @@ try {
     await panel.waitForTimeout(300);
   }
 
+  checkTrue('the panel offers a drop zone as well as the picker', (await panel.locator('#dropzone').count()) === 1);
+
   await panel.setInputFiles('#file-input', workbookPath);
   await panel.waitForTimeout(1200);
 

@@ -199,3 +199,5 @@ ul, ol { margin: 4px 0; padding-left: 18px; }
 .calc-output.ok { background: var(--green-bg); }
 .calc-output.error { background: var(--red-bg); }
 kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; background: var(--surface); }
+.dropzone { border: 1px dashed var(--line); border-radius: 6px; padding: 14px 12px; text-align: center; color: var(--ink-muted); font-size: 12px; background: var(--surface-alt); }
+.dropzone-over { border-color: var(--blue); border-style: solid; background: #eef4fb; color: var(--navy); }
