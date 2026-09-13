@@ -1,0 +1,144 @@
+# CI for ACE Helper.
+#
+# Three jobs, deliberately separate so a red run says *what* broke:
+#   verify  - typecheck, unit tests, build, generated files up to date (Node 20 and 22)
+#   bundle  - supply-chain check on what actually ships in dist/
+#   smoke   - end-to-end in real Chrome against a mocked ACE host
+#
+# The unit suite includes tests/invariants.test.ts, which asserts the safety
+# promises in docs/SECURITY.md against the source: no eval, no network calls,
+# no automatic ACE submission, no permission creep in the manifest. Those are
+# the tests that must never be allowed to go unrun on a pull request.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege: nothing here writes to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build the unpacked extension
+        run: npm run build
+
+      - name: Generated files are up to date
+        # The import template and the icons are generated, deterministic, and
+        # committed. Regenerating them must be a no-op, or the committed copy
+        # has drifted from its generator.
+        run: |
+          npm run template
+          npm run icons
+          if ! git diff --exit-code -- templates extension/icons; then
+            echo "::error::templates/ or extension/icons/ is out of date. Run 'npm run template' and 'npm run icons', then commit the result."
+            exit 1
+          fi
+
+      - name: Upload the unpacked extension
+        if: matrix.node == '22'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ace-helper-unpacked
+          path: dist/
+          retention-days: 14
+
+  bundle:
+    name: Bundle supply-chain check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: No eval, no network APIs, no unexpected hosts in dist/
+        run: npm run check:bundle
+
+  smoke:
+    name: End-to-end (real Chrome, mocked ACE host)
+    runs-on: ubuntu-latest
+    env:
+      # Pinned so CI is reproducible. Bump deliberately, and re-run the smoke
+      # test locally against the same version before doing so.
+      CHROME_VERSION: '141.0.7390.54'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Cache Chrome for Testing
+        id: cache-chrome
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/chrome-for-testing
+          key: chrome-for-testing-${{ env.CHROME_VERSION }}-linux64
+
+      - name: Install Chrome for Testing
+        # NOT the runner's branded Google Chrome. Branded Chrome 137+ disables
+        # the --load-extension switch, so the extension silently never loads
+        # and the smoke test times out waiting for its service worker. Chrome
+        # for Testing is the supported automation build, and pinning it also
+        # stops a runner image bump from changing the browser under us.
+        run: |
+          set -euo pipefail
+          dest="$HOME/.cache/chrome-for-testing/$CHROME_VERSION"
+          if [ ! -x "$dest/chrome-linux64/chrome" ]; then
+            mkdir -p "$dest"
+            url="https://storage.googleapis.com/chrome-for-testing-public/$CHROME_VERSION/linux64/chrome-linux64.zip"
+            echo "Downloading $url"
+            curl -fsSL --retry 3 --retry-delay 5 -o /tmp/chrome-for-testing.zip "$url"
+            unzip -q /tmp/chrome-for-testing.zip -d "$dest"
+          fi
+          echo "CHROME_PATH=$dest/chrome-linux64/chrome" >> "$GITHUB_ENV"
+          "$dest/chrome-linux64/chrome" --version
+
+      - name: End-to-end smoke test
+        run: npm run smoke

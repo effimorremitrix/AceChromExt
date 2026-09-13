@@ -104,11 +104,40 @@ writeMessyWorkbook(workbookPath);
 const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'ace-profile-')), {
   executablePath,
   headless: true,
-  args: [`--disable-extensions-except=${dist}`, `--load-extension=${dist}`, '--no-sandbox'],
+  args: [
+    `--disable-extensions-except=${dist}`,
+    `--load-extension=${dist}`,
+    // Branded Chrome 137+ ignores --load-extension unless this feature is
+    // switched off. Chrome for Testing does not need it, and an unknown
+    // feature name is harmless, so it is always passed.
+    '--disable-features=DisableLoadExtensionCommandLineSwitch',
+    '--no-sandbox',
+  ],
 });
 
 try {
-  const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker', { timeout: 20000 }));
+  let worker = context.serviceWorkers()[0];
+  if (!worker) {
+    try {
+      worker = await context.waitForEvent('serviceworker', { timeout: 20000 });
+    } catch {
+      console.error(
+        [
+          '',
+          'The extension never started its service worker, which means Chrome did not load it.',
+          `  Chrome:    ${executablePath}`,
+          `  Extension: ${dist}`,
+          '',
+          'Most likely causes:',
+          '  1. Branded Google Chrome 137 or newer, which disables the --load-extension',
+          '     switch. Use Chrome for Testing instead - that is what CI pins:',
+          '     https://googlechromelabs.github.io/chrome-for-testing/',
+          '  2. dist/ is not a valid unpacked extension. Re-run: npm run build',
+        ].join('\n'),
+      );
+      process.exit(1);
+    }
+  }
   const extensionId = new URL(worker.url()).host;
   console.log(`extension loaded: ${extensionId}\n`);
 

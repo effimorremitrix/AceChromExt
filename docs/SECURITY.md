@@ -97,6 +97,21 @@ future change breaks a test rather than a promise:
 
 Each of these was verified to fail when deliberately violated.
 
+`npm run check:bundle` asserts the same promises against the **built** `dist/`
+rather than the source, so a bundled dependency - SheetJS included - cannot
+introduce `eval`, `new Function`, `fetch`, `XMLHttpRequest`, `WebSocket`,
+`sendBeacon`, `EventSource`, `importScripts`, `document.cookie`, or
+`localStorage` without failing the build. Any http(s) URL string in the bundle
+must belong to an allowlisted domain; today the only matches are XML namespace
+identifiers used by SheetJS to compare spreadsheet markup (they are never
+dereferenced, which the forbidden-API list above proves) and our own
+`cbp.dhs.gov` match patterns. Both checks were verified to fail when
+deliberately violated.
+
+CI (`.github/workflows/ci.yml`) runs the unit suite, the bundle check, and the
+end-to-end smoke test on every pull request, so none of these guarantees can
+regress unnoticed.
+
 `npm run smoke` additionally confirms in a real browser that an outbound
 `fetch` and an inline `<script>` are both refused by the CSP on the extension
 pages, and that ACE's Save Line button is never clicked during a fill.
