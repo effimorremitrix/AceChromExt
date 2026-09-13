@@ -36,6 +36,7 @@ Individual steps, if you prefer:
 | `npm run typecheck` | TypeScript, no emit |
 | `npm run template` | regenerates `templates/ACE_Import_Template.xlsx` |
 | `npm run icons` | regenerates the PNG icons |
+| `npm run check:bundle` | checks the built `dist/` for eval, network APIs, and unexpected URL hosts - covers bundled dependencies, not just our own source |
 | `npm run smoke` | end-to-end test: loads `dist/` into a real Chromium, serves the mock ACE screens *from the ACE host* by request interception, and drives F2, import, and both Fill buttons. Needs `dist/` built first; set `CHROME_PATH` if Chrome is not in a standard location. It never contacts the real ACE portal. |
 
 ## 3. Load it into Chrome
@@ -90,6 +91,24 @@ and reload any open ACE tab.
 
 Remove the extension from `chrome://extensions`. Settings are removed with it.
 Imported shipment data was only ever in memory, so nothing is left on disk.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and on every push to
+`main`:
+
+| Job | What it runs |
+| --- | --- |
+| **Verify** (Node 20 and 22) | typecheck, the 210 unit tests, build, and a check that the committed template and icons still match their generators |
+| **Bundle supply-chain check** | `npm run check:bundle` against the built `dist/` |
+| **End-to-end** | `npm run smoke` in the runner's Chrome, against the mocked ACE host |
+
+The Verify job uploads the built unpacked extension as a workflow artifact
+(`ace-helper-unpacked`, kept 14 days), so a reviewer can download and load it
+without building anything.
+
+Both Node versions in the matrix are tested, and the workflow uses only
+first-party `actions/*` steps with `permissions: contents: read`.
 
 ## Build notes
 

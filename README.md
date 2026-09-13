@@ -1,5 +1,7 @@
 # ACE Helper
 
+[![CI](https://github.com/effimorremitrix/AceChromExt/actions/workflows/ci.yml/badge.svg)](https://github.com/effimorremitrix/AceChromExt/actions/workflows/ci.yml)
+
 A Chrome (Manifest V3) extension that cuts the manual typing out of preparing
 U.S. Customs **ACE / AES export filings**.
 
@@ -43,7 +45,7 @@ QuickBooks integration is **not** in this phase.
 
 ```bash
 npm install
-npm run verify        # typecheck + tests + template + build -> dist/
+npm run verify        # typecheck + tests + template + build + bundle check -> dist/
 ```
 
 Then `chrome://extensions` -> Developer mode -> **Load unpacked** -> pick
@@ -83,6 +85,7 @@ src/
 templates/        ACE_Import_Template.xlsx
 tests/            210 unit tests, security invariants, e2e smoke test, mock ACE fixtures
 docs/             INSTALLATION | USER-GUIDE | ACE-MAPPING | ARCHITECTURE | SECURITY
+.github/workflows CI: verify (Node 20 + 22), bundle check, e2e smoke
 ```
 
 Data flows one way: `Excel -> canonical model -> preview -> ACE`. Every ACE
@@ -97,10 +100,11 @@ More: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**,
 
 | Command | Does |
 | --- | --- |
-| `npm run verify` | typecheck + tests + template + build |
+| `npm run verify` | typecheck + tests + template + build + bundle check |
 | `npm run build` / `build:watch` | build `dist/` |
 | `npm test` / `test:watch` | vitest (210 tests) |
 | `npm run smoke` | end-to-end test in real Chromium against a mocked ACE host |
+| `npm run check:bundle` | supply-chain check on `dist/`: no eval, no network APIs, no unexpected URL hosts |
 | `npm run typecheck` | tsc, no emit |
 | `npm run template` | regenerate the import template |
 | `npm run icons` | regenerate the PNG icons |

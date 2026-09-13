@@ -12,9 +12,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run typecheck && npm run test && npm run template && npm run build",
+    "verify": "npm run typecheck && npm run test && npm run template && npm run build && npm run check:bundle",
     "icons": "node scripts/generate-icons.mjs",
-    "smoke": "node tests/e2e/smoke.mjs"
+    "smoke": "node tests/e2e/smoke.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs"
   },
   "dependencies": {
     "xlsx": "0.18.5"
