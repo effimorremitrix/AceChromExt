@@ -6,10 +6,29 @@
 > must be verified against the real DOM before ACE Helper fills reliably.
 > Until then, expect "no field on this page matched the mapping" warnings, and
 > note that nothing is ever written to a field that was not confidently found.
+>
+> **You do not need this document to fix a selector.** Since Phase 3 a captured
+> selector can be pasted into the panel as JSON and is in force on the next
+> fill, with no rebuild and no developer - see
+> [Installing a captured selector without a rebuild](#installing-a-captured-selector-without-a-rebuild).
+> This document is how you capture it, and how you make it permanent.
 
 ## How the mapping layer works
 
-A field is data, not code. `src/ace/mappings/commodities.ts`:
+A field mapping is split across four files, because the four things change at
+four different rates:
+
+| What | Where | Changes |
+| --- | --- | --- |
+| canonical field | `src/models/CanonicalInvoice.ts` | ~never |
+| transformation | `src/ace/transformers/` | with ACE's rules |
+| validation rule | `src/excel/validator.ts` (shared with the companion) | with ACE's rules |
+| **ACE selector** | **`src/ace/selectors/`** | **whenever CBP redeploys the portal** |
+
+The volatile one lives on its own, so fixing a broken field means editing a
+table of strings.
+
+`src/ace/mappings/commodities.ts` - what to fill:
 
 ```ts
 defineField({
@@ -21,15 +40,28 @@ defineField({
   type: 'number',
   transforms: ['money'],            // named transformers, applied in order
   expected: true,                   // empty -> a warning, not a silent skip
+  selectors: COMMODITY_SELECTORS,   // candidates looked up by `key`
+});
+```
+
+`src/ace/selectors/commodities.ts` - where to find it:
+
+```ts
+ValueOfGoods: {
   candidates: [                     // tried in this order
     placeholder('id', '#valueOfGoods'),
     placeholder('name', "input[name='valueOfGoods']"),
+    byFrameworkName('valueOfGoods'),   // formcontrolname / ng-reflect-name / data-*
+    byIdSuffix('valueOfGoods'),        // for portals that namespace control ids
     byLabel(['Value of Goods', 'Value', 'Commodity Value']),
     byNearby("[data-section='commodityLine']", "input[name*='value' i]"),
   ],
   devtoolsHint: 'Line Details -> inspect the Value of Goods box...',
-});
+},
 ```
+
+A mapping with no selector entry is a build error, not a field that silently
+never fills.
 
 ### Selector strategy, in priority order
 
@@ -57,10 +89,11 @@ Rules the detector enforces (`src/content/fieldDetector.ts`):
 You need an ACE account and a filing open in the portal. Nothing below changes
 a filing; you are only reading the DOM.
 
-### 1. Turn on Developer mode
+### 1. Open Diagnostics
 
-Extension panel -> **Settings** -> **Developer mode**. A **Diagnostics** tab
-appears.
+Extension panel -> **Diagnostics** -> **Run field detection on the ACE tab**.
+Every field that did not resolve is listed with each candidate that was tried.
+(**Settings -> Developer mode** additionally turns on console logging.)
 
 ### 2. Capture the real element
 
@@ -92,21 +125,64 @@ For a **commodity-line** field, also capture the container that wraps one open
 Line Details form, and add it to `lineContainerSelectors` in
 `src/ace/pages.ts`. This is what stops a write landing on another line.
 
-### 3. Put it in the mapping
+### 3. Put it in the selector table
 
-Replace the placeholder with a verified candidate, keeping the placeholders
-below it as fallbacks:
+Replace the placeholder with a verified candidate in
+`src/ace/selectors/<page>.ts`, keeping the placeholders below it as fallbacks:
 
 ```ts
-candidates: [
-  verified('id', '#realIdFromAce', 'captured 2026-03-12 from the Commodities step'),
-  placeholder('name', "input[name='valueOfGoods']"),
-  byLabel(['Value of Goods']),
-],
+ValueOfGoods: {
+  candidates: [
+    verified('id', '#realIdFromAce', 'captured 2026-03-12 from the Commodities step'),
+    placeholder('name', "input[name='valueOfGoods']"),
+    byLabel(['Value of Goods']),
+  ],
+  devtoolsHint: '...',
+},
 ```
 
 `verificationStatus` is derived automatically: one verified candidate flips the
 field from `placeholder` to `verified`.
+
+**Or skip this step entirely** and paste the selector into the panel instead -
+next section. Editing the file is how a selector becomes permanent for everyone
+who installs the build; pasting is how it works on this machine in a minute.
+
+## Installing a captured selector without a rebuild
+
+Panel -> **Diagnostics** -> **ACE selectors** -> **Starter for unresolved
+fields** gives a JSON skeleton containing only the fields that failed:
+
+```json
+{
+  "version": 1,
+  "capturedAt": "2026-09-24",
+  "fields": {
+    "ScheduleB": [
+      { "strategy": "id", "selector": "#filingForm\\:lineDetails\\:scheduleB" }
+    ],
+    "LicenseCode": [
+      { "strategy": "label", "labelText": ["License Code/License Exemption"] }
+    ]
+  }
+}
+```
+
+Press **Save selectors**. They take effect on the next fill; reload the ACE tab
+if it was already open.
+
+| | |
+| --- | --- |
+| Where they are stored | `chrome.storage.local` in this browser profile. They contain CSS selectors and label text read off a public form - no shipment, customer or credential data |
+| Precedence | tried **first**, and counted as verified, because a human read them off the live DOM |
+| Failure mode | the built-in candidates stay behind them, so a wrong paste degrades to today's behaviour rather than breaking the field |
+| Validation | strategy, selector syntax, field key, sizes and `__proto__` are all checked on save. Anything unusable is refused with a message and nothing is stored |
+| Sharing | **Export** writes the JSON file; paste it into another machine's panel |
+| Undo | **Remove all** goes back to the built-ins |
+
+`strategy` is one of `id`, `name`, `attribute`, `label`, `nearby`,
+`placeholder`. `label` takes `labelText` (an array); `placeholder` takes
+`placeholder`; the rest take `selector`. `nearby` may also take `within`.
 
 ### 4. Check it
 
@@ -136,7 +212,7 @@ real shape of ACE.
 Each field below needs one DOM capture. `devtoolsHint` in the mapping file
 repeats this inside the Diagnostics panel, next to the field.
 
-### Step 1: Shipment (`src/ace/mappings/shipment.ts`)
+### Step 1: Shipment (`src/ace/selectors/shipment.ts`)
 
 | Field | Capture |
 | --- | --- |
@@ -146,7 +222,7 @@ repeats this inside the Diagnostics panel, next to the field.
 | `Destination` | the destination `<select>` **plus two `<option>` tags** |
 | `FreightTerms` | the Terms of Sale / INCO Terms control |
 
-### Step 2: Parties (`src/ace/mappings/parties.ts`)
+### Step 2: Parties (`src/ace/selectors/parties.ts`)
 
 | Field | Capture |
 | --- | --- |
@@ -155,7 +231,7 @@ repeats this inside the Diagnostics panel, next to the field.
 
 Party EIN/ID numbers are intentionally not mapped: identity data stays manual.
 
-### Step 3: Commodities (`src/ace/mappings/commodities.ts`)
+### Step 3: Commodities (`src/ace/selectors/commodities.ts`)
 
 | Field | Capture |
 | --- | --- |
@@ -171,7 +247,7 @@ Party EIN/ID numbers are intentionally not mapped: identity data stays manual.
 | `LicenseCode` | `<select>` + sample `<option>` |
 | *line container* | the element that wraps one open Line Details form -> `src/ace/pages.ts` |
 
-### Step 4: Transportation (`src/ace/mappings/transportation.ts`)
+### Step 4: Transportation (`src/ace/selectors/transportation.ts`)
 
 | Field | Capture |
 | --- | --- |
@@ -193,12 +269,16 @@ For each step, capture:
 ## If ACE changes its DOM
 
 1. Open **Diagnostics** on the affected step. Any field that stopped resolving
-   shows `NOT_FOUND` (or `AMBIGUOUS`) with every candidate that was tried.
+   shows `NOT_FOUND` (or `AMBIGUOUS`) with every candidate that was tried. The
+   **Mapping** tab says the same thing per field, with the selector in force.
 2. Re-capture that element.
-3. Add the new selector as the first candidate. Keep the old one below it: a
-   stale candidate that matches nothing costs nothing and covers the case where
-   ACE reverts.
-4. **Copy diagnostics JSON** attaches the whole snapshot to a bug report.
+3. Paste it into **ACE selectors** and save. Filing can continue immediately.
+4. When it has proven itself, move it into `src/ace/selectors/<page>.ts` as a
+   `verified(...)` candidate so the next build carries it. Keep the old one
+   below it: a stale candidate that matches nothing costs nothing and covers
+   the case where ACE reverts.
+5. **Export diagnostics** attaches the whole picture - mapping status, session
+   log and detection snapshot - to a bug report.
 
 ## Autocompletes, date pickers, and custom widgets
 

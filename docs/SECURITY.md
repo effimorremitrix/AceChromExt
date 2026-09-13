@@ -211,3 +211,57 @@ committed by accident.
 
 Security issues in this extension should go to the repository owner privately,
 not into a public issue.
+
+
+---
+
+## Phase 3 additions
+
+### The session log
+
+Import, every transformation and every fill are recorded so that "ACE has the
+wrong weight on line 2 - where did that come from?" has an answer after the
+fact as well as before it.
+
+| | |
+| --- | --- |
+| Where | `chrome.storage.session` - memory-backed, not written to disk by the extension, gone when the browser closes |
+| Contains | invoice numbers, weights, values and transformations derived from the shipment |
+| Credentials | none. ACE Helper never sees an ACE, Login.gov or QuickBooks credential, and `makeEntry` refuses any entry matching a credential pattern rather than relying on that |
+| Leaves the machine | never. **Copy diagnostics** writes to the clipboard; **Export diagnostics** writes a file via a Blob URL. There is no third path - the extension has no network permission and `npm run check:bundle` fails the build if a network API appears |
+| Cleared by | **Clear Imported Data**, which clears the log with the shipment because the log holds values derived from it; **Clear log** in Diagnostics; closing the browser |
+
+Asserted in `tests/invariants.test.ts` ("the session log").
+
+### Selector overrides
+
+Selectors captured from the live ACE portal can be pasted into the panel rather
+than compiled in.
+
+| | |
+| --- | --- |
+| Where | `chrome.storage.local` - a configuration fact about the portal, so it survives a restart |
+| Contains | CSS selectors and label text read off a public form. No shipment, customer or credential data |
+| Trust | the JSON is untrusted input. `parseOverrides` checks the strategy, the field key, the CSS selector's syntax, sizes and counts, and refuses `__proto__`. A refusal stores nothing |
+| Blast radius | overrides are tried *first*; the built-in candidates stay behind them, so a wrong paste degrades to the previous behaviour rather than breaking the field |
+| Read by | the content script, from storage - never accepted from the panel over a message. The side that touches the ACE DOM does not take a selector on trust from another context |
+
+### Auto-fill safety, written down
+
+`src/content/automationPolicy.ts` states that **Save Line**, **Add New Line**,
+**Submit** and **Certify** are disabled. They are named and frozen rather than
+merely absent, so enabling one is a deliberate edit to a file whose entire
+content is the reason not to, and no *setting* can reach them.
+
+`tests/invariants.test.ts` asserts the constants are false and frozen, that no
+settings key resembles one, and that no file under `src/content/` or
+`src/calculator/` calls `.click()`, `.submit()`, `requestSubmit()`,
+`window.open`, or assigns `location`.
+
+### The source seam
+
+`src/sources/` may not import from `companion/`, may not call `fetch`, and may
+not open a socket - asserted in `tests/invariants.test.ts`. `WebSource` is
+declared and **unavailable**: building it would mean giving the extension a
+network permission, which is a decision about the security posture of the whole
+tool rather than a code change.

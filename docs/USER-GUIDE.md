@@ -182,6 +182,73 @@ the ACE tab.
   warning - never guessed at.
 - If the ACE step cannot be identified, both Fill buttons are disabled.
 
+## 4b. The mapping status screen
+
+Panel -> **Mapping**. The preview asks "is this value right?"; this screen asks
+"where did it come from, and which ACE box is it going into?" - one row per ACE
+field:
+
+```
+Shipping Weight (kg)                                              READY
+  Source          QuickBooks export - InvoiceLineRet/Quantity
+  Original        176000 lb
+  Transformation  lb x 0.45359237
+  ACE value       79832
+  ACE selector    #shippingWeight
+```
+
+It works with no ACE tab open. **Check against the open ACE page** resolves
+every selector against the page you have open and **writes nothing** - which is
+how you find out that a field says `NOT FOUND` before you rely on it.
+
+| Status | Means |
+| --- | --- |
+| `READY` | value is good and the ACE field was found |
+| `NOT CHECKED` | value is good; nobody has looked at an ACE page yet |
+| `REVIEW` | written, but something wants an eye |
+| `MISSING` | ACE expects it and the data has no value for it |
+| `EMPTY` | optional, not supplied |
+| `ERROR` | the value cannot be turned into something ACE accepts |
+| `NOT FOUND` | not on this page, or the selector is stale |
+| `AMBIGUOUS` | several ACE fields matched. Deliberately not written |
+
+## 4c. Data quality checks
+
+Ten named checks sit directly above the Fill buttons, because that is the last
+thing read before the first thing clicked:
+
+```
+Data quality checks                                       2 to review
+  ✓ Required values present     ✓ Schedule B on every line
+  ✓ Numbers are valid           ⚠ Origin on every line
+  ✓ Amounts are positive        ⚠ License code on every line
+  ✓ Weights are present         ✓ Dates are valid
+  ✓ Units of measure recognised ✓ All columns mapped
+```
+
+They report; they do not block. A field with a blocking issue is skipped by the
+filler anyway - never guessed, never half-written - so the good fields can be
+typed while you go and find the missing one.
+
+## 4d. The session log
+
+Panel -> **Diagnostics**. Everything that happened, in order:
+
+```
+20:01:12  import      Loaded ACE_Invoice_CN-1042.xlsx - 1 line(s) via QuickBooks export
+20:01:12  transform   Line 1 shippingWeight: 176000 lb -> 79,832 kg   (lb x 0.45359237)
+20:03:44  fill        Filled Shipment page: filled 4, skipped 1, warnings 0, errors 0
+20:05:09  fill        Filled Commodity line 1: filled 10, warnings 1, errors 0
+```
+
+**Copy diagnostics** puts the whole picture on the clipboard; **Export
+diagnostics** writes it to a file. Those two are the complete list of places it
+can go - the extension has no network permission and nothing is uploaded.
+
+It lives in memory for the browsing session only, contains no credential, and is
+cleared along with the imported data when you press **Clear Data**. Export it
+first if you want the trail.
+
 ## 5. Settings
 
 | Setting | Default | Effect |
