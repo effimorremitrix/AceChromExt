@@ -1,0 +1,21 @@
+<?xml version="1.0" ?>
+<QBXML>
+  <QBXMLMsgsRs>
+    <InvoiceQueryRs requestID="1" statusCode="0" statusSeverity="Info" statusMessage="Status OK">
+      <InvoiceRet>
+        <TxnID>5AA1-1758672000</TxnID>
+        <CustomerRef><FullName>Aydin Kuruyemis San Ve Tic A.S</FullName></CustomerRef>
+        <TxnDate>2026-09-24</TxnDate>
+        <RefNumber>CN-1042</RefNumber>
+        <TotalAmount>100.00</TotalAmount>
+      </InvoiceRet>
+      <InvoiceRet>
+        <TxnID>5AA2-1758672100</TxnID>
+        <CustomerRef><FullName>Another Buyer Ltd</FullName></CustomerRef>
+        <TxnDate>2026-09-25</TxnDate>
+        <RefNumber>CN-1042</RefNumber>
+        <TotalAmount>200.00</TotalAmount>
+      </InvoiceRet>
+    </InvoiceQueryRs>
+  </QBXMLMsgsRs>
+</QBXML>

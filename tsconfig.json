@@ -19,5 +19,5 @@
     "noEmit": true,
     "types": ["chrome", "node"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.mjs"]
+  "include": ["src/**/*.ts", "companion/**/*.ts", "tests/**/*.ts", "scripts/**/*.mjs"]
 }
