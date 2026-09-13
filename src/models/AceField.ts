@@ -98,6 +98,18 @@ export interface FillOutcome {
   key: string;
   label: string;
   status: FillStatus;
+  /**
+   * Dotted canonical path the value came from, e.g. 'commodity.shippingWeight'.
+   * Carried so the mapping status screen can show Source -> ACE Field without
+   * re-deriving it from the mapping registry.
+   */
+  source?: string;
+  /**
+   * The selector that was used, or - when nothing matched - the first
+   * candidate that was tried, so the screen always has something to show in
+   * the "ACE Selector" column.
+   */
+  selector?: string;
   /** Value written into ACE (already transformed). */
   written?: string;
   /** Value as it appeared in the spreadsheet. */

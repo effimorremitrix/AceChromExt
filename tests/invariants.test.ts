@@ -76,6 +76,19 @@ describe('no network access', () => {
 });
 
 describe('no ACE automation beyond typing', () => {
+  it('keeps Save Line and Add New Line disabled, with no setting that enables them', async () => {
+    const { AUTOMATION_POLICY } = await import('../src/content/automationPolicy.js');
+    expect(AUTOMATION_POLICY.clickSaveLine).toBe(false);
+    expect(AUTOMATION_POLICY.clickAddLine).toBe(false);
+    expect(AUTOMATION_POLICY.submitFiling).toBe(false);
+    expect(Object.isFrozen(AUTOMATION_POLICY)).toBe(true);
+
+    // No settings key may turn any of them on: the switch lives in one file,
+    // and it is a source edit, not a preference.
+    const settings = readFileSync(join(SRC, 'core', 'settings.ts'), 'utf8');
+    expect(settings).not.toMatch(/saveLine|addLine|autoSubmit|certif/i);
+  });
+
   it('never clicks, submits, or navigates an ACE page', () => {
     const content = stripped.filter(({ path }) => path.includes('/content/') || path.includes('/calculator/'));
     for (const { path, code } of content) {
@@ -96,6 +109,46 @@ describe('no ACE automation beyond typing', () => {
     for (const { path, code } of writers) {
       expect(code, path).not.toMatch(/\.value\s*=\s*[^=]/);
     }
+  });
+});
+
+describe('the session log', () => {
+  it('lives in session storage, never storage.local or a file', () => {
+    const log = readFileSync(join(SRC, 'core', 'sessionLog.ts'), 'utf8');
+    expect(log).toMatch(/chrome\.storage\.session/);
+    expect(log).not.toMatch(/storage\.local/);
+    expect(log).not.toMatch(/storage\.sync/);
+  });
+
+  it('screens entries for credential-shaped text before storing them', async () => {
+    const { looksLikeSecret, makeEntry } = await import('../src/core/sessionLog.js');
+    expect(looksLikeSecret('my password is hunter2')).toBe(true);
+    expect(makeEntry('note', 'ACE password hunter2')?.message).not.toContain('hunter2');
+  });
+
+  it('is never sent anywhere: export writes a Blob, copy writes the clipboard', () => {
+    const app = readFileSync(join(SRC, 'ui', 'app.ts'), 'utf8');
+    expect(app).toMatch(/URL\.createObjectURL/);
+    expect(app).toMatch(/navigator\.clipboard/);
+    expect(app).not.toMatch(/\bfetch\s*\(/);
+  });
+});
+
+describe('the invoice data source seam', () => {
+  it('keeps every source inside the extension, with no server of any kind', () => {
+    const sourceFiles = stripped.filter(({ path }) => path.includes('/sources/'));
+    expect(sourceFiles.length).toBeGreaterThan(0);
+    for (const { path, code } of sourceFiles) {
+      expect(code, path).not.toMatch(/\bfetch\s*\(/);
+      expect(code, path).not.toMatch(/companion/);
+      expect(code, path).not.toMatch(/XMLHttpRequest|WebSocket/);
+    }
+  });
+
+  it('declares the web source unavailable rather than shipping a stub that pretends', () => {
+    const web = readFileSync(join(SRC, 'sources', 'WebSource.ts'), 'utf8');
+    expect(web).toMatch(/available = false/);
+    expect(web).toMatch(/throw new SourceError/);
   });
 });
 

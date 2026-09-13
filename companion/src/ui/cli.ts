@@ -48,6 +48,8 @@ export interface ResolvedOptions {
   outputDirectory: string | null;
   fileName: string | null;
   overrides: Record<string, string>;
+  /** Per-commodity-line overrides, keyed by 1-based line number. */
+  lineOverrides: Record<number, Record<string, string>>;
   limit: number | null;
   contains: string | null;
   customer: string | null;
@@ -71,6 +73,7 @@ const VALUE_FLAGS = new Set([
   'out',
   'file-name',
   'set',
+  'set-line',
   'limit',
   'contains',
   'customer',
@@ -173,6 +176,24 @@ export function resolveOptions(args: ParsedArgs): ResolvedOptions {
     overrides[entry.slice(0, split).trim()] = entry.slice(split + 1);
   }
 
+  // --set-line 1.scheduleB=0802.12.0000
+  const lineOverrides: Record<number, Record<string, string>> = {};
+  for (const entry of args.flags.get('set-line') ?? []) {
+    const split = entry.indexOf('=');
+    if (split < 1) throw new CliError(`--set-line expects line.field=value; got "${entry}".`);
+    const target = entry.slice(0, split).trim();
+    const dot = target.indexOf('.');
+    if (dot < 1) throw new CliError(`--set-line expects line.field=value; got "${entry}".`);
+    const line = Number(target.slice(0, dot));
+    if (!Number.isInteger(line) || line < 1) {
+      throw new CliError(`--set-line needs a commodity line number; got "${target.slice(0, dot)}".`);
+    }
+    const field = target.slice(dot + 1).trim();
+    const existing = lineOverrides[line] ?? {};
+    existing[field] = entry.slice(split + 1);
+    lineOverrides[line] = existing;
+  }
+
   return {
     config,
     configPath,
@@ -184,6 +205,7 @@ export function resolveOptions(args: ParsedArgs): ResolvedOptions {
     outputDirectory: single(args, 'out'),
     fileName: single(args, 'file-name'),
     overrides,
+    lineOverrides,
     limit: integer(args, 'limit'),
     contains: single(args, 'contains'),
     customer: single(args, 'customer'),
@@ -232,8 +254,14 @@ List filters
 Export options
   --out DIR             directory to write into (default: config output.directory)
   --file-name NAME      file name, overriding the configured pattern
-  --set field=value     supply a field QuickBooks does not hold, e.g.
+  --set field=value     supply a header field QuickBooks does not hold, e.g.
                         --set vessel="MSC FIRENZE" --set containerNumber=MSCU1234567
+  --set-line N.field=V  supply an ACE-only field on one commodity line, e.g.
+                        --set-line 1.scheduleB=0802.12.0000 --set-line 1.licenseCode=C33
+                        (Schedule B, origin, licence code, ECCN, export info
+                        code, description and the second quantity/unit. Quantity
+                        1, the value and the weight come from the invoice and
+                        cannot be overridden here.)
   --force               replace an existing file
   --dry-run             preview and validate, write nothing
 
@@ -288,7 +316,10 @@ async function commandShow(invoiceId: string, options: ResolvedOptions, io: CliI
   const adapter = buildAdapter(options, io);
   try {
     const invoice = await adapter.getInvoice(invoiceId);
-    const mapping = adapter.toCanonicalInvoice(invoice, { overrides: options.overrides });
+    const mapping = adapter.toCanonicalInvoice(invoice, {
+      overrides: options.overrides,
+      lineOverrides: options.lineOverrides,
+    });
     const validation = validateShipment(mapping.shipment);
     io.out(renderPreview(mapping, validation, { ascii: options.ascii }));
     return validation.errors > 0 ? 1 : 0;
@@ -329,7 +360,10 @@ async function commandExport(invoiceId: string, options: ResolvedOptions, io: Cl
   const adapter = buildAdapter(options, io);
   try {
     const invoice = await adapter.getInvoice(invoiceId);
-    const mapping = adapter.toCanonicalInvoice(invoice, { overrides: options.overrides });
+    const mapping = adapter.toCanonicalInvoice(invoice, {
+      overrides: options.overrides,
+      lineOverrides: options.lineOverrides,
+    });
     const validation = validateShipment(mapping.shipment);
     io.out(renderPreview(mapping, validation, { ascii: options.ascii }));
     io.out('');

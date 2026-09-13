@@ -197,6 +197,8 @@ export function renderPreview(mapping: CanonicalMapping, validation: ValidationR
   }
 
   lines.push('');
+  lines.push(...renderReadiness(mapping, style));
+  lines.push('');
   lines.push(...renderChecklist(mapping, validation, style));
 
   const problems = validation.issues.filter((issue) => issue.severity === 'error');
@@ -291,6 +293,85 @@ export function renderChecklist(
       : `  0 errors, ${validation.warnings} warning(s).`,
   );
 
+  return lines;
+}
+
+/**
+ * ACE readiness, per commodity line.
+ *
+ * "The invoice is fine" and "the filing is complete" are different statements.
+ * QuickBooks answers the first. These six facts answer the second, and three
+ * of them - Schedule B, origin, licence code - are not in any accounting
+ * system, so they are the ones an operator has to be shown *before* the
+ * workbook is written rather than after ACE rejects the line.
+ */
+export interface ReadinessItem {
+  field: string;
+  label: string;
+  value: string;
+  ok: boolean;
+  /** True when the export screen may let the operator type a value in. */
+  editable: boolean;
+}
+
+export interface LineReadiness {
+  line: number;
+  description: string;
+  items: ReadinessItem[];
+  ready: boolean;
+}
+
+const READINESS_FIELDS: Array<{ field: string; label: string; editable: boolean }> = [
+  { field: 'scheduleB', label: 'Schedule B', editable: true },
+  { field: 'origin', label: 'Origin', editable: true },
+  { field: 'licenseCode', label: 'License Code', editable: true },
+  { field: 'exportInformationCode', label: 'Export Info Code', editable: true },
+  { field: 'eccn', label: 'ECCN', editable: true },
+  { field: 'description', label: 'Description', editable: true },
+  { field: 'quantity1', label: 'Quantity 1', editable: false },
+  { field: 'uom1', label: 'UOM 1', editable: false },
+  { field: 'valueOfGoods', label: 'Value of Goods', editable: false },
+  { field: 'shippingWeight', label: 'Shipping Weight', editable: false },
+];
+
+/** ECCN is genuinely optional for most lines, so a blank one is not a warning. */
+const OPTIONAL_READINESS_FIELDS = new Set(['eccn', 'exportInformationCode']);
+
+export function aceReadiness(mapping: CanonicalMapping): LineReadiness[] {
+  return mapping.shipment.commodities.map((commodity) => {
+    const record = commodity as unknown as Record<string, string | number | null>;
+    const items = READINESS_FIELDS.map(({ field, label, editable }) => {
+      const raw = record[field] ?? null;
+      const present = raw !== null && String(raw).trim() !== '' && !(typeof raw === 'number' && raw === 0);
+      return {
+        field,
+        label,
+        value: displayValue(raw, field),
+        ok: present || OPTIONAL_READINESS_FIELDS.has(field),
+        editable,
+      };
+    });
+    return {
+      line: commodity.line,
+      description: commodity.description || `(line ${commodity.line})`,
+      items,
+      ready: items.every((item) => item.ok),
+    };
+  });
+}
+
+/** The readiness table as text, for the command line. */
+export function renderReadiness(mapping: CanonicalMapping, style: PreviewStyle = {}): string[] {
+  const mark = markers(style);
+  const lines: string[] = [];
+  for (const line of aceReadiness(mapping)) {
+    lines.push(`ACE readiness - line ${line.line}: ${line.description}`);
+    for (const item of line.items) {
+      lines.push(
+        `  ${item.ok ? mark.ok : mark.warn} ${pad(item.label, 18)} ${item.value === '(blank)' && !item.ok ? 'missing' : item.value}`,
+      );
+    }
+  }
   return lines;
 }
 

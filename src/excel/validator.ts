@@ -12,7 +12,7 @@
  */
 
 import type { CanonicalShipment } from '../models/CanonicalInvoice.js';
-import { scheduleBDigits } from '../ace/transformers/codes.js';
+import { isKnownUom, scheduleBDigits } from '../ace/transformers/codes.js';
 
 export type IssueSeverity = 'error' | 'warning';
 
@@ -82,6 +82,22 @@ export function validateShipment(shipment: CanonicalShipment): ValidationResult 
     issues.push(issue('warning', 'shipment', 'containerNumber', 'Container Number', `Container "${invoice.containerNumber}" does not match the ISO 6346 pattern (4 letters + 7 digits).`));
   }
 
+  // Columns the sheet carried that the dictionary did not recognise. Not an
+  // error - people add their own columns - but it is the usual explanation for
+  // "why is that field blank?", so it is said out loud rather than buried in
+  // the import notes.
+  for (const header of shipment.source.unknownHeaders) {
+    issues.push(
+      issue(
+        'warning',
+        'shipment',
+        'unmappedColumns',
+        'Unmapped Column',
+        `Column "${header}" is not a recognised ACE field and was ignored. Rename it to a template column if it should be filed.`,
+      ),
+    );
+  }
+
   // ---- commodity lines ---------------------------------------------------
   if (!commodities.length) {
     issues.push(issue('error', 'shipment', 'commodities', 'Commodity Lines', 'The import produced no commodity lines.'));
@@ -118,6 +134,30 @@ export function validateShipment(shipment: CanonicalShipment): ValidationResult 
 
     if (commodity.uom1.trim() === '') {
       issues.push(issue('error', 'commodity', 'uom1', 'UOM 1', 'Unit of measure 1 is required.', line));
+    } else if (!isKnownUom(commodity.uom1)) {
+      issues.push(
+        issue(
+          'warning',
+          'commodity',
+          'uom1',
+          'UOM 1',
+          `Unit of measure "${commodity.uom1}" is not one ACE normally accepts. Confirm it matches the Schedule B unit.`,
+          line,
+        ),
+      );
+    }
+
+    if (commodity.uom2.trim() !== '' && !isKnownUom(commodity.uom2)) {
+      issues.push(
+        issue(
+          'warning',
+          'commodity',
+          'uom2',
+          'UOM 2',
+          `Unit of measure "${commodity.uom2}" is not one ACE normally accepts. Confirm it matches the Schedule B second unit.`,
+          line,
+        ),
+      );
     }
 
     if (commodity.quantity2 !== null && commodity.uom2.trim() === '') {
@@ -135,14 +175,20 @@ export function validateShipment(shipment: CanonicalShipment): ValidationResult 
 
     if (commodity.valueOfGoods === null) {
       issues.push(issue('error', 'commodity', 'valueOfGoods', 'Value of Goods', 'Value of goods is required.', line));
-    } else if (commodity.valueOfGoods <= 0) {
-      issues.push(issue('warning', 'commodity', 'valueOfGoods', 'Value of Goods', `Value is ${commodity.valueOfGoods}. AES expects a positive value.`, line));
+    } else if (commodity.valueOfGoods < 0) {
+      // A credit memo or a returns line reaching an export filing is a data
+      // problem, not something to round up: AES has no negative value.
+      issues.push(issue('error', 'commodity', 'valueOfGoods', 'Value of Goods', `Value is ${commodity.valueOfGoods}. AES has no negative value; check whether this line is a credit.`, line));
+    } else if (commodity.valueOfGoods === 0) {
+      issues.push(issue('warning', 'commodity', 'valueOfGoods', 'Value of Goods', 'Value is zero. AES expects a positive value.', line));
     }
 
     if (commodity.shippingWeight === null) {
       issues.push(issue('error', 'commodity', 'shippingWeight', 'Shipping Weight', 'Shipping weight is required.', line));
-    } else if (commodity.shippingWeight <= 0) {
-      issues.push(issue('warning', 'commodity', 'shippingWeight', 'Shipping Weight', `Shipping weight is ${commodity.shippingWeight} kg.`, line));
+    } else if (commodity.shippingWeight < 0) {
+      issues.push(issue('error', 'commodity', 'shippingWeight', 'Shipping Weight', `Shipping weight is ${commodity.shippingWeight} kg. A weight cannot be negative.`, line));
+    } else if (commodity.shippingWeight === 0) {
+      issues.push(issue('warning', 'commodity', 'shippingWeight', 'Shipping Weight', 'Shipping weight is zero. ACE will reject a zero shipping weight.', line));
     }
 
     if (commodity.licenseCode.trim() === '') {

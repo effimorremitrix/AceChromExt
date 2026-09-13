@@ -35,7 +35,8 @@ import {
   type SourceInvoice,
   type ToCanonicalOptions,
 } from './InvoiceSourceAdapter.js';
-import { INVOICE_FIELDS, type InvoiceField } from '../../../src/models/CanonicalInvoice.js';
+import { INVOICE_FIELDS, type CommodityField, type InvoiceField } from '../../../src/models/CanonicalInvoice.js';
+import { OVERRIDABLE_COMMODITY_FIELDS } from '../mapping/qbToCanonical.js';
 
 /**
  * QuickBooks TxnIDs look like `1A2B-1234567890`: hex, a hyphen, a timestamp.
@@ -68,6 +69,37 @@ function asInvoiceOverrides(overrides: Record<string, string> | undefined): Part
       throw new AdapterError(`"${key}" is not an invoice field. Valid fields: ${INVOICE_FIELDS.join(', ')}.`);
     }
     out[key as InvoiceField] = value;
+  }
+  return out;
+}
+
+/**
+ * Validate per-line overrides.
+ *
+ * A field that is not overridable is rejected rather than ignored: silently
+ * dropping "shippingWeight" from an export screen would mean the operator
+ * believes they corrected a weight that is still wrong.
+ */
+function asLineOverrides(
+  input: Record<number, Record<string, string>> | undefined,
+): Record<number, Partial<Record<CommodityField, string>>> {
+  if (!input) return {};
+  const out: Record<number, Partial<Record<CommodityField, string>>> = {};
+  for (const [rawLine, fields] of Object.entries(input)) {
+    const line = Number(rawLine);
+    if (!Number.isInteger(line) || line < 1) {
+      throw new AdapterError(`"${rawLine}" is not a commodity line number.`);
+    }
+    const perLine: Partial<Record<CommodityField, string>> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (!OVERRIDABLE_COMMODITY_FIELDS.includes(key as CommodityField)) {
+        throw new AdapterError(
+          `"${key}" cannot be supplied per line. Valid fields: ${OVERRIDABLE_COMMODITY_FIELDS.join(', ')}.`,
+        );
+      }
+      perLine[key as CommodityField] = value;
+    }
+    out[line] = perLine;
   }
   return out;
 }
@@ -203,6 +235,7 @@ export class QuickBooksDesktopAdapter implements InvoiceSourceAdapter<QbInvoice>
   toCanonicalInvoice(invoice: SourceInvoice<QbInvoice>, options: ToCanonicalOptions = {}): CanonicalMapping {
     return mapQbInvoiceToCanonical(invoice.raw, this.config, {
       overrides: asInvoiceOverrides(options.overrides),
+      lineOverrides: asLineOverrides(options.lineOverrides),
     });
   }
 

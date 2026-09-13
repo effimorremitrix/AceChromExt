@@ -213,6 +213,13 @@ try {
   await panel.goto(`chrome-extension://${extensionId}/panel.html`, { waitUntil: 'load' });
   await panel.waitForTimeout(600);
 
+  // The panel opens on Import when nothing is loaded. If a previous run left
+  // data in the session, it opens on Overview instead - so go to Import.
+  if (!(await panel.locator('#file-input').count())) {
+    await panel.click('text=Import');
+    await panel.waitForTimeout(300);
+  }
+
   await panel.setInputFiles('#file-input', workbookPath);
   await panel.waitForTimeout(1200);
 
@@ -303,6 +310,44 @@ try {
     })),
     { reference: 'INV-20451', exportDate: '03/12/2026', po: 'PO-88213', destination: 'IL', incoTerms: 'CIF' },
   );
+
+  // --- 4b. Phase 3 screens ---------------------------------------------
+  console.log('\n--- overview, mapping status, diagnostics, calculator ---');
+
+  await panel.click('text=Overview');
+  await panel.waitForTimeout(400);
+  const overview = (await panel.textContent('body')) ?? '';
+  checkTrue('the overview names the invoice', overview.includes('INV-20451'));
+  checkTrue('the overview names the customer', overview.includes('MEDITERRANEAN FOODS LTD'));
+  checkTrue('the overview reports how many ACE fields are mapped', /of \d+ ACE fields mapped/.test(overview));
+  checkTrue('the overview offers the five actions', overview.includes('Fill Current Page') && overview.includes('Clear Data'));
+
+  await panel.click('text=Mapping');
+  await panel.waitForTimeout(400);
+  await panel.click('button:has-text("Check against the open ACE page")');
+  await panel.waitForTimeout(1200);
+  const mapping = (await panel.textContent('body')) ?? '';
+  checkTrue('the mapping screen shows the source', mapping.includes('Source'));
+  checkTrue('the mapping screen shows the ACE selector', mapping.includes('ACE selector'));
+  checkTrue('the mapping screen shows the transformation', mapping.includes('0.45359237'));
+  checkTrue('the mapping screen marks a resolved field READY', mapping.includes('READY'));
+  checkTrue('checking the page writes nothing', ((await panel.textContent('#status')) ?? '').includes('Nothing was written'));
+
+  await panel.click('text=Calculator');
+  await panel.waitForTimeout(300);
+  await panel.fill('#calc-input', '20 * 4');
+  await panel.click('button:has-text("Calculate")');
+  await panel.waitForTimeout(300);
+  checkTrue('the panel calculator works on its own', ((await panel.textContent('.calc-output')) ?? '').includes('80'));
+
+  await panel.click('text=Diagnostics');
+  await panel.waitForTimeout(400);
+  const diagnostics = (await panel.textContent('body')) ?? '';
+  checkTrue('the session log recorded the import', diagnostics.includes('Session log') && diagnostics.includes('import'));
+  checkTrue('the session log recorded a fill', diagnostics.includes('fill'));
+  checkTrue('the selector editor is available', diagnostics.includes('ACE selectors'));
+  checkTrue('diagnostics can be copied and exported', diagnostics.includes('Copy diagnostics') && diagnostics.includes('Export diagnostics'));
+  checkTrue('the log says it is not uploaded', diagnostics.includes('Nothing here is uploaded'));
 
   // --- 5. CSP -----------------------------------------------------------
   // Everything up to here must have run without a single page error. The CSP

@@ -1,6 +1,7 @@
 /** Mapping registry. The only place that knows which fields belong to which page. */
 
 import type { AceFieldMapping, AceFieldScope, AcePageId } from '../../models/AceField.js';
+import { applyOverrides, type SelectorOverrides } from '../selectors/overrides.js';
 import { SHIPMENT_FIELDS } from './shipment.js';
 import { PARTIES_FIELDS } from './parties.js';
 import { COMMODITY_FIELDS } from './commodities.js';
@@ -28,6 +29,20 @@ export function fieldsForPage(page: AcePageId, scope?: AceFieldScope): AceFieldM
 
 export function fieldByKey(key: string): AceFieldMapping | undefined {
   return ALL_MAPPINGS.find((field) => field.key === key);
+}
+
+/**
+ * The fields to use for a page, with any operator-captured selectors applied.
+ *
+ * This is what the content script calls. `fieldsForPage` stays the pure
+ * built-in view, used by tests and by the "what ships in the box" reporting.
+ */
+export function resolveFields(
+  page: AcePageId,
+  scope: AceFieldScope | undefined,
+  overrides: SelectorOverrides | null,
+): AceFieldMapping[] {
+  return applyOverrides(fieldsForPage(page, scope), overrides);
 }
 
 /** Count of fields whose selectors have not been confirmed against live ACE. */

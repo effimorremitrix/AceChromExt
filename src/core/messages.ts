@@ -5,6 +5,8 @@ import type { CanonicalShipment } from '../models/CanonicalInvoice.js';
 import type { AceHelperSettings } from './settings.js';
 import type { ValidationResult } from '../excel/validator.js';
 import type { PageDetection } from '../content/pageDetector.js';
+import type { SourceDescriptor } from '../sources/InvoiceDataSource.js';
+import type { SessionLogEntry, SessionLogKind } from './sessionLog.js';
 
 export interface StoredImport {
   shipment: CanonicalShipment;
@@ -12,6 +14,11 @@ export interface StoredImport {
   notes: Array<{ severity: 'info' | 'warning' | 'error'; message: string; sheetRow?: number; column?: string }>;
   /** Line the user has selected for "Fill Current Commodity Line". */
   selectedLine: number;
+  /**
+   * Which InvoiceDataSource produced this. Optional so a payload stored by a
+   * Phase 1/2 build still loads after an upgrade.
+   */
+  source?: SourceDescriptor;
 }
 
 // ---- popup/panel -> background ------------------------------------------
@@ -19,11 +26,16 @@ export type BackgroundRequest =
   | { type: 'store/get' }
   | { type: 'store/set'; payload: StoredImport }
   | { type: 'store/selectLine'; line: number }
-  | { type: 'store/clear' };
+  | { type: 'store/clear' }
+  | { type: 'log/append'; kind: SessionLogKind; message: string; detail?: string }
+  | { type: 'log/get' }
+  | { type: 'log/clear' };
 
 export type BackgroundResponse =
   | { ok: true; type: 'store/data'; payload: StoredImport | null }
   | { ok: true; type: 'store/cleared' }
+  | { ok: true; type: 'log/data'; payload: SessionLogEntry[] }
+  | { ok: true; type: 'log/ok' }
   | { ok: false; error: string };
 
 // ---- popup/panel -> content script --------------------------------------
@@ -55,6 +67,13 @@ export interface DiagnosticsSnapshot {
     devtoolsHint?: string;
   }>;
   generatedAt: string;
+  /** Which operator-captured selectors were in force for this snapshot. */
+  overrides: {
+    capturedAt: string;
+    fieldKeys: string[];
+    /** Override keys that match no mapping on this page. */
+    unknownKeys: string[];
+  };
 }
 
 export type ContentResponse =

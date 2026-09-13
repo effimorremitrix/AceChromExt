@@ -91,8 +91,15 @@ export interface InvoiceSourceAdapter<TRaw = unknown> {
 }
 
 export interface ToCanonicalOptions {
-  /** Field values the operator supplied for this export only. */
+  /** Header field values the operator supplied for this export only. */
   overrides?: Record<string, string>;
+  /**
+   * Per-commodity-line values the operator supplied for this export only,
+   * keyed by 1-based line number: the Schedule B, origin and licence code that
+   * no accounting system holds. Recorded as operator-supplied in the audit
+   * trail, never as something the source system said.
+   */
+  lineOverrides?: Record<number, Record<string, string>>;
 }
 
 export class AdapterError extends Error {

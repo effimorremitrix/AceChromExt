@@ -144,6 +144,24 @@ const UOM_ALIASES: Record<string, string> = {
   x: 'X', 'no quantity required': 'X',
 };
 
+/**
+ * The unit codes ACE accepts for a Schedule B reporting quantity.
+ *
+ * Used by the validator to flag "unexpected UOM" *before* a fill, rather than
+ * letting ACE reject the line after it is typed. It is deliberately the small
+ * set that covers ordinary export lines: an unlisted code is a warning to
+ * confirm, never an error, because the Schedule B schedule is longer than this.
+ */
+export const KNOWN_UOM_CODES: readonly string[] = [
+  'KG', 'LB', 'G', 'T', 'NO', 'DOZ', 'L', 'M', 'M2', 'M3', 'X',
+  'CM', 'CM2', 'CM3', 'PCS', 'PRS', 'GM', 'CAR', 'CKG', 'BBL', 'GAL',
+];
+
+export function isKnownUom(code: unknown): boolean {
+  const text = cleanText(code).toUpperCase();
+  return text === '' || KNOWN_UOM_CODES.includes(text);
+}
+
 export function normalizeUom(input: unknown): CodeResult {
   const text = cleanText(input);
   if (text === '') return plain('');

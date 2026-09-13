@@ -59,6 +59,16 @@ export const PAGE_HTML = `<!doctype html>
     <button id="refresh" type="button">Apply and preview</button>
   </section>
 
+  <section class="panel" id="readiness" hidden>
+    <h2>ACE readiness, line by line</h2>
+    <p class="hint">QuickBooks has the invoice. It does not have the Schedule B
+    number, the origin indicator or the licence code - those are customs facts,
+    and they are yours. Fill them in here for this export, or put them in the
+    item profile so they are right every time.</p>
+    <div id="lines"></div>
+    <button id="applyLines" type="button">Apply and preview</button>
+  </section>
+
   <section class="panel" id="checks" hidden>
     <h2>Ready to export?</h2>
     <pre id="checklist"></pre>
@@ -112,6 +122,16 @@ pre { white-space: pre-wrap; word-break: break-word; font: 12px/1.45 ui-monospac
 .bad { color: #9c1b1b; }
 .ok { color: #146c2e; }
 footer p { opacity: .7; border-top: 1px solid var(--line); padding-top: .75rem; margin-bottom: 2rem; }
+.line-card { border: 1px solid var(--line); border-radius: 6px; padding: .75rem; margin-bottom: .75rem; }
+.line-card h3 { font-size: .95rem; margin: 0 0 .5rem; }
+.line-card h3 .state { font-weight: normal; opacity: .8; margin-left: .5rem; }
+.readiness { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: .3rem 1rem; margin-bottom: .6rem; }
+.readiness .item { display: flex; gap: .5rem; align-items: baseline; }
+.readiness .mark { width: 1rem; flex: 0 0 auto; font-weight: 700; }
+.readiness .name { width: 9rem; flex: 0 0 auto; opacity: .75; }
+.readiness .value { word-break: break-word; }
+.line-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: .4rem .75rem; }
+.line-inputs label { display: flex; flex-direction: column; gap: .2rem; opacity: .85; font-size: .9rem; }
 `;
 
 export const PAGE_JS = `(function () {
@@ -148,12 +168,91 @@ export const PAGE_JS = `(function () {
 
   function overrides() {
     var out = {};
-    var inputs = document.querySelectorAll('[data-field]');
+    var inputs = document.querySelectorAll('#supply [data-field]');
     for (var i = 0; i < inputs.length; i += 1) {
       var value = inputs[i].value.trim();
       if (value !== '') out[inputs[i].getAttribute('data-field')] = value;
     }
     return out;
+  }
+
+  /** Per-line values the operator typed, keyed by line number. */
+  function lineOverrides() {
+    var out = {};
+    var inputs = document.querySelectorAll('#lines [data-line]');
+    for (var i = 0; i < inputs.length; i += 1) {
+      var value = inputs[i].value.trim();
+      if (value === '') continue;
+      var line = inputs[i].getAttribute('data-line');
+      if (!out[line]) out[line] = {};
+      out[line][inputs[i].getAttribute('data-line-field')] = value;
+    }
+    return out;
+  }
+
+  /**
+   * Redraw the readiness table.
+   *
+   * Values the operator has already typed are preserved across a redraw: the
+   * preview round-trip must not wipe the Schedule B they just entered.
+   */
+  function renderLines(lines) {
+    var kept = lineOverrides();
+    var host = $('lines');
+    host.textContent = '';
+
+    lines.forEach(function (line) {
+      var card = document.createElement('div');
+      card.className = 'line-card';
+
+      var title = document.createElement('h3');
+      title.textContent = 'Line ' + line.line + ': ' + line.description;
+      var state = document.createElement('span');
+      state.className = 'state ' + (line.ready ? 'ok' : 'bad');
+      state.textContent = line.ready ? 'ready' : 'needs attention';
+      title.appendChild(state);
+      card.appendChild(title);
+
+      var grid = document.createElement('div');
+      grid.className = 'readiness';
+      line.items.forEach(function (item) {
+        var row = document.createElement('div');
+        row.className = 'item';
+        var mark = document.createElement('span');
+        mark.className = 'mark ' + (item.ok ? 'ok' : 'bad');
+        mark.textContent = item.ok ? '\u2713' : '\u26a0';
+        var name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = item.label;
+        var value = document.createElement('span');
+        value.className = 'value';
+        value.textContent = item.ok ? item.value : (item.value === '(blank)' ? 'missing' : item.value);
+        row.appendChild(mark);
+        row.appendChild(name);
+        row.appendChild(value);
+        grid.appendChild(row);
+      });
+      card.appendChild(grid);
+
+      var inputs = document.createElement('div');
+      inputs.className = 'line-inputs';
+      line.items.filter(function (item) { return item.editable; }).forEach(function (item) {
+        var label = document.createElement('label');
+        label.appendChild(document.createTextNode(item.label));
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.setAttribute('data-line', String(line.line));
+        input.setAttribute('data-line-field', item.field);
+        input.autocomplete = 'off';
+        var previous = kept[String(line.line)];
+        if (previous && previous[item.field]) input.value = previous[item.field];
+        label.appendChild(input);
+        inputs.appendChild(label);
+      });
+      card.appendChild(inputs);
+
+      host.appendChild(card);
+    });
   }
 
   function fail(error) {
@@ -183,15 +282,21 @@ export const PAGE_JS = `(function () {
     selected = $('invoice').value;
     if (!selected) { fail(new Error('Choose an invoice first.')); return; }
     $('result').textContent = '';
-    api('/api/invoice', { id: selected, overrides: JSON.stringify(overrides()) }).then(function (data) {
+    api('/api/invoice', {
+      id: selected,
+      overrides: JSON.stringify(overrides()),
+      lineOverrides: JSON.stringify(lineOverrides())
+    }).then(function (data) {
       $('customer').textContent = data.invoice.customerName || '(blank)';
       $('date').textContent = data.invoice.invoiceDate || '(blank)';
       $('items').textContent = String(data.itemCount);
       $('destination').textContent = data.invoice.destination || '(blank)';
       $('checklist').textContent = data.checklist.join('\\n');
       $('preview').textContent = data.preview;
+      renderLines(data.readiness || []);
       show('summary', true);
       show('supply', true);
+      show('readiness', true);
       show('checks', true);
       show('detail', true);
     }).catch(fail);
@@ -201,7 +306,7 @@ export const PAGE_JS = `(function () {
     if (!selected) { fail(new Error('Preview an invoice first.')); return; }
     var button = $('export');
     button.disabled = true;
-    post('/api/export', { id: selected, overrides: overrides() }).then(function (data) {
+    post('/api/export', { id: selected, overrides: overrides(), lineOverrides: lineOverrides() }).then(function (data) {
       var result = $('result');
       result.textContent = 'Wrote ' + data.path + '. Import it from the ACE Helper panel in Chrome.';
       result.className = 'ok';
@@ -211,6 +316,7 @@ export const PAGE_JS = `(function () {
   $('find').addEventListener('click', loadInvoices);
   $('load').addEventListener('click', preview);
   $('refresh').addEventListener('click', preview);
+  $('applyLines').addEventListener('click', preview);
   $('export').addEventListener('click', exportWorkbook);
   $('search').addEventListener('keydown', function (event) { if (event.key === 'Enter') loadInvoices(); });
 
