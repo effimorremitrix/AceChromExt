@@ -103,7 +103,7 @@ More: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**,
 | `npm run verify` | typecheck + tests + template + build + bundle check |
 | `npm run build` / `build:watch` | build `dist/` |
 | `npm test` / `test:watch` | vitest (210 tests) |
-| `npm run smoke` | end-to-end test in real Chromium against a mocked ACE host |
+| `npm run smoke` | end-to-end test in real Chromium against a mocked ACE host (needs Chrome for Testing or a Playwright Chromium; see docs/INSTALLATION.md) |
 | `npm run check:bundle` | supply-chain check on `dist/`: no eval, no network APIs, no unexpected URL hosts |
 | `npm run typecheck` | tsc, no emit |
 | `npm run template` | regenerate the import template |

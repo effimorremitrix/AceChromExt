@@ -97,6 +97,10 @@ jobs:
   smoke:
     name: End-to-end (real Chrome, mocked ACE host)
     runs-on: ubuntu-latest
+    env:
+      # Pinned so CI is reproducible. Bump deliberately, and re-run the smoke
+      # test locally against the same version before doing so.
+      CHROME_VERSION: '141.0.7390.54'
 
     steps:
       - uses: actions/checkout@v4
@@ -110,21 +114,31 @@ jobs:
 
       - run: npm run build
 
-      - name: Locate Chrome
-        # ubuntu-latest ships Google Chrome. Resolve it explicitly so a runner
-        # image change fails here with a clear message instead of inside the
-        # test as an opaque launch error.
+      - name: Cache Chrome for Testing
+        id: cache-chrome
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/chrome-for-testing
+          key: chrome-for-testing-${{ env.CHROME_VERSION }}-linux64
+
+      - name: Install Chrome for Testing
+        # NOT the runner's branded Google Chrome. Branded Chrome 137+ disables
+        # the --load-extension switch, so the extension silently never loads
+        # and the smoke test times out waiting for its service worker. Chrome
+        # for Testing is the supported automation build, and pinning it also
+        # stops a runner image bump from changing the browser under us.
         run: |
-          for candidate in "$CHROME_BIN" /usr/bin/google-chrome /usr/bin/google-chrome-stable /usr/bin/chromium-browser /usr/bin/chromium; do
-            if [ -n "$candidate" ] && [ -x "$candidate" ]; then
-              echo "CHROME_PATH=$candidate" >> "$GITHUB_ENV"
-              echo "Using $candidate"
-              "$candidate" --version || true
-              exit 0
-            fi
-          done
-          echo "::error::No Chrome binary found on this runner. Install one, or set CHROME_PATH."
-          exit 1
+          set -euo pipefail
+          dest="$HOME/.cache/chrome-for-testing/$CHROME_VERSION"
+          if [ ! -x "$dest/chrome-linux64/chrome" ]; then
+            mkdir -p "$dest"
+            url="https://storage.googleapis.com/chrome-for-testing-public/$CHROME_VERSION/linux64/chrome-linux64.zip"
+            echo "Downloading $url"
+            curl -fsSL --retry 3 --retry-delay 5 -o /tmp/chrome-for-testing.zip "$url"
+            unzip -q /tmp/chrome-for-testing.zip -d "$dest"
+          fi
+          echo "CHROME_PATH=$dest/chrome-linux64/chrome" >> "$GITHUB_ENV"
+          "$dest/chrome-linux64/chrome" --version
 
       - name: End-to-end smoke test
         run: npm run smoke
