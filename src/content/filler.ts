@@ -25,6 +25,7 @@ import {
 import type { CanonicalCommodity, CanonicalShipment } from '../models/CanonicalInvoice.js';
 import { resolveFields } from '../ace/mappings/index.js';
 import type { SelectorOverrides } from '../ace/selectors/overrides.js';
+import { describeCandidate } from '../ace/selectors/types.js';
 import { runTransforms } from '../ace/transformers/index.js';
 import { truncate } from '../ace/transformers/text.js';
 import type { AceHelperSettings } from '../core/settings.js';
@@ -151,15 +152,6 @@ interface FillOneContext {
   overwrite: boolean;
 }
 
-/** The selector a human would look for first when this field misbehaves. */
-function describeCandidate(mapping: AceFieldMapping): string {
-  const first = mapping.candidates[0];
-  if (!first) return '(no selector configured)';
-  if (first.strategy === 'label') return `label: ${(first.labelText ?? []).join(' | ')}`;
-  if (first.strategy === 'placeholder') return `placeholder: ${first.placeholder ?? ''}`;
-  return first.selector ?? '(no selector configured)';
-}
-
 function fillOne(mapping: AceFieldMapping, ctx: FillOneContext, root: ParentNode): FillOutcome {
   const { shipment, commodity, settings, dryRun, overwrite } = ctx;
   const base: FillOutcome = {
@@ -167,7 +159,7 @@ function fillOne(mapping: AceFieldMapping, ctx: FillOneContext, root: ParentNode
     label: mapping.label,
     status: 'skipped',
     source: mapping.source,
-    selector: describeCandidate(mapping),
+    selector: describeCandidate(mapping.candidates),
   };
 
   const resolved = resolveSource(mapping.source, shipment, commodity);

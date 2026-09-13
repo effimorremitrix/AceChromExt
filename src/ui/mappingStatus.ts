@@ -19,6 +19,7 @@
  */
 
 import { ALL_MAPPINGS } from '../ace/mappings/index.js';
+import { describeCandidate } from '../ace/selectors/types.js';
 import { runTransforms } from '../ace/transformers/index.js';
 import { truncate } from '../ace/transformers/text.js';
 import type { AceFieldMapping, AceFieldScope, AcePageId, FillReport } from '../models/AceField.js';
@@ -66,14 +67,6 @@ export interface MappingStatusOptions {
   line: number;
   /** Where the data came from, used to word the Source column. */
   source?: SourceDescriptor | undefined;
-}
-
-function describeCandidate(mapping: AceFieldMapping): string {
-  const first = mapping.candidates[0];
-  if (!first) return '(no selector configured)';
-  if (first.strategy === 'label') return `label: ${(first.labelText ?? []).join(' | ')}`;
-  if (first.strategy === 'placeholder') return `placeholder: ${first.placeholder ?? ''}`;
-  return first.selector ?? '(no selector configured)';
 }
 
 function canonicalField(mapping: AceFieldMapping): string {
@@ -151,7 +144,7 @@ export function buildMappingStatus(shipment: CanonicalShipment, options: Mapping
       transform: importTransform,
       aceValue: '',
       aceField: mapping.label,
-      selector: describeCandidate(mapping),
+      selector: describeCandidate(mapping.candidates),
       status: 'NOT CHECKED',
     };
 

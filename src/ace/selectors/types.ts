@@ -109,6 +109,20 @@ export function byIdSuffix(name: string): AceSelectorCandidate {
   };
 }
 
+/**
+ * The selector a human would look for first when this field misbehaves.
+ *
+ * Used by the fill report and the mapping status screen, which must not
+ * describe the same candidate two different ways.
+ */
+export function describeCandidate(candidates: AceSelectorCandidate[]): string {
+  const first = candidates[0];
+  if (!first) return '(no selector configured)';
+  if (first.strategy === 'label') return `label: ${(first.labelText ?? []).join(' | ')}`;
+  if (first.strategy === 'placeholder') return `placeholder: ${first.placeholder ?? ''}`;
+  return first.selector ?? '(no selector configured)';
+}
+
 /** True when any candidate has been verified against live ACE. */
 export function statusFor(candidates: AceSelectorCandidate[]): AceFieldMapping['verificationStatus'] {
   return candidates.some((candidate) => candidate.verified) ? 'verified' : 'placeholder';

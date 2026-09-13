@@ -19,7 +19,7 @@
 import type { FillReport } from '../models/AceField.js';
 import type { DiagnosticsSnapshot, StoredImport } from '../core/messages.js';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type AceHelperSettings } from '../core/settings.js';
-import { formatLog, type SessionLogEntry } from '../core/sessionLog.js';
+import { formatLog, type SessionLogEntry, type SessionLogKind } from '../core/sessionLog.js';
 import type { MapperNote } from '../excel/canonicalMapper.js';
 import type { ExcelImporter, OpenedWorkbook } from './importer.js';
 import { buildPreview, summarize, type PreviewCell } from './preview.js';
@@ -126,7 +126,7 @@ function tick(status: 'pass' | 'warn' | 'fail'): string {
   return status === 'pass' ? '✓' : status === 'warn' ? '⚠' : '✗';
 }
 
-async function appendLog(kind: Parameters<typeof formatLog> extends never ? never : SessionLogEntry['kind'], message: string, detail?: string): Promise<void> {
+async function appendLog(kind: SessionLogKind, message: string, detail?: string): Promise<void> {
   await sendToBackground({ type: 'log/append', kind, message, ...(detail ? { detail } : {}) });
 }
 
