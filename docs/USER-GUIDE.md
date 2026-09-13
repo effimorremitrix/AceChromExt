@@ -58,6 +58,14 @@ Details worth knowing:
 
 ## 2. Importing a spreadsheet
 
+> **Working from QuickBooks Desktop?** You do not have to fill the spreadsheet
+> in by hand. The companion writes it for you from an invoice:
+> `ace-export export CN-1042` produces `ACE_Invoice_CN-1042.xlsx`, which you
+> then import exactly as below. It reads what QuickBooks holds, converts pounds
+> to kilograms, and flags the customs facts QuickBooks does not hold rather
+> than guessing them. See
+> **[QUICKBOOKS-INTEGRATION.md](QUICKBOOKS-INTEGRATION.md)**.
+
 Import happens in the **panel**, not the popup: Chrome closes a popup as soon as
 a file picker opens.
 

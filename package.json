@@ -8,14 +8,16 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:watch": "node scripts/build.mjs --watch",
+    "build:companion": "node scripts/build-companion.mjs",
     "template": "node scripts/generate-template.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run typecheck && npm run test && npm run template && npm run build && npm run check:bundle",
+    "verify": "npm run typecheck && npm run test && npm run template && npm run build && npm run check:bundle && npm run build:companion",
     "icons": "node scripts/generate-icons.mjs",
     "smoke": "node tests/e2e/smoke.mjs",
-    "check:bundle": "node scripts/check-bundle.mjs"
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "qb": "node dist-companion/ace-export.mjs"
   },
   "dependencies": {
     "xlsx": "0.18.5"

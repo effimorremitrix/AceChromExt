@@ -85,8 +85,10 @@ a locally imported spreadsheet. See `README.md` for what it does and
 
 | Command | Use |
 | --- | --- |
-| `npm run verify` | typecheck + 210 tests + template + build + bundle check. Run before every push. |
-| `npm run build` / `build:watch` | build `dist/` |
+| `npm run verify` | typecheck + 451 tests + template + build + bundle check + companion build. Run before every push. |
+| `npm run build` / `build:watch` | build `dist/` (the extension) |
+| `npm run build:companion` | build `dist-companion/` (the QuickBooks companion) |
+| `npm run qb -- --help` | run the companion |
 | `npm test` / `test:watch` | vitest |
 | `npm run smoke` | end-to-end in real Chrome against a mocked ACE host. Needs Chrome for Testing or a Playwright Chromium - **branded Chrome 137+ will not work** (see `docs/INSTALLATION.md`). |
 | `npm run check:bundle` | supply-chain check on `dist/` |
@@ -115,7 +117,8 @@ of these, so do not work around them - fix the cause:
 
 ## Where things live
 
-Data flows one way: `Excel → canonical model → preview → ACE`.
+Data flows one way: `QuickBooks → canonical model → Excel → canonical model →
+preview → ACE`.
 
 | Change | File |
 | --- | --- |
@@ -124,10 +127,35 @@ Data flows one way: `Excel → canonical model → preview → ACE`.
 | a transformation rule | `src/ace/transformers/` + register in `index.ts` |
 | a validation rule | `src/excel/validator.ts` |
 | a selector that ACE changed | the mapping's `candidates`, per `docs/ACE-MAPPING.md` |
+| a qbXML element to read | `builtInCandidates` in `companion/src/mapping/qbToCanonical.ts` |
+| a QuickBooks custom field | `customFields` in the user's `ace-export.config.json`, no code |
+| another invoice source | implement `InvoiceSourceAdapter` in `companion/src/adapter/` |
+
+## The companion is a separate program
+
+`companion/` (→ `dist-companion/`) is a Node program that runs on the Windows PC
+beside QuickBooks. **Do not move it under `src/`.** `tests/invariants.test.ts`
+and `scripts/check-bundle.mjs` assert that nothing in the extension spawns a
+process, opens a socket, or names a non-CBP host; the companion legitimately
+does the first two. It has its own invariants in the same test file.
+
+It reuses Phase 1 rather than reimplementing it: `qbToCanonical.ts` calls
+`mapCell` from `src/excel/canonicalMapper.ts`, so unit conversion and code
+formatting exist once. Never add a second invoice model or a second
+transformation engine.
 
 ## Current state
 
-All 24 ACE selectors are **placeholders** - none captured from the live portal.
-`docs/ACE-MAPPING.md` lists exactly what to capture, field by field. Never
-replace a `placeholder(...)` with `verified(...)` unless the selector really was
-copied from live ACE.
+Two things are built but not verified against the real system, and both must
+stay honestly described:
+
+1. All 24 ACE selectors are **placeholders** - none captured from the live
+   portal. `docs/ACE-MAPPING.md` lists exactly what to capture, field by field.
+   Never replace a `placeholder(...)` with `verified(...)` unless the selector
+   really was copied from live ACE.
+
+2. The QuickBooks **COM hop has never run against a real QuickBooks** - there is
+   no Windows machine with QuickBooks Desktop in this toolchain. Everything
+   above the transport is tested against saved qbXML fixtures. Do not describe
+   the live integration as working; `docs/QUICKBOOKS-INTEGRATION.md` section 11
+   is the procedure for verifying it on the QuickBooks PC.

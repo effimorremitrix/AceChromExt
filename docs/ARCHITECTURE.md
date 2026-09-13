@@ -3,6 +3,16 @@
 ## The one-way data flow
 
 ```
+  QuickBooks Desktop (local)                      ..... Phase 2, companion/
+        |  companion/src/transport/    qbXML over COM, or a saved response
+        |  companion/src/qbxml/        request builders + response parsers
+        v
+  QbInvoice  (QuickBooks-shaped, knows nothing about ACE)
+        |  companion/src/mapping/      -> canonical, + a field-origin record
+        v
+  CANONICAL SHIPMENT MODEL
+        |  companion/src/excel/        -> ACE_Import.xlsx
+        v
   XLSX file (local)
         |  src/excel/excelReader.ts        bytes -> arrays of arrays
         v
@@ -29,17 +39,27 @@
 ```
 
 Nothing flows backwards. The canonical model has no idea ACE exists; the
-mappings have no idea Excel exists.
+mappings have no idea Excel exists; and the QuickBooks half has no idea either
+exists - it produces the canonical model and stops.
+
+The QuickBooks half deliberately rejoins through the **spreadsheet**, not
+through a private channel into the extension. A workbook is inspectable,
+editable, e-mailable and archivable; a private channel would have meant a
+second import path to maintain, a second thing to validate, and a Chrome
+extension that had to talk to a local process.
 
 ## Why the canonical model sits in the middle
 
-The spreadsheet, ACE's DOM, and (in a later phase) QuickBooks all change for
-unrelated reasons. Putting a stable model between them means:
+The spreadsheet, ACE's DOM and QuickBooks all change for unrelated reasons.
+Putting a stable model between them means:
 
 - a spreadsheet-format change touches only `columnAliases.ts` + `canonicalMapper.ts`;
 - an ACE DOM change touches only `ace/mappings/*`;
-- QuickBooks becomes a second *producer* of the same model, and reuses the
-  entire preview / validation / fill pipeline unchanged.
+- QuickBooks is a second *producer* of the same model, and reuses the entire
+  preview / validation / fill pipeline unchanged. Phase 2 added no second
+  invoice model and no second transformation engine: `qbToCanonical.ts` calls
+  Phase 1's own `mapCell`, so `lb x 0.45359237` is written once and both paths
+  round the same way.
 
 Provenance is stored beside the model rather than inside it, so the model stays
 a plain data contract while the preview can still show "176,000 lb -> 79,832 kg".
@@ -76,6 +96,43 @@ layer data-only.
 | `src/ui/importer.ts` | the XLSX parser, injected only into the panel |
 | `src/core/store.ts` | session-memory storage of the imported shipment |
 | `src/background/serviceWorker.ts` | holds the store across popup open/close |
+| `companion/src/qbxml/` | a small XML reader (no DOCTYPE, no entity expansion), qbXML request builders, response parsers |
+| `companion/src/transport/` | `QbxmlTransport`: the COM bridge, or replay of a saved response |
+| `companion/src/adapter/` | `InvoiceSourceAdapter` and its QuickBooks implementation |
+| `companion/src/mapping/` | QuickBooks -> canonical, plus the `FieldOrigin` record |
+| `companion/src/excel/` | canonical -> the Phase 1 import workbook |
+| `companion/src/ui/` | the `ace-export` command and the local window |
+
+## Why the companion is a separate program
+
+It is a Node program in `companion/`, built to `dist-companion/`, and it is not
+part of the extension bundle. Three reasons:
+
+1. **The extension's promises stay true by construction.** `tests/invariants.test.ts`
+   asserts that nothing in `src/` calls `fetch`, spawns anything, or names a
+   non-CBP host, and `scripts/check-bundle.mjs` asserts the same of `dist/`.
+   The companion legitimately spawns PowerShell and opens a loopback socket.
+   Keeping it out of `src/` means those checks never had to be weakened.
+2. **It runs where QuickBooks runs.** QuickBooks Desktop is a Windows
+   application with a local COM server; a browser extension cannot reach it.
+3. **Different lifecycles.** Chrome reviews the extension; the companion is
+   copied onto one PC by the person who exports the invoices.
+
+The seam between them is the canonical model and the workbook - both plain
+data, both already tested from the Phase 1 side.
+
+## Why the adapter interface exists
+
+`InvoiceSourceAdapter` is written in shipping words, not QuickBooks words: no
+method mentions qbXML, `TxnID` or `DataExt`. The QuickBooks types stop at
+`toCanonicalInvoice`. A second source - a different accounting system, a
+customer's ERP - implements four methods and inherits the preview, the
+validation, the workbook and both user interfaces.
+
+`FieldOrigin` is the other half of that contract. An ACE filing is a legal
+declaration, so "QuickBooks reported this", "this was computed from it",
+"this came from a custom field" and "a person typed this" must not look alike
+in a review screen. Every canonical value carries which one it was.
 
 ## Why `setAceFieldValue` exists
 
@@ -134,6 +191,9 @@ an explicit user action; it does not require changing the fill path.
 | To do this | Change |
 | --- | --- |
 | Support a new spreadsheet column | `src/excel/columnAliases.ts` |
+| Map another QuickBooks custom field | `customFields` in `ace-export.config.json` - no code |
+| Read another built-in qbXML element | `builtInCandidates` in `companion/src/mapping/qbToCanonical.ts` |
+| Add a second invoice source | implement `InvoiceSourceAdapter` in `companion/src/adapter/` |
 | Add an ACE field | the relevant `src/ace/mappings/*.ts` |
 | Add a transformation rule | `src/ace/transformers/` + register it in `index.ts` |
 | Fix a selector after an ACE change | the mapping's `candidates`, per `docs/ACE-MAPPING.md` |

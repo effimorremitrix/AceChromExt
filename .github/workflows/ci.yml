@@ -1,7 +1,7 @@
 # CI for ACE Helper.
 #
 # Three jobs, deliberately separate so a red run says *what* broke:
-#   verify  - typecheck, unit tests, build, generated files up to date (Node 20 and 22)
+#   verify  - typecheck, unit tests, both builds, generated files up to date (Node 20 and 22)
 #   bundle  - supply-chain check on what actually ships in dist/
 #   smoke   - end-to-end in real Chrome against a mocked ACE host
 #
@@ -54,6 +54,15 @@ jobs:
 
       - name: Build the unpacked extension
         run: npm run build
+
+      - name: Build the QuickBooks companion
+        # Separate output (dist-companion/), separate program: the bundle check
+        # below is about dist/ only. Building it here catches a companion that
+        # typechecks but does not bundle.
+        run: npm run build:companion
+
+      - name: The companion runs
+        run: node dist-companion/ace-export.mjs --help > /dev/null
 
       - name: Generated files are up to date
         # The import template and the icons are generated, deterministic, and

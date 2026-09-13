@@ -1,0 +1,129 @@
+<?xml version="1.0" ?>
+<QBXML>
+  <QBXMLMsgsRs>
+    <InvoiceQueryRs requestID="1" statusCode="0" statusSeverity="Info" statusMessage="Status OK">
+      <InvoiceRet>
+        <TxnID>2AB4-1758412800</TxnID>
+        <TimeCreated>2026-09-21T09:14:02-07:00</TimeCreated>
+        <TimeModified>2026-09-21T09:31:44-07:00</TimeModified>
+        <EditSequence>1758412304</EditSequence>
+        <TxnNumber>8841</TxnNumber>
+        <CustomerRef>
+          <ListID>80000041-1613512800</ListID>
+          <FullName>Aydin Kuruyemis San Ve Tic A.S</FullName>
+        </CustomerRef>
+        <ARAccountRef>
+          <ListID>80000009-1481000400</ListID>
+          <FullName>Accounts Receivable</FullName>
+        </ARAccountRef>
+        <TemplateRef>
+          <ListID>80000018-1613512900</ListID>
+          <FullName>Export Invoice</FullName>
+        </TemplateRef>
+        <TxnDate>2026-09-21</TxnDate>
+        <RefNumber>CN-1042</RefNumber>
+        <BillAddress>
+          <Addr1>Aydin Kuruyemis San Ve Tic A.S</Addr1>
+          <Addr2>Organize Sanayi Bolgesi 3. Cadde No 14</Addr2>
+          <City>Aydin</City>
+          <State>Aydin</State>
+          <PostalCode>09100</PostalCode>
+          <Country>Turkey</Country>
+        </BillAddress>
+        <BillAddressBlock>
+          <Addr1>Aydin Kuruyemis San Ve Tic A.S</Addr1>
+          <Addr2>Organize Sanayi Bolgesi 3. Cadde No 14</Addr2>
+          <Addr3>Aydin 09100</Addr3>
+          <Addr4>Turkey</Addr4>
+        </BillAddressBlock>
+        <ShipAddress>
+          <Addr1>Derince Limani</Addr1>
+          <City>Derince</City>
+          <State>Kocaeli</State>
+          <Country>Turkey</Country>
+        </ShipAddress>
+        <IsPending>false</IsPending>
+        <IsFinanceCharge>false</IsFinanceCharge>
+        <PONumber>3993</PONumber>
+        <TermsRef>
+          <ListID>80000007-1481000400</ListID>
+          <FullName>Net 120</FullName>
+        </TermsRef>
+        <DueDate>2027-01-19</DueDate>
+        <ShipDate>2026-09-28</ShipDate>
+        <ShipMethodRef>
+          <ListID>80000003-1613512700</ListID>
+          <FullName>MSC Line</FullName>
+        </ShipMethodRef>
+        <FOB>FOB dock</FOB>
+        <Subtotal>651217.60</Subtotal>
+        <SalesTaxPercentage>0.00</SalesTaxPercentage>
+        <SalesTaxTotal>0.00</SalesTaxTotal>
+        <TotalAmount>651217.60</TotalAmount>
+        <CurrencyRef>
+          <ListID>80000001-1481000400</ListID>
+          <FullName>US Dollar</FullName>
+        </CurrencyRef>
+        <ExchangeRate>1</ExchangeRate>
+        <BalanceRemaining>651217.60</BalanceRemaining>
+        <IsPaid>false</IsPaid>
+        <Memo>Container load, September sailing</Memo>
+        <IsToBePrinted>false</IsToBePrinted>
+        <IsToBeEmailed>false</IsToBeEmailed>
+        <Other>EXPORT</Other>
+        <InvoiceLineRet>
+          <TxnLineID>2AB5-1758412800</TxnLineID>
+          <ItemRef>
+            <ListID>80000012-1613512600</ListID>
+            <FullName>Shelled Almonds</FullName>
+          </ItemRef>
+          <Desc>Almond Kernels, Monterey SSR 23/25, new crop, 50 lb cartons</Desc>
+          <Quantity>176000</Quantity>
+          <UnitOfMeasure>lb</UnitOfMeasure>
+          <Rate>3.7001</Rate>
+          <Amount>651217.60</Amount>
+          <SalesTaxCodeRef>
+            <ListID>80000001-1481000400</ListID>
+            <FullName>Non</FullName>
+          </SalesTaxCodeRef>
+        </InvoiceLineRet>
+        <DataExtRet>
+          <OwnerID>0</OwnerID>
+          <DataExtName>Vessel</DataExtName>
+          <DataExtType>STR255TYPE</DataExtType>
+          <DataExtValue>MSC FIRENZE V.541W</DataExtValue>
+        </DataExtRet>
+        <DataExtRet>
+          <OwnerID>0</OwnerID>
+          <DataExtName>Booking</DataExtName>
+          <DataExtType>STR255TYPE</DataExtType>
+          <DataExtValue>EBKG18531408</DataExtValue>
+        </DataExtRet>
+        <DataExtRet>
+          <OwnerID>0</OwnerID>
+          <DataExtName>Container</DataExtName>
+          <DataExtType>STR255TYPE</DataExtType>
+          <DataExtValue>See Ocean B/L</DataExtValue>
+        </DataExtRet>
+        <DataExtRet>
+          <OwnerID>0</OwnerID>
+          <DataExtName>Seal</DataExtName>
+          <DataExtType>STR255TYPE</DataExtType>
+          <DataExtValue>See Ocean B/L</DataExtValue>
+        </DataExtRet>
+        <DataExtRet>
+          <OwnerID>0</OwnerID>
+          <DataExtName>Destination</DataExtName>
+          <DataExtType>STR255TYPE</DataExtType>
+          <DataExtValue>Derince</DataExtValue>
+        </DataExtRet>
+        <DataExtRet>
+          <OwnerID>0</OwnerID>
+          <DataExtName>Broker</DataExtName>
+          <DataExtType>STR255TYPE</DataExtType>
+          <DataExtValue>Pacific Customs Brokers</DataExtValue>
+        </DataExtRet>
+      </InvoiceRet>
+    </InvoiceQueryRs>
+  </QBXMLMsgsRs>
+</QBXML>

@@ -1,0 +1,6 @@
+<?xml version="1.0" ?>
+<QBXML>
+  <QBXMLMsgsRs>
+    <InvoiceQueryRs requestID="1" statusCode="3000" statusSeverity="Error" statusMessage="The given object ID &quot;9999-0&quot; in the field &quot;TxnID&quot; is invalid." />
+  </QBXMLMsgsRs>
+</QBXML>

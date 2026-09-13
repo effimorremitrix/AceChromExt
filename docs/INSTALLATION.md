@@ -99,7 +99,7 @@ Imported shipment data was only ever in memory, so nothing is left on disk.
 
 | Job | What it runs |
 | --- | --- |
-| **Verify** (Node 20 and 22) | typecheck, the 210 unit tests, build, and a check that the committed template and icons still match their generators |
+| **Verify** (Node 20 and 22) | typecheck, the 451 unit tests, both builds, and a check that the committed template and icons still match their generators |
 | **Bundle supply-chain check** | `npm run check:bundle` against the built `dist/` |
 | **End-to-end** | `npm run smoke` against the mocked ACE host, in a pinned Chrome for Testing build |
 
@@ -141,3 +141,18 @@ applies to the command-line switch that automation uses.
   together keep the two published SheetJS advisories out of reach - see
   `docs/SECURITY.md`.
 - `vitest` is a development dependency only; nothing from it ships in `dist/`.
+
+## The QuickBooks companion
+
+`npm run build` builds the extension. The QuickBooks Desktop companion is a
+separate program with a separate output:
+
+```bash
+npm run build:companion        # -> dist-companion/
+npm run qb -- --help
+```
+
+Copy `dist-companion/` to the Windows PC that runs QuickBooks; it needs Node 20+
+and the QuickBooks Desktop SDK there, and nothing else. Installation,
+authorization and troubleshooting:
+**[QUICKBOOKS-INTEGRATION.md](QUICKBOOKS-INTEGRATION.md)**.

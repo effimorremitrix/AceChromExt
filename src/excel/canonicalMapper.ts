@@ -66,7 +66,12 @@ interface HeaderMap {
   headerRowIndex: number;
 }
 
-function cellToText(cell: RawCell): string {
+/**
+ * A cell rendered as text, exactly as the mapper sees it. Exported because the
+ * QuickBooks companion (companion/) feeds qbXML values through the same
+ * mapping so a rule exists once.
+ */
+export function cellToText(cell: RawCell): string {
   if (cell === null || cell === undefined) return '';
   if (cell instanceof Date) {
     const iso = normalizeDate(cell);
@@ -128,7 +133,7 @@ function provenance(column: string, original: string, transform: string | null, 
   return { column, original, transform, normalized };
 }
 
-interface CellOutcome {
+export interface CellOutcome {
   /** Value for the canonical model. */
   value: string | number | null;
   transform: string | null;
@@ -138,7 +143,12 @@ interface CellOutcome {
   error?: string;
 }
 
-function mapCell(spec: ColumnSpec, cell: RawCell, weightUnitHint: string, settings: AceHelperSettings): CellOutcome {
+/**
+ * Map one cell through its column's rule. Exported so a second producer of the
+ * canonical model - the QuickBooks companion - normalizes values with exactly
+ * this code rather than a parallel copy of it.
+ */
+export function mapCell(spec: ColumnSpec, cell: RawCell, weightUnitHint: string, settings: AceHelperSettings): CellOutcome {
   const original = cellToText(cell);
 
   if (original === '') {

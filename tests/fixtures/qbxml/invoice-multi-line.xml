@@ -1,0 +1,92 @@
+<?xml version="1.0" ?>
+<QBXML>
+  <QBXMLMsgsRs>
+    <InvoiceQueryRs requestID="1" statusCode="0" statusSeverity="Info" statusMessage="Status OK">
+      <InvoiceRet>
+        <TxnID>3CD8-1758499200</TxnID>
+        <EditSequence>1758499201</EditSequence>
+        <CustomerRef>
+          <ListID>80000041-1613512800</ListID>
+          <FullName>Aydin Kuruyemis San Ve Tic A.S</FullName>
+        </CustomerRef>
+        <TxnDate>2026-09-22</TxnDate>
+        <RefNumber>CN-1043</RefNumber>
+        <BillAddress>
+          <Addr1>Aydin Kuruyemis San Ve Tic A.S</Addr1>
+          <City>Aydin</City>
+          <Country>Turkey</Country>
+        </BillAddress>
+        <PONumber>4001</PONumber>
+        <TermsRef>
+          <FullName>Net 120</FullName>
+        </TermsRef>
+        <DueDate>2027-01-20</DueDate>
+        <ShipMethodRef>
+          <FullName>MSC Line</FullName>
+        </ShipMethodRef>
+        <FOB>FOB dock</FOB>
+        <TotalAmount>716817.60</TotalAmount>
+        <InvoiceLineRet>
+          <TxnLineID>3CD9-1758499200</TxnLineID>
+          <ItemRef>
+            <FullName>Shelled Almonds</FullName>
+          </ItemRef>
+          <Desc>Almond Kernels, Monterey SSR 23/25, new crop, 50 lb cartons</Desc>
+          <Quantity>176000</Quantity>
+          <UnitOfMeasure>lb</UnitOfMeasure>
+          <Rate>3.7001</Rate>
+          <Amount>651217.60</Amount>
+          <Other1>LOT-2026-114</Other1>
+        </InvoiceLineRet>
+        <InvoiceLineRet>
+          <TxnLineID>3CDA-1758499200</TxnLineID>
+          <ItemRef>
+            <FullName>Dried Fruit:Dried Prunes</FullName>
+          </ItemRef>
+          <Desc>Dried Prunes, pitted, 25 lb cartons</Desc>
+          <Quantity>800</Quantity>
+          <UnitOfMeasure>ct</UnitOfMeasure>
+          <Rate>82.00</Rate>
+          <Amount>65600.00</Amount>
+          <DataExtRet>
+            <OwnerID>0</OwnerID>
+            <DataExtName>Schedule B</DataExtName>
+            <DataExtType>STR255TYPE</DataExtType>
+            <DataExtValue>0813.20.0000</DataExtValue>
+          </DataExtRet>
+        </InvoiceLineRet>
+        <InvoiceLineGroupRet>
+          <TxnLineID>3CDB-1758499200</TxnLineID>
+          <ItemGroupRef>
+            <FullName>Sample Pack</FullName>
+          </ItemGroupRef>
+          <Quantity>1</Quantity>
+          <TotalAmount>0.00</TotalAmount>
+          <InvoiceLineRet>
+            <TxnLineID>3CDC-1758499200</TxnLineID>
+            <ItemRef>
+              <FullName>Shelled Almonds</FullName>
+            </ItemRef>
+            <Desc>Trade sample, almond kernels</Desc>
+            <Quantity>40</Quantity>
+            <UnitOfMeasure>lb</UnitOfMeasure>
+            <Rate>0.00</Rate>
+            <Amount>0.00</Amount>
+          </InvoiceLineRet>
+        </InvoiceLineGroupRet>
+        <DataExtRet>
+          <OwnerID>0</OwnerID>
+          <DataExtName>Vessel</DataExtName>
+          <DataExtType>STR255TYPE</DataExtType>
+          <DataExtValue>MSC FIRENZE V.541W</DataExtValue>
+        </DataExtRet>
+        <DataExtRet>
+          <OwnerID>0</OwnerID>
+          <DataExtName>Booking</DataExtName>
+          <DataExtType>STR255TYPE</DataExtType>
+          <DataExtValue>EBKG18531409</DataExtValue>
+        </DataExtRet>
+      </InvoiceRet>
+    </InvoiceQueryRs>
+  </QBXMLMsgsRs>
+</QBXML>

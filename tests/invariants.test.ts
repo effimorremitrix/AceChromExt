@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 
 const SRC = join(__dirname, '..', 'src');
 const EXTENSION = join(__dirname, '..', 'extension');
+const COMPANION = join(__dirname, '..', 'companion');
 
 function walk(dir: string, extension: string): string[] {
   const found: string[] = [];
@@ -168,5 +169,113 @@ describe('manifest', () => {
     for (const host of manifest['host_permissions'] as string[]) {
       expect(tabs, host).toContain(host);
     }
+  });
+});
+
+describe('the QuickBooks companion', () => {
+  // The companion is a separate program, so the rules above (which are about
+  // what may run inside Chrome) do not apply to it verbatim: it legitimately
+  // spawns PowerShell and opens a loopback socket. These are its own promises,
+  // from docs/SECURITY.md.
+  const companionSources = walk(join(COMPANION, 'src'), '.ts').map((path) => ({
+    path: path.replace(`${COMPANION}/`, ''),
+    code: stripComments(readFileSync(path, 'utf8')),
+  }));
+
+  function companionOffenders(pattern: RegExp): string[] {
+    return companionSources.filter(({ code }) => pattern.test(code)).map(({ path }) => path);
+  }
+
+  /**
+   * src/ui/page.ts holds the local window's own HTML and JavaScript as string
+   * constants. Its `fetch` calls run in the operator's browser, against the
+   * loopback server that served the page - they are not the Node process
+   * reaching the network - so they are checked separately, below.
+   */
+  const nodeSources = companionSources.filter(({ path }) => path !== 'src/ui/page.ts');
+
+  function nodeOffenders(pattern: RegExp): string[] {
+    return nodeSources.filter(({ code }) => pattern.test(code)).map(({ path }) => path);
+  }
+
+  it('is not part of the extension bundle', () => {
+    // Nothing under src/ may import it, or the extension would inherit its
+    // process- and socket-level capabilities.
+    for (const { path, code } of stripped) {
+      expect(code, path).not.toMatch(/from\s+['"][^'"]*companion/);
+    }
+  });
+
+  it('makes no outbound network request of any kind', () => {
+    expect(nodeOffenders(/\bfetch\s*\(/)).toEqual([]);
+    expect(nodeOffenders(/XMLHttpRequest/)).toEqual([]);
+    expect(nodeOffenders(/new\s+WebSocket/)).toEqual([]);
+    expect(nodeOffenders(/sendBeacon/)).toEqual([]);
+    // node:http is present for the local window's *listener*; node:https, and
+    // any client that could reach outward, must not be.
+    expect(nodeOffenders(/from\s+['"]node:https['"]|require\(['"]https?['"]\)/)).toEqual([]);
+    expect(nodeOffenders(/https?\.(request|get)\s*\(/)).toEqual([]);
+  });
+
+  it('lets the local page talk only to the page it came from', () => {
+    const page = readFileSync(join(COMPANION, 'src', 'ui', 'page.ts'), 'utf8');
+    // Every fetch target is a relative path, so it can only reach the loopback
+    // server that served the page - and connect-src 'self' enforces that too.
+    for (const call of page.match(/fetch\(([^,)]+)/g) ?? []) {
+      expect(call, page).toMatch(/fetch\(path \+|fetch\('\/[^']*'/);
+    }
+    expect(page).not.toMatch(/https?:\/\//);
+    expect(page).not.toMatch(/<script[^>]+src=["']http/);
+  });
+
+  it('names no host but this machine', () => {
+    const urls = companionSources
+      .flatMap(({ code }) => code.match(/https?:\/\/[^\s'"`)]+/g) ?? [])
+      .filter((url) => !/^https?:\/\/(127\.0\.0\.1|localhost)([:/]|$)/.test(url));
+    expect(urls).toEqual([]);
+  });
+
+  it('serves the local window on the loopback address only', () => {
+    const server = readFileSync(join(COMPANION, 'src', 'ui', 'server.ts'), 'utf8');
+    expect(server).toMatch(/server\.listen\([^)]*'127\.0\.0\.1'/);
+    expect(server).not.toMatch(/'0\.0\.0\.0'/);
+    // Every API route is behind a per-run token.
+    expect(server).toMatch(/query\.get\('t'\) !== context\.token/);
+  });
+
+  it('only ever reads from QuickBooks', () => {
+    // An Add/Mod/Del request would let a data-entry aid change the books.
+    const requests = readFileSync(join(COMPANION, 'src', 'qbxml', 'requests.ts'), 'utf8');
+    const built = requests.match(/<(\w+)Rq/g) ?? [];
+    for (const element of built) {
+      expect(element, requests).toMatch(/^<(QBXMLMsgs|\w*Query)Rq$/);
+    }
+    expect(companionOffenders(/InvoiceAddRq|InvoiceModRq|TxnDelRq/)).toEqual([]);
+  });
+
+  it('handles no QuickBooks credential', () => {
+    expect(companionOffenders(/\bpassword\b/i)).toEqual([]);
+    expect(companionOffenders(/\bcredential/i)).toEqual([]);
+  });
+
+  it('refuses XML declarations, so no entity expansion is possible', () => {
+    const xml = readFileSync(join(COMPANION, 'src', 'qbxml', 'xml.ts'), 'utf8');
+    expect(xml).toMatch(/Declarations \(DOCTYPE, ENTITY\) are not accepted/);
+    expect(xml).toMatch(/MAX_XML_DEPTH/);
+    expect(xml).toMatch(/MAX_XML_BYTES/);
+  });
+
+  it('builds no PowerShell command out of company data', () => {
+    const script = readFileSync(join(COMPANION, 'powershell', 'QbxmlRequest.ps1'), 'utf8');
+    expect(script).toMatch(/^\s*param\(/m);
+    expect(script).not.toMatch(/Invoke-Expression|\biex\b/);
+    // The request body travels as a file, never as an argument.
+    expect(script).toMatch(/ReadAllText\(\$RequestPath/);
+
+    const transport = readFileSync(join(COMPANION, 'src', 'transport', 'ComTransport.ts'), 'utf8');
+    expect(transport).toContain("'-NoProfile'");
+    expect(transport).toContain("'-NonInteractive'");
+    expect(transport).toMatch(/mkdtempSync/);
+    expect(transport).toMatch(/rmSync\(directory/);
   });
 });

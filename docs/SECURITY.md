@@ -1,5 +1,17 @@
 # Security and privacy
 
+This document covers two programs that ship from this repository:
+
+- **the extension** (`src/` -> `dist/`), which runs in Chrome;
+- **the QuickBooks companion** (`companion/` -> `dist-companion/`), which runs
+  on the Windows PC beside QuickBooks Desktop.
+
+They are built separately and on purpose. The extension's guarantees below are
+enforced by checks over `src/` and `dist/`; the companion legitimately needs to
+spawn a process and open a loopback socket, and keeping it out of the
+extension's build means those checks never had to be relaxed to accommodate it.
+The companion's own guarantees are in [Companion](#the-quickbooks-companion).
+
 ## What this extension does not do
 
 | Not done | Enforced by |
@@ -115,6 +127,85 @@ regress unnoticed.
 `npm run smoke` additionally confirms in a real browser that an outbound
 `fetch` and an inline `<script>` are both refused by the CSP on the extension
 pages, and that ACE's Save Line button is never clicked during a fill.
+
+## The QuickBooks companion
+
+### What it does not do
+
+| Not done | Enforced by |
+| --- | --- |
+| Any outbound network request | there is no `fetch`, no HTTP client, and no URL to anything: everything it talks to is on the same machine |
+| Cloud upload, telemetry, analytics | there is no server and no endpoint |
+| Storing or reading a QuickBooks password | QuickBooks authorization is the SDK's certificate mechanism; no credential is ever seen |
+| Writing to QuickBooks | only `*QueryRq` requests are built. There is no `Add`, `Mod` or `Del` request anywhere in the code |
+| Filing anything | it writes a spreadsheet. The extension then fills fields, and a person submits |
+| Inventing customs data | a missing Schedule B, origin or licence code stays blank and is reported as an error |
+
+### QuickBooks authorization
+
+Access is granted through the SDK's **application certificate**, stored inside
+the company file, approved once by a QuickBooks Admin, and revocable at any
+time under *Edit > Preferences > Integrated Applications*. The companion never
+sees, asks for, or stores a QuickBooks password. Only `*QueryRq` requests are
+sent, so an authorized session cannot alter the company file.
+
+### The COM bridge
+
+The SDK's request processor is 32-bit in-process COM, so the call is made by
+the 32-bit Windows PowerShell through `companion/powershell/QbxmlRequest.ps1`.
+
+- The script takes **parameters only**; the request body is read from a file.
+  Nothing out of a company file is ever concatenated into a command line, and
+  the script contains no `Invoke-Expression`.
+- PowerShell is started with `-NoProfile -NonInteractive`, so no user profile
+  script runs.
+- Request and response live in a private temporary directory created per
+  request with mode 0700, and removed in a `finally` block.
+- The session is opened and closed per request, so the tool never leaves a
+  session held against someone's company file.
+
+### The local window
+
+`ace-export gui` is the one listener in the whole project, and it is opt-in.
+
+- It binds to **127.0.0.1**, never `0.0.0.0`, so nothing on the network can
+  reach it.
+- Every API request must carry a **token generated for that run**, so another
+  program on the same machine cannot drive it by guessing the port.
+- The page loads no external script, style, font or image. Its response CSP is
+  `default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'`,
+  with `form-action 'none'` and `base-uri 'none'`.
+- Responses carry `no-store`, `nosniff` and `no-referrer`.
+
+### Reading qbXML safely
+
+A qbXML response is untrusted input like any other file. The reader in
+`companion/src/qbxml/xml.ts` is deliberately small:
+
+- **`<!DOCTYPE>` is rejected outright**, so there are no entity definitions, no
+  external entities, and no "billion laughs" expansion;
+- only the five predefined entities and numeric character references are
+  decoded, and an unknown entity is left verbatim rather than resolved;
+- input size and nesting depth are capped;
+- attribute bags are null-prototype objects and an attribute literally named
+  `__proto__` is dropped, so a response cannot reach `Object.prototype`.
+
+The configuration file gets the same treatment: unknown keys are dropped, every
+field name is validated against the canonical model, and `__proto__` keys are
+ignored.
+
+### Data at rest
+
+| Data | Where | Lifetime |
+| --- | --- | --- |
+| The qbXML request and response | a per-request temp directory, mode 0700 | deleted when the request ends |
+| The generated workbook | wherever you pointed `--out` | yours |
+| Configuration (`ace-export.config.json`) | the working directory | yours. It holds custom-field names and Schedule B numbers, never credentials |
+| QuickBooks credentials | nowhere | never read |
+
+`ace-export.config.json` and `ACE_Invoice_*.xlsx` are in `.gitignore`, so a
+real company's item catalogue and a real customer's shipment do not get
+committed by accident.
 
 ## Reporting
 

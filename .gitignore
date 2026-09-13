@@ -4,3 +4,6 @@ dist/
 .DS_Store
 .vitest/
 coverage/
+dist-companion/
+ace-export.config.json
+ACE_Invoice_*.xlsx
