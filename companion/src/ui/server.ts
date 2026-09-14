@@ -28,7 +28,7 @@ import { validateShipment, type ValidationResult } from '../../../src/excel/vali
 import type { InvoiceSourceAdapter } from '../adapter/InvoiceSourceAdapter.js';
 import type { QbInvoice } from '../qbxml/types.js';
 import type { CanonicalMapping } from '../mapping/types.js';
-import { renderChecklist, renderPreview } from './preview.js';
+import { aceReadiness, renderChecklist, renderPreview } from './preview.js';
 import { buildAdapter, type CliIo, type ResolvedOptions } from './cli.js';
 import { PAGE_CSS, PAGE_HTML, PAGE_JS } from './page.js';
 
@@ -72,6 +72,7 @@ function summaryPayload(mapping: CanonicalMapping, validation: ValidationResult,
     },
     origins: mapping.origins.invoice,
     itemCount: commodities.length,
+    readiness: aceReadiness(mapping),
     checklist: renderChecklist(mapping, validation, { ascii }),
     preview: renderPreview(mapping, validation, { ascii }),
     errors: validation.errors,
@@ -128,7 +129,8 @@ export async function handleRequest(
       if (id.trim() === '') return json(400, { error: 'Which invoice?' });
       const invoice = await context.adapter.getInvoice(id);
       const overrides = readOverrides(query.get('overrides'));
-      const mapping = context.adapter.toCanonicalInvoice(invoice, { overrides });
+      const lineOverrides = readLineOverrides(query.get('lineOverrides'));
+      const mapping = context.adapter.toCanonicalInvoice(invoice, { overrides, lineOverrides });
       const validation = validateShipment(mapping.shipment);
       return json(200, summaryPayload(mapping, validation, context.options.ascii));
     }
@@ -138,9 +140,10 @@ export async function handleRequest(
       const id = typeof request['id'] === 'string' ? request['id'] : '';
       if (id.trim() === '') return json(400, { error: 'Which invoice?' });
       const overrides = readOverrides(request['overrides']);
+      const lineOverrides = readLineOverrides(request['lineOverrides']);
 
       const invoice = await context.adapter.getInvoice(id);
-      const mapping = context.adapter.toCanonicalInvoice(invoice, { overrides });
+      const mapping = context.adapter.toCanonicalInvoice(invoice, { overrides, lineOverrides });
       const validation = validateShipment(mapping.shipment);
       const result = await context.adapter.exportAceExcel({
         mapping,
@@ -175,6 +178,34 @@ function readOverrides(raw: unknown): Record<string, string> {
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
     if (key === '__proto__') continue;
     if (typeof item === 'string' && item.trim() !== '') out[key] = item;
+  }
+  return out;
+}
+
+/**
+ * Per-line overrides from the form: { "1": { "scheduleB": "0802.12.0000" } }.
+ *
+ * Parsed as defensively as the header overrides - the line key must be a
+ * positive integer and every value a non-empty string. Whether a *field* may
+ * be overridden is the adapter's decision, not this parser's, so an unknown
+ * field reaches it and is rejected with a message the operator can act on.
+ */
+function readLineOverrides(raw: unknown): Record<number, Record<string, string>> {
+  if (raw === null || raw === undefined || raw === '') return {};
+  const value: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  const out: Record<number, Record<string, string>> = {};
+  for (const [key, fields] of Object.entries(value as Record<string, unknown>)) {
+    if (key === '__proto__') continue;
+    const line = Number(key);
+    if (!Number.isInteger(line) || line < 1 || line > 10000) continue;
+    if (typeof fields !== 'object' || fields === null || Array.isArray(fields)) continue;
+    const perLine: Record<string, string> = {};
+    for (const [field, item] of Object.entries(fields as Record<string, unknown>)) {
+      if (field === '__proto__') continue;
+      if (typeof item === 'string' && item.trim() !== '') perLine[field] = item;
+    }
+    if (Object.keys(perLine).length) out[line] = perLine;
   }
   return out;
 }

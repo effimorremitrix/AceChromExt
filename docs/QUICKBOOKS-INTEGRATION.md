@@ -385,6 +385,50 @@ certifies - [docs/USER-GUIDE.md](USER-GUIDE.md).
 Exit codes: `0` clean, `1` the export found validation errors (the workbook is
 still written, so it can be corrected in Excel), `2` the command line was wrong.
 
+## 10b. Correcting the ACE-only fields before export
+
+Schedule B, origin and licence code are customs facts. No accounting system
+holds them, so there are exactly three places they can come from, and the
+export screen shows which:
+
+| Source | When to use it |
+| --- | --- |
+| `items` in the configuration | the normal case - the fact is about the item and is true every time |
+| a QuickBooks line custom field (`itemCustomFields`) | your company already keeps it in QuickBooks |
+| supplied at export time | you need to ship today and the configuration is not up to date |
+
+The **ACE readiness** panel in `ace-export gui` lists every line and marks each
+fact:
+
+```
+Line 1: Almond Kernels, Monterey SSR 23/25              needs attention
+  ✓ Schedule B         0802.12.0000
+  ✓ Origin             D
+  ⚠ License Code       missing
+  ✓ Quantity 1         79,832
+  ✓ Value of Goods     651,217.60
+  ✓ Shipping Weight    79,832 kg
+```
+
+The customs facts have a box under them. Type the value, press **Apply and
+preview**, and the line goes green. On the command line the same thing is:
+
+```bash
+node ace-export.mjs export CN-1042 --set-line 1.licenseCode=C33
+```
+
+Either way the value applies to **this export only** and is recorded in the
+audit trail as `supplied for this export`, not as something QuickBooks said.
+Put it in `items` when you want it to be permanent.
+
+**Quantity 1, the value and the shipping weight have no box, and `--set-line`
+refuses them.** They are what the invoice line *is*. An ACE filing that
+disagrees with its own invoice is a worse problem than one that is late, so the
+only way to change them is to change the invoice. `uom1` is refused for a
+narrower reason: Quantity 1 and UOM 1 are derived together from the weight, so
+changing the unit alone would make ACE report 79,832 *pounds*. The unit belongs
+in the item profile's `aceUom1`, where the quantity is derived to match it.
+
 ## 11. What still needs testing on the QuickBooks PC
 
 Everything from `QbInvoice` onwards is covered by tests against saved qbXML

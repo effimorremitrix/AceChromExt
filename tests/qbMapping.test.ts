@@ -290,3 +290,105 @@ describe('configuration', () => {
     expect(Object.keys(parsed.customFields)).toEqual(['Vessel']);
   });
 });
+
+/**
+ * Phase 3: correcting the ACE-only fields at export time.
+ *
+ * Schedule B, origin and licence code belong in the item profile long-term.
+ * But on the morning of a sailing an operator needs to supply one for a line
+ * and export, not edit JSON first - so the export screen can pass them for
+ * this export only, and the audit trail still says a human supplied them.
+ */
+describe('per-line ACE overrides', () => {
+  const bare = config({ items: {}, itemDefaults: { quantity1From: 'weight', aceUom1: 'KG' } });
+
+  it('leaves the customs fields blank when nothing supplies them', () => {
+    const mapping = mapQbInvoiceToCanonical(invoiceFrom('invoice-single-line.xml'), bare);
+    const line = mapping.shipment.commodities[0]!;
+    expect(line.scheduleB).toBe('');
+    expect(line.origin).toBe('');
+    expect(line.licenseCode).toBe('');
+    expect(validateShipment(mapping.shipment).errors).toBeGreaterThan(0);
+  });
+
+  it('takes a Schedule B, origin and licence supplied for this export', () => {
+    const mapping = mapQbInvoiceToCanonical(invoiceFrom('invoice-single-line.xml'), bare, {
+      lineOverrides: { 1: { scheduleB: '0802.12.0000', origin: 'Domestic', licenseCode: 'c33' } },
+    });
+    const line = mapping.shipment.commodities[0]!;
+
+    // Normalised by the same transformers the spreadsheet path uses.
+    expect(line.scheduleB).toBe('0802.12.0000');
+    expect(line.origin).toBe('D');
+    expect(line.licenseCode).toBe('C33');
+    expect(validateShipment(mapping.shipment).errors).toBe(0);
+  });
+
+  it('records them as operator-supplied, not as something QuickBooks said', () => {
+    const mapping = mapQbInvoiceToCanonical(invoiceFrom('invoice-single-line.xml'), bare, {
+      lineOverrides: { 1: { scheduleB: '0802.12.0000' } },
+    });
+    const origin = mapping.origins.commodities[1]?.['scheduleB'];
+    expect(origin?.origin).toBe('manual');
+    expect(origin?.source).toContain('supplied for this export');
+  });
+
+  it('beats the item profile, which beats QuickBooks', () => {
+    const mapping = mapQbInvoiceToCanonical(invoiceFrom('invoice-single-line.xml'), config(), {
+      lineOverrides: { 1: { scheduleB: '0813.40.8000' } },
+    });
+    // starterConfig() puts 0802.12.0000 on the item; the override wins.
+    expect(mapping.shipment.commodities[0]?.scheduleB).toBe('0813.40.8000');
+  });
+
+  it('ignores an override aimed at a line that does not exist', () => {
+    const mapping = mapQbInvoiceToCanonical(invoiceFrom('invoice-single-line.xml'), config(), {
+      lineOverrides: { 7: { scheduleB: '9999.99.9999' } },
+    });
+    expect(mapping.shipment.commodities).toHaveLength(1);
+    expect(mapping.shipment.commodities[0]?.scheduleB).toBe('0802.12.0000');
+  });
+
+  it('will not let the export screen contradict the invoice', () => {
+    const mapping = mapQbInvoiceToCanonical(invoiceFrom('invoice-single-line.xml'), config(), {
+      // Not in OVERRIDABLE_COMMODITY_FIELDS, so it is refused at the mapper
+      // even if something upstream let it through.
+      lineOverrides: { 1: { valueOfGoods: '1.00', shippingWeight: '1', quantity1: '1', uom1: 'LB' } as never },
+    });
+    const line = mapping.shipment.commodities[0]!;
+    expect(line.valueOfGoods).toBe(651217.6);
+    expect(line.shippingWeight).toBe(79832);
+    expect(line.quantity1).toBe(79832);
+    expect(line.uom1).toBe('KG');
+  });
+});
+
+describe('ACE readiness, per line', () => {
+  it('says which customs facts are still missing before the workbook is written', async () => {
+    const { aceReadiness } = await import('../companion/src/ui/preview.js');
+    const mapping = mapQbInvoiceToCanonical(
+      invoiceFrom('invoice-single-line.xml'),
+      config({ items: {}, itemDefaults: { quantity1From: 'weight', aceUom1: 'KG' } }),
+    );
+    const [line] = aceReadiness(mapping);
+    const byField = new Map(line!.items.map((item) => [item.field, item]));
+
+    expect(byField.get('scheduleB')?.ok).toBe(false);
+    expect(byField.get('origin')?.ok).toBe(false);
+    expect(byField.get('licenseCode')?.ok).toBe(false);
+    // The invoice facts are fine: QuickBooks does hold those.
+    expect(byField.get('valueOfGoods')?.ok).toBe(true);
+    expect(byField.get('shippingWeight')?.ok).toBe(true);
+    expect(line!.ready).toBe(false);
+
+    // And the three missing ones are the three the screen lets you type in.
+    expect(byField.get('scheduleB')?.editable).toBe(true);
+    expect(byField.get('shippingWeight')?.editable).toBe(false);
+  });
+
+  it('is ready once the item profile supplies them', async () => {
+    const { aceReadiness } = await import('../companion/src/ui/preview.js');
+    const mapping = mapQbInvoiceToCanonical(invoiceFrom('invoice-single-line.xml'), config());
+    expect(aceReadiness(mapping)[0]?.ready).toBe(true);
+  });
+});

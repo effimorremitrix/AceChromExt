@@ -17,6 +17,10 @@
         |  src/excel/excelReader.ts        bytes -> arrays of arrays
         v
   raw grid
+        |  src/sources/                    which InvoiceDataSource claims it?
+        |    ExcelSource                   a workbook somebody filled in
+        |    QuickBooksExportSource        one the companion wrote
+        |    WebSource                     declared, unavailable by design
         |  src/excel/canonicalMapper.ts    semantic normalization + provenance
         v
   CANONICAL SHIPMENT MODEL  ................ src/models/CanonicalInvoice.ts
@@ -24,10 +28,14 @@
         |
         |  src/excel/validator.ts          plausibility rules -> issues
         |  src/ui/preview.ts               traffic lights, original vs ACE
+        |  src/ui/preflight.ts             ten named data quality checks
+        |  src/ui/mappingStatus.ts         source -> ACE field, per field
         v
   USER REVIEWS, THEN CLICKS FILL
         |
-        |  src/ace/mappings/*              declarative field -> selector map
+        |  src/ace/mappings/*              what to fill: field, transform, limits
+        |  src/ace/selectors/*             where to find it: the ACE selectors
+        |  src/ace/selectors/overrides.ts  selectors captured from live ACE
         |  src/ace/transformers/*          presentation for ACE
         |  src/content/pageDetector.ts     which step is on screen?
         |  src/content/fieldDetector.ts    which element is this field?
@@ -36,6 +44,10 @@
         |
         v
   ACE form  ->  user reviews  ->  USER SUBMITS
+
+  (throughout: src/core/sessionLog.ts records import, every transformation and
+   every fill, in session memory only, exportable on request and uploaded
+   nowhere. src/content/automationPolicy.ts states what is never clicked.)
 ```
 
 Nothing flows backwards. The canonical model has no idea ACE exists; the
@@ -54,7 +66,13 @@ The spreadsheet, ACE's DOM and QuickBooks all change for unrelated reasons.
 Putting a stable model between them means:
 
 - a spreadsheet-format change touches only `columnAliases.ts` + `canonicalMapper.ts`;
-- an ACE DOM change touches only `ace/mappings/*`;
+- an ACE DOM change touches only `ace/selectors/*` - or nothing at all, because
+  a captured selector can be pasted into the panel and is in force on the next
+  fill without a rebuild;
+- a new *source* of the model implements `InvoiceDataSource` and changes nothing
+  downstream. ExcelSource is the fallback and is the Phase 1 path verbatim;
+  identifying a workbook as QuickBooks-produced changes its label and nothing
+  else, which a test asserts by comparing the two canonical models;
 - QuickBooks is a second *producer* of the same model, and reuses the entire
   preview / validation / fill pipeline unchanged. Phase 2 added no second
   invoice model and no second transformation engine: `qbToCanonical.ts` calls

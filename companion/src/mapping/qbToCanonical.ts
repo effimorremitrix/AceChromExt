@@ -52,7 +52,43 @@ export interface QbMapOptions {
   settings?: AceHelperSettings;
   /** Last-word overrides, e.g. from `--set vessel="MSC FIRENZE"`. */
   overrides?: Partial<Record<InvoiceField, string>>;
+  /**
+   * Per-line overrides, keyed by 1-based commodity line.
+   *
+   * Schedule B, origin and licence code are the three facts no accounting
+   * system holds, and the item profile is where they belong long-term. But on
+   * the morning of a sailing an operator needs to supply one for a line and
+   * export, not edit a JSON file first - so the export UI can pass them here
+   * for this export only. They are recorded with origin 'manual', exactly like
+   * a --set, so the audit trail still says a human supplied them.
+   *
+   * Quantity 1, the value and the shipping weight are deliberately not
+   * overridable: those are what the invoice line *is*, and letting the export
+   * screen change them would let an ACE filing disagree with its own invoice.
+   */
+  lineOverrides?: Record<number, Partial<Record<CommodityField, string>>>;
 }
+
+/**
+ * Commodity fields an export-time override may set.
+ *
+ * `uom1` is absent on purpose, even though a custom field may fill it.
+ * Quantity 1 and UOM 1 are derived together from the weight, so changing the
+ * unit alone would make ACE report 79,832 *pounds*. The unit for a Schedule B
+ * number belongs in the item profile (`aceUom1`), where quantity 1 is derived
+ * to match it. Quantity 1, the value and the shipping weight are absent for
+ * the stronger reason: they are what the invoice line is.
+ */
+export const OVERRIDABLE_COMMODITY_FIELDS: CommodityField[] = [
+  'exportInformationCode',
+  'scheduleB',
+  'description',
+  'quantity2',
+  'uom2',
+  'origin',
+  'eccn',
+  'licenseCode',
+];
 
 // ---------------------------------------------------------------------------
 // Canonical field -> the Phase 1 column spec that knows how to normalize it.
@@ -352,33 +388,50 @@ export function mapQbInvoiceToCanonical(
         ? []
         : [{ origin: 'manual' as FieldOrigin, source: `items."${line.item.fullName}".${key}`, value }];
 
+    // Supplied for this export only. First in the list, so it beats the item
+    // profile and anything QuickBooks carries.
+    const overrideCandidate = (field: CommodityField): Candidate[] => {
+      const value = options.lineOverrides?.[lineNumber]?.[field];
+      if (value === undefined || value.trim() === '') return [];
+      if (!OVERRIDABLE_COMMODITY_FIELDS.includes(field)) return [];
+      return [{ origin: 'manual' as FieldOrigin, source: `supplied for this export (line ${lineNumber})`, value }];
+    };
+
     const customCandidate = (field: string): Candidate[] => {
       const found = context.itemCustom.get(field);
       return found ? [{ origin: 'custom-field' as FieldOrigin, source: found.source, value: found.value }] : [];
     };
 
-    assign('scheduleB', pick([...profileCandidate(profile.scheduleB, 'scheduleB'), ...customCandidate('scheduleB')]));
+    assign(
+      'scheduleB',
+      pick([...overrideCandidate('scheduleB'), ...profileCandidate(profile.scheduleB, 'scheduleB'), ...customCandidate('scheduleB')]),
+    );
     assign(
       'description',
       pick([
+        ...overrideCandidate('description'),
         ...profileCandidate(profile.description, 'description'),
         ...customCandidate('description'),
         { origin: 'quickbooks', source: 'InvoiceLineRet/Desc', value: line.desc },
         { origin: 'quickbooks', source: 'InvoiceLineRet/ItemRef/FullName', value: line.item.fullName },
       ]),
     );
-    assign('origin', pick([...profileCandidate(profile.origin, 'origin'), ...customCandidate('origin')]));
-    assign('licenseCode', pick([...profileCandidate(profile.licenseCode, 'licenseCode'), ...customCandidate('licenseCode')]));
-    assign('eccn', pick([...profileCandidate(profile.eccn, 'eccn'), ...customCandidate('eccn')]));
+    assign('origin', pick([...overrideCandidate('origin'), ...profileCandidate(profile.origin, 'origin'), ...customCandidate('origin')]));
+    assign(
+      'licenseCode',
+      pick([...overrideCandidate('licenseCode'), ...profileCandidate(profile.licenseCode, 'licenseCode'), ...customCandidate('licenseCode')]),
+    );
+    assign('eccn', pick([...overrideCandidate('eccn'), ...profileCandidate(profile.eccn, 'eccn'), ...customCandidate('eccn')]));
     assign(
       'exportInformationCode',
       pick([
+        ...overrideCandidate('exportInformationCode'),
         ...profileCandidate(profile.exportInformationCode, 'exportInformationCode'),
         ...customCandidate('exportInformationCode'),
       ]),
     );
-    assign('quantity2', pick([...customCandidate('quantity2')]));
-    assign('uom2', pick([...customCandidate('uom2')]));
+    assign('quantity2', pick([...overrideCandidate('quantity2'), ...customCandidate('quantity2')]));
+    assign('uom2', pick([...overrideCandidate('uom2'), ...customCandidate('uom2')]));
 
     // ---- value ----
     if (line.amount !== null) {

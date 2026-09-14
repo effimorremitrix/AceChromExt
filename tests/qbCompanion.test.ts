@@ -337,6 +337,43 @@ describe('the command line', () => {
     expect(run.text()).toContain('MSCU1234567');
   });
 
+  it('applies a customs fact supplied for one commodity line', async () => {
+    const directory = scratch();
+    const run = capture();
+    const code = await runCli(
+      [
+        'show',
+        'CN-1042',
+        '--out',
+        directory,
+        '--config',
+        configFile(),
+        '--set-line',
+        '1.scheduleB=0813.40.8000',
+        '--set-line',
+        '1.licenseCode=C33',
+      ],
+      run.io,
+    );
+    expect(code).toBe(0);
+    expect(run.text()).toContain('0813.40.8000');
+    expect(run.text()).toContain('supplied for this export');
+  });
+
+  it('rejects a --set-line that names no line', async () => {
+    const run = capture();
+    expect(await runCli(['show', 'CN-1042', '--set-line', 'scheduleB=0802.12.0000'], run.io)).toBe(1);
+    expect(run.errors()).toContain('line.field=value');
+  });
+
+  it('prints ACE readiness per line, so the missing customs facts are visible', async () => {
+    const run = capture();
+    expect(await runCli(['show', 'CN-1042', '--config', configFile()], run.io)).toBe(0);
+    expect(run.text()).toContain('ACE readiness - line 1');
+    expect(run.text()).toContain('Schedule B');
+    expect(run.text()).toContain('License Code');
+  });
+
   it('exits non-zero when the customs facts are not configured', async () => {
     // No configuration file means no Schedule B, no origin and no licence
     // code, which ACE will reject. The command must say so in its exit code.
@@ -425,6 +462,7 @@ describe('the local window', () => {
       outputDirectory: null,
       fileName: null,
       overrides: {},
+      lineOverrides: {},
       limit: null,
       contains: null,
       customer: null,
@@ -446,6 +484,54 @@ describe('the local window', () => {
     expect(PAGE_JS).not.toMatch(/https?:\/\//);
     expect(CONTENT_SECURITY_POLICY).toContain("default-src 'none'");
     expect(CONTENT_SECURITY_POLICY).toContain("connect-src 'self'");
+  });
+
+  it('returns ACE readiness per line so the form can render it', async () => {
+    const reply = await handleRequest(context(), 'GET', '/api/invoice', query({ id: 'CN-1042' }), '');
+    const payload = JSON.parse(reply.body) as Record<string, never>;
+    const readiness = payload['readiness'] as unknown as Array<{ line: number; ready: boolean; items: Array<{ field: string; ok: boolean; editable: boolean }> }>;
+
+    expect(readiness).toHaveLength(1);
+    const scheduleB = readiness[0]!.items.find((item) => item.field === 'scheduleB');
+    expect(scheduleB?.editable).toBe(true);
+    const weight = readiness[0]!.items.find((item) => item.field === 'shippingWeight');
+    expect(weight?.editable).toBe(false);
+  });
+
+  it('accepts a customs fact typed into the form for one line', async () => {
+    const reply = await handleRequest(
+      context(),
+      'GET',
+      '/api/invoice',
+      query({ id: 'CN-1042', lineOverrides: JSON.stringify({ 1: { scheduleB: '0813.40.8000' } }) }),
+      '',
+    );
+    expect(reply.status).toBe(200);
+    expect(reply.body).toContain('0813.40.8000');
+  });
+
+  it('refuses a form value aimed at a field the invoice owns', async () => {
+    const reply = await handleRequest(
+      context(),
+      'GET',
+      '/api/invoice',
+      query({ id: 'CN-1042', lineOverrides: JSON.stringify({ 1: { shippingWeight: '1' } }) }),
+      '',
+    );
+    expect(reply.status).toBe(400);
+    expect(reply.body).toContain('cannot be supplied per line');
+  });
+
+  it('ignores a nonsense line key instead of trusting it', async () => {
+    const reply = await handleRequest(
+      context(),
+      'GET',
+      '/api/invoice',
+      query({ id: 'CN-1042', lineOverrides: JSON.stringify({ '__proto__': { scheduleB: 'x' }, '-3': { scheduleB: 'y' } }) }),
+      '',
+    );
+    expect(reply.status).toBe(200);
+    expect(({} as Record<string, unknown>)['scheduleB']).toBeUndefined();
   });
 
   it('refuses every API call without the run token', async () => {

@@ -10,6 +10,8 @@
 
 import type { BackgroundRequest, BackgroundResponse } from '../core/messages.js';
 import { clearImport, getImport, selectLine, setImport } from '../core/store.js';
+import { clearLog, logEvent, readLog } from '../core/sessionLog.js';
+
 
 async function handle(message: BackgroundRequest): Promise<BackgroundResponse> {
   switch (message.type) {
@@ -23,9 +25,27 @@ async function handle(message: BackgroundRequest): Promise<BackgroundResponse> {
     case 'store/selectLine':
       return { ok: true, type: 'store/data', payload: await selectLine(message.line) };
 
+    // Clearing the import clears the log with it. The log holds invoice
+    // numbers, weights and values derived from the shipment, so leaving it
+    // behind would make "Clear Imported Data" a promise the extension does not
+    // keep. Export diagnostics first if the trail is wanted.
     case 'store/clear':
       await clearImport();
+      await clearLog();
       return { ok: true, type: 'store/cleared' };
+
+    // The log is owned here so the panel, the popup and the content script all
+    // append to one ordered list instead of three private ones.
+    case 'log/append':
+      await logEvent(message.kind, message.message, message.detail);
+      return { ok: true, type: 'log/ok' };
+
+    case 'log/get':
+      return { ok: true, type: 'log/data', payload: await readLog() };
+
+    case 'log/clear':
+      await clearLog();
+      return { ok: true, type: 'log/ok' };
 
     default:
       return { ok: false, error: 'Unsupported request.' };
@@ -44,4 +64,5 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
 // must never find shipment data lying around.
 chrome.runtime.onStartup.addListener(() => {
   void clearImport();
+  void clearLog();
 });

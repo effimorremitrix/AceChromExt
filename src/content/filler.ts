@@ -23,7 +23,9 @@ import {
   type FillReport,
 } from '../models/AceField.js';
 import type { CanonicalCommodity, CanonicalShipment } from '../models/CanonicalInvoice.js';
-import { fieldsForPage } from '../ace/mappings/index.js';
+import { resolveFields } from '../ace/mappings/index.js';
+import type { SelectorOverrides } from '../ace/selectors/overrides.js';
+import { describeCandidate } from '../ace/selectors/types.js';
 import { runTransforms } from '../ace/transformers/index.js';
 import { truncate } from '../ace/transformers/text.js';
 import type { AceHelperSettings } from '../core/settings.js';
@@ -44,6 +46,8 @@ export interface FillRequest {
   dryRun?: boolean;
   /** Overwrite ACE fields that already hold a different value. Default false. */
   overwrite?: boolean;
+  /** Operator-captured selectors, tried ahead of the built-in candidates. */
+  overrides?: SelectorOverrides | null;
 }
 
 /** Resolve a mapping's dotted source path against the canonical model. */
@@ -117,7 +121,7 @@ export function fillFields(request: FillRequest, doc: Document = document): Fill
     return tallyReport(report);
   }
 
-  const mappings = fieldsForPage(page, scope);
+  const mappings = resolveFields(page, scope, request.overrides ?? null);
   if (!mappings.length) {
     report.outcomes.push({
       key: 'page',
@@ -150,7 +154,13 @@ interface FillOneContext {
 
 function fillOne(mapping: AceFieldMapping, ctx: FillOneContext, root: ParentNode): FillOutcome {
   const { shipment, commodity, settings, dryRun, overwrite } = ctx;
-  const base: FillOutcome = { key: mapping.key, label: mapping.label, status: 'skipped' };
+  const base: FillOutcome = {
+    key: mapping.key,
+    label: mapping.label,
+    status: 'skipped',
+    source: mapping.source,
+    selector: describeCandidate(mapping.candidates),
+  };
 
   const resolved = resolveSource(mapping.source, shipment, commodity);
   if (!resolved.found) {
@@ -193,6 +203,8 @@ function fillOne(mapping: AceFieldMapping, ctx: FillOneContext, root: ParentNode
       confidence: detection.confidence,
     };
   }
+
+  base.selector = detection.matchedWith ?? base.selector;
 
   const existing = readAceFieldValue(detection.element);
   if (existing.trim() !== '' && existing.trim() !== finalValue.trim() && !overwrite) {

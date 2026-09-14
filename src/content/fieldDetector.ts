@@ -76,9 +76,8 @@ function findByLabel(root: ParentNode, labelTexts: string[]): Element[] {
       matches.push(nested);
       continue;
     }
-    // A label that sits beside its control (common in table layouts).
-    const sibling = label.parentElement?.querySelector(CONTROL_SELECTOR);
-    if (sibling) matches.push(sibling);
+    const adjacent = adjacentControl(label);
+    if (adjacent) matches.push(adjacent);
   }
 
   // 2. aria-label / aria-labelledby / title
@@ -104,6 +103,42 @@ function findByLabel(root: ParentNode, labelTexts: string[]): Element[] {
   }
 
   return [...new Set(matches)];
+}
+
+/**
+ * The control a label sits *beside*.
+ *
+ * A label with a `for` that resolves to nothing is common on portals that
+ * re-render, and the tempting fallback - "the first control inside the label's
+ * container" - is wrong in exactly the case that matters: a Line Details panel
+ * holds a dozen controls, so a stale label for the licence code would resolve
+ * to the export information code and the wrong box would be typed into.
+ *
+ * So only genuinely adjacent controls count: the element straight after the
+ * label, or a single control inside it, or a single control in the next cell
+ * of a table row. Anything less definite returns nothing, and detection moves
+ * on to the next candidate or reports NOT_FOUND.
+ */
+function adjacentControl(label: Element): Element | null {
+  const next = label.nextElementSibling;
+  if (next) {
+    if (next.matches(CONTROL_SELECTOR)) return next;
+    const inside = safeQueryAll(next, CONTROL_SELECTOR);
+    if (inside.length === 1) return inside[0] as Element;
+  }
+
+  // <td><label></td><td><input></td>
+  const cell = label.parentElement;
+  if (cell && cell.children.length === 1) {
+    const nextCell = cell.nextElementSibling;
+    if (nextCell) {
+      if (nextCell.matches(CONTROL_SELECTOR)) return nextCell;
+      const inside = safeQueryAll(nextCell, CONTROL_SELECTOR);
+      if (inside.length === 1) return inside[0] as Element;
+    }
+  }
+
+  return null;
 }
 
 function findByPlaceholder(root: ParentNode, placeholder: string): Element[] {

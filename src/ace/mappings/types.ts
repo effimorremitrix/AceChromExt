@@ -1,69 +1,40 @@
 /**
  * Helpers for writing field mappings.
  *
- * Every selector in this folder is a *candidate*. Candidates are tried in the
- * order they appear, and each carries `verified`:
+ * Since Phase 3 a mapping declares only the four things that are about the
+ * *filing*: which canonical field feeds it, how the value is transformed for
+ * ACE, how long ACE lets it be, and whether it is expected to be present.
  *
- *   verified: true   - the selector was copied out of the live ACE DOM and
- *                      checked in. Matching it gives high confidence.
- *   verified: false  - a placeholder. It is still tried (it costs nothing and
- *                      may well work), but a match is reported with reduced
- *                      confidence, and the diagnostics panel lists the field
- *                      as needing verification.
- *
- * Nothing is ever written to a field that no candidate matched.
+ * The ACE selectors live in `src/ace/selectors/`, because they change on
+ * CBP's schedule rather than ours, and are looked up here by field key. A
+ * mapping with no selector entry is a build error rather than a field that
+ * silently never fills.
  */
 
-import type { AceFieldMapping, AceSelectorCandidate } from '../../models/AceField.js';
+import type { AceFieldMapping } from '../../models/AceField.js';
+import { statusFor, type SelectorTable } from '../selectors/types.js';
 
-/** A verified id/name selector captured from live ACE. */
-export function verified(strategy: 'id' | 'name' | 'attribute', selector: string, note?: string): AceSelectorCandidate {
-  return { strategy, selector, verified: true, ...(note ? { note } : {}) };
-}
+export { byLabel, byNearby, placeholder, statusFor, verified } from '../selectors/types.js';
+export type { SelectorEntry, SelectorTable } from '../selectors/types.js';
 
-/** A placeholder id/name/attribute selector that still needs confirming against live ACE. */
-export function placeholder(
-  strategy: 'id' | 'name' | 'attribute' | 'nearby' | 'placeholder',
-  selector: string,
-  note = 'Placeholder - confirm against the live ACE DOM.',
-): AceSelectorCandidate {
-  return { strategy, selector, verified: false, note };
-}
+export type FieldDefinition = Omit<AceFieldMapping, 'candidates' | 'verificationStatus' | 'devtoolsHint'> & {
+  /** The page's selector table. Candidates are looked up by `key`. */
+  selectors: SelectorTable;
+};
 
-/**
- * Match by the field's visible label text.
- *
- * This is the most durable strategy available before the real DOM is captured:
- * ACE can restructure its markup and keep the same label. The strings below
- * come from the AESDirect filing screens as they appear to the user and must
- * still be confirmed - hence verified: false.
- */
-export function byLabel(labelText: string[], note = 'Label wording taken from the AESDirect UI; confirm exact text.'): AceSelectorCandidate {
-  return { strategy: 'label', labelText, verified: false, note };
-}
-
-/** Match the first enabled control inside a named container. */
-export function byNearby(containerSelector: string, within = 'input, select, textarea'): AceSelectorCandidate {
-  return {
-    strategy: 'nearby',
-    selector: containerSelector,
-    within,
-    verified: false,
-    note: 'Structural fallback - confirm the container against the live ACE DOM.',
-  };
-}
-
-/** True when any candidate has been verified against live ACE. */
-export function statusFor(candidates: AceSelectorCandidate[]): AceFieldMapping['verificationStatus'] {
-  return candidates.some((candidate) => candidate.verified) ? 'verified' : 'placeholder';
-}
-
-/** Build a mapping, deriving verificationStatus from the candidates. */
-export function defineField(
-  field: Omit<AceFieldMapping, 'verificationStatus'> & { verificationStatus?: AceFieldMapping['verificationStatus'] },
-): AceFieldMapping {
+/** Build a mapping, pulling its selectors from the page's selector table. */
+export function defineField(definition: FieldDefinition): AceFieldMapping {
+  const { selectors, ...field } = definition;
+  const entry = selectors[field.key];
+  if (!entry) {
+    throw new Error(
+      `No selector entry for "${field.key}". Add one to src/ace/selectors/${field.page}.ts before mapping the field.`,
+    );
+  }
   return {
     ...field,
-    verificationStatus: field.verificationStatus ?? statusFor(field.candidates),
+    candidates: entry.candidates,
+    devtoolsHint: entry.devtoolsHint,
+    verificationStatus: statusFor(entry.candidates),
   };
 }

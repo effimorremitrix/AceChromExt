@@ -2,27 +2,48 @@
  * Shared extension UI.
  *
  * Rendered into both surfaces:
- *   - popup  : quick actions against the ACE tab (fill, summary, line picker).
- *   - panel  : full page - Excel import, preview, diagnostics, settings.
+ *   - popup  : quick actions against the ACE tab (overview, fill, preview).
+ *   - panel  : the full workspace - import, preview, mapping status, fill,
+ *              calculator, settings, diagnostics.
  *
  * Import lives in the panel because Chrome closes an extension popup when a
  * file picker opens; the popup links to the panel instead.
  *
  * Safety invariants enforced here:
  *   - nothing is sent to ACE without an explicit button click;
- *   - no button in this UI saves, submits, or certifies an ACE filing.
+ *   - no button in this UI saves, submits, or certifies an ACE filing;
+ *   - nothing is uploaded: "copy" writes to the clipboard and "export" writes
+ *     a file the user chose to download. See src/content/automationPolicy.ts.
  */
 
 import type { FillReport } from '../models/AceField.js';
 import type { DiagnosticsSnapshot, StoredImport } from '../core/messages.js';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type AceHelperSettings } from '../core/settings.js';
+import { formatLog, type SessionLogEntry, type SessionLogKind } from '../core/sessionLog.js';
 import type { MapperNote } from '../excel/canonicalMapper.js';
 import type { ExcelImporter, OpenedWorkbook } from './importer.js';
 import { buildPreview, summarize, type PreviewCell } from './preview.js';
+import { buildPreflight, summarizePreflight, type PreflightResult } from './preflight.js';
+import {
+  applyFillReport,
+  buildMappingStatus,
+  formatMappingStatus,
+  summarizeMappingStatus,
+  type MappingStatusRow,
+} from './mappingStatus.js';
+import { renderCalculatorPanel } from './calculatorPanel.js';
 import { renderDiagnostics } from './diagnostics.js';
 import { appendAll, byId, clear, el, show } from './dom.js';
 import { resolveAceTab, sendToBackground, sendToTab, type AceTab } from './tabs.js';
 import type { PageDetection } from '../content/pageDetector.js';
+import { ALL_MAPPINGS, unverifiedFieldKeys } from '../ace/mappings/index.js';
+import {
+  emptyOverrides,
+  serializeOverrides,
+  starterOverrides,
+  type SelectorOverrides,
+} from '../ace/selectors/overrides.js';
+import { clearOverrides, loadOverrides, saveOverrides } from '../ace/selectors/overridesStore.js';
 
 export type Surface = 'popup' | 'panel';
 
@@ -41,6 +62,14 @@ interface AppState {
   activeTab: string;
   /** True while a workbook is being read, so the file input can be disabled. */
   busy: boolean;
+  /** Mapping status rows, rebuilt on import and refined by a dry run. */
+  mapping: MappingStatusRow[];
+  /** True once a dry run against the open ACE page has been folded in. */
+  mappingChecked: boolean;
+  log: SessionLogEntry[];
+  overrides: SelectorOverrides;
+  /** Text in the selector-override editor, kept across re-renders. */
+  overridesDraft: string | null;
 }
 
 /** Injected by the panel surface only; the popup has no Import tab. */
@@ -56,8 +85,13 @@ const state: AppState = {
   report: null,
   diagnostics: null,
   status: null,
-  activeTab: 'fill',
+  activeTab: 'overview',
   busy: false,
+  mapping: [],
+  mappingChecked: false,
+  log: [],
+  overrides: emptyOverrides(),
+  overridesDraft: null,
 };
 
 // ---------------------------------------------------------------- utilities
@@ -88,11 +122,68 @@ function statusWord(status: 'green' | 'yellow' | 'red'): string {
   return status === 'green' ? 'valid' : status === 'yellow' ? 'check' : 'invalid';
 }
 
+function tick(status: 'pass' | 'warn' | 'fail'): string {
+  return status === 'pass' ? '✓' : status === 'warn' ? '⚠' : '✗';
+}
+
+async function appendLog(kind: SessionLogKind, message: string, detail?: string): Promise<void> {
+  await sendToBackground({ type: 'log/append', kind, message, ...(detail ? { detail } : {}) });
+}
+
+async function refreshLog(): Promise<void> {
+  const response = await sendToBackground({ type: 'log/get' });
+  state.log = response.ok && response.type === 'log/data' ? response.payload : [];
+}
+
+function copyToClipboard(text: string, what: string): void {
+  void navigator.clipboard
+    .writeText(text)
+    .then(() => setStatus(`${what} copied to the clipboard.`, 'ok'))
+    .catch(() => setStatus('Could not copy to the clipboard.', 'error'));
+}
+
+/**
+ * Save text as a file.
+ *
+ * A Blob URL and an anchor click, entirely inside the extension page: nothing
+ * is uploaded and no network permission is involved. The URL is revoked
+ * immediately so the data does not sit in memory after the save dialog.
+ */
+function downloadText(text: string, fileName: string): void {
+  try {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = el('a', { attrs: { href: url, download: fileName } });
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus(`Saved ${fileName}. It was written to this machine only.`, 'ok');
+  } catch (error) {
+    setStatus(`Could not save the file: ${(error as Error).message}`, 'error');
+  }
+}
+
 // ------------------------------------------------------------------ loading
 
 async function refreshData(): Promise<void> {
   const response = await sendToBackground({ type: 'store/get' });
   state.data = response.ok && response.type === 'store/data' ? response.payload : null;
+  rebuildMapping();
+}
+
+function rebuildMapping(): void {
+  if (!state.data) {
+    state.mapping = [];
+    state.mappingChecked = false;
+    return;
+  }
+  state.mapping = buildMappingStatus(state.data.shipment, {
+    settings: state.settings,
+    line: state.data.selectedLine,
+    source: state.data.source,
+  });
+  state.mappingChecked = false;
 }
 
 async function refreshAceTab(): Promise<void> {
@@ -101,6 +192,11 @@ async function refreshAceTab(): Promise<void> {
   if (!state.aceTab) return;
   const response = await sendToTab(state.aceTab.id, { type: 'content/detectPage' });
   if (response.ok && response.type === 'content/page') state.page = response.payload;
+}
+
+function preflight(): PreflightResult | null {
+  if (!state.data) return null;
+  return buildPreflight(state.data.shipment, state.data.validation, state.data.notes);
 }
 
 // -------------------------------------------------------------------- import
@@ -144,6 +240,25 @@ async function importSheet(sheetName: string): Promise<void> {
   const response = await sendToBackground({ type: 'store/set', payload });
   state.data = response.ok && response.type === 'store/data' ? response.payload : payload;
   state.report = null;
+  rebuildMapping();
+
+  const source = payload.source;
+  await appendLog(
+    'import',
+    `Loaded ${payload.shipment.source.fileName} - ${payload.shipment.commodities.length} line(s) from "${sheetName}"${source ? ` via ${source.label}` : ''}.`,
+    source?.detail,
+  );
+  // The transformations are the part somebody will want to trace later, so
+  // each one gets its own line rather than being summarised away.
+  for (const commodity of payload.shipment.commodities) {
+    const records = payload.shipment.provenance.commodities[commodity.line] ?? {};
+    for (const [field, record] of Object.entries(records)) {
+      if (!record.transform) continue;
+      await appendLog('transform', `Line ${commodity.line} ${field}: ${record.original} -> ${record.normalized}`, record.transform);
+    }
+  }
+  await refreshLog();
+
   state.activeTab = 'preview';
   setStatus(
     `Imported ${payload.shipment.commodities.length} line(s) from "${sheetName}" - ${summarize(payload.validation, payload.shipment.commodities.length)}. Nothing has been written to ACE yet.`,
@@ -156,9 +271,12 @@ async function clearData(): Promise<void> {
   state.data = null;
   state.workbook = null;
   state.report = null;
+  state.mapping = [];
+  state.mappingChecked = false;
   importer?.reset();
   if (state.aceTab) await sendToTab(state.aceTab.id, { type: 'content/clearHighlights' });
-  setStatus('Imported data cleared from memory.', 'ok');
+  await refreshLog();
+  setStatus('Imported data cleared from memory, along with the session log that held values from it.', 'ok');
   render();
 }
 
@@ -186,6 +304,10 @@ async function fill(scope: 'shipment' | 'commodityLine', dryRun: boolean): Promi
 
   const overwrite = (document.getElementById('overwrite') as HTMLInputElement | null)?.checked ?? false;
 
+  // Recorded before the write, so the log says what was known at the time.
+  const check = preflight();
+  if (!dryRun && check) await appendLog('note', summarizePreflight(check));
+
   const response = await sendToTab(state.aceTab.id, {
     type: 'content/fill',
     scope,
@@ -204,11 +326,49 @@ async function fill(scope: 'shipment' | 'commodityLine', dryRun: boolean): Promi
   if (response.type !== 'content/fillReport') return;
 
   state.report = response.payload;
+  state.mapping = applyFillReport(state.mapping, response.payload);
+  state.mappingChecked = true;
+  await refreshLog();
+
   const { filled, skipped, warnings, errors } = response.payload;
   const prefix = dryRun ? 'Dry run (nothing written)' : 'Done';
   setStatus(
     `${prefix}: filled ${filled}, skipped ${skipped}, warnings ${warnings}${errors ? `, errors ${errors}` : ''}. Review every value in ACE before you submit.`,
     errors ? 'error' : warnings ? 'warn' : 'ok',
+  );
+  render();
+}
+
+/** Resolve the mapping table against the open ACE page, writing nothing. */
+async function checkMappingAgainstPage(): Promise<void> {
+  if (!state.data) return;
+  await refreshAceTab();
+  if (!state.aceTab || !state.page || state.page.page === 'unknown') {
+    setStatus('Open an ACE filing step in another tab, then check again.', 'warn');
+    render();
+    return;
+  }
+
+  for (const scope of ['shipment', 'commodityLine'] as const) {
+    const response = await sendToTab(state.aceTab.id, {
+      type: 'content/fill',
+      scope,
+      ...(scope === 'commodityLine' ? { line: state.data.selectedLine } : {}),
+      shipment: state.data.shipment,
+      settings: state.settings,
+      dryRun: true,
+    });
+    if (response.ok && response.type === 'content/fillReport') {
+      state.mapping = applyFillReport(state.mapping, response.payload);
+    }
+  }
+
+  state.mappingChecked = true;
+  await refreshLog();
+  const summary = summarizeMappingStatus(state.mapping.filter((row) => row.page === state.page?.page));
+  setStatus(
+    `Checked against ${state.page.label}: ${summary.ready} ready, ${summary.review} to review, ${summary.blocked} blocked. Nothing was written.`,
+    summary.blocked ? 'warn' : 'ok',
   );
   render();
 }
@@ -227,6 +387,7 @@ async function runDiagnostics(): Promise<void> {
     state.diagnostics = response.payload;
     setStatus('Diagnostics refreshed.', 'ok');
   }
+  await refreshLog();
   render();
 }
 
@@ -242,6 +403,7 @@ async function revealField(key: string): Promise<void> {
 async function selectLine(line: number): Promise<void> {
   const response = await sendToBackground({ type: 'store/selectLine', line });
   if (response.ok && response.type === 'store/data') state.data = response.payload;
+  rebuildMapping();
   render();
 }
 
@@ -277,17 +439,25 @@ function buildRefreshButton(): HTMLElement {
 }
 
 function renderTabs(): HTMLElement {
-  const tabs: Array<{ id: string; label: string }> = [{ id: 'fill', label: 'Fill ACE' }];
-  if (state.surface === 'panel') {
-    tabs.unshift({ id: 'import', label: 'Import' });
-    tabs.push({ id: 'preview', label: 'Preview' });
-    tabs.push({ id: 'settings', label: 'Settings' });
-    if (state.settings.debugMode) tabs.push({ id: 'diagnostics', label: 'Diagnostics' });
-  } else {
-    tabs.push({ id: 'preview', label: 'Preview' });
-  }
+  const tabs: Array<{ id: string; label: string }> =
+    state.surface === 'panel'
+      ? [
+          { id: 'overview', label: 'Overview' },
+          { id: 'import', label: 'Import' },
+          { id: 'preview', label: 'Preview' },
+          { id: 'mapping', label: 'Mapping' },
+          { id: 'fill', label: 'Fill ACE' },
+          { id: 'calculator', label: 'Calculator' },
+          { id: 'settings', label: 'Settings' },
+          { id: 'diagnostics', label: 'Diagnostics' },
+        ]
+      : [
+          { id: 'overview', label: 'Overview' },
+          { id: 'fill', label: 'Fill ACE' },
+          { id: 'preview', label: 'Preview' },
+        ];
 
-  if (!tabs.some((tab) => tab.id === state.activeTab)) state.activeTab = tabs[0]?.id ?? 'fill';
+  if (!tabs.some((tab) => tab.id === state.activeTab)) state.activeTab = tabs[0]?.id ?? 'overview';
 
   const nav = el('nav', { className: 'tabs', attrs: { role: 'tablist' } });
   for (const tab of tabs) {
@@ -305,13 +475,119 @@ function renderTabs(): HTMLElement {
   return nav;
 }
 
+function goTo(tab: string): void {
+  state.activeTab = tab;
+  render();
+}
+
+function actionButton(label: string, tab: string, primary = false): HTMLElement {
+  const button = el('button', {
+    className: `button${primary ? ' button-primary' : ''}`,
+    text: label,
+    attrs: { type: 'button' },
+  });
+  button.addEventListener('click', () => goTo(tab));
+  return button;
+}
+
+/**
+ * The home screen: what is loaded, whether it is ready, and the five things
+ * an operator does. Everything else is a tab away.
+ */
+function renderOverview(): HTMLElement {
+  const section = el('section', { className: 'panel-section' });
+
+  // ---- Invoice -----------------------------------------------------------
+  section.append(el('h2', { text: 'Invoice' }));
+  if (!state.data) {
+    section.append(
+      el('p', { className: 'muted', text: 'Nothing loaded. Import an ACE workbook, or export one from QuickBooks first.' }),
+      state.surface === 'panel' ? actionButton('Import a workbook', 'import', true) : buildOpenPanelButton('Open the panel to import'),
+    );
+    return section;
+  }
+
+  const { shipment, validation, source } = state.data;
+  section.append(
+    el('div', { className: 'card' }, [
+      el('div', { className: 'invoice-number', text: shipment.invoice.invoiceNumber || '(no invoice number)' }),
+      el('div', { text: shipment.invoice.customerName || '(no customer)' }),
+      el('div', { className: 'small muted', text: `${shipment.source.fileName} - ${shipment.commodities.length} commodity line(s)` }),
+      source ? el('div', { className: 'small muted', text: `Source: ${source.label} - ${source.detail}` }) : null,
+    ]),
+  );
+
+  // ---- Status ------------------------------------------------------------
+  const check = preflight();
+  const summary = summarizeMappingStatus(state.mapping);
+  const lines: Array<{ status: 'pass' | 'warn' | 'fail'; text: string }> = [
+    { status: 'pass', text: `${source?.label ?? 'Workbook'} loaded` },
+    {
+      status: summary.ready + summary.review > 0 ? 'pass' : 'warn',
+      text: `${summary.total - summary.blocked} of ${summary.total} ACE fields mapped${state.mappingChecked ? ' and found on the ACE page' : ''}`,
+    },
+  ];
+  if (summary.review) lines.push({ status: 'warn', text: `${summary.review} field(s) require review` });
+  if (summary.blocked) lines.push({ status: 'fail', text: `${summary.blocked} field(s) cannot be filled` });
+  if (check && !check.ready) {
+    lines.push({ status: 'fail', text: `${check.blocking.length} data quality error(s) - see Fill ACE` });
+  } else if (check && check.warnings.length) {
+    lines.push({ status: 'warn', text: `${check.warnings.length} data quality warning(s)` });
+  }
+  if (!state.aceTab) lines.push({ status: 'warn', text: 'No ACE tab open' });
+
+  section.append(
+    el('h2', { text: 'Status' }),
+    el(
+      'ul',
+      { className: 'status-list' },
+      lines.map((line) =>
+        el('li', { className: `status-line status-${line.status}` }, [
+          el('span', { className: 'status-mark', text: tick(line.status) }),
+          el('span', { text: line.text }),
+        ]),
+      ),
+    ),
+    el('p', { className: 'small muted', text: summarize(validation, shipment.commodities.length) }),
+  );
+
+  // ---- Actions -----------------------------------------------------------
+  const actions = el('div', { className: 'actions actions-grid' });
+  actions.append(actionButton('Preview', 'preview'));
+  if (state.surface === 'panel') actions.append(actionButton('Mapping status', 'mapping'));
+  actions.append(actionButton('Fill Current Page', 'fill', true));
+  actions.append(actionButton('Fill Current Line', 'fill'));
+  if (state.surface === 'panel') actions.append(actionButton('Calculator', 'calculator'));
+
+  const clearButton = el('button', {
+    className: 'button button-danger',
+    text: 'Clear Data',
+    attrs: { type: 'button', title: 'Removes the shipment and the session log from memory. Export diagnostics first if you want the trail.' },
+  });
+  clearButton.addEventListener('click', () => void clearData());
+  actions.append(clearButton);
+
+  section.append(el('h2', { text: 'Actions' }), actions);
+
+  // ---- Diagnostics -------------------------------------------------------
+  if (state.surface === 'panel') {
+    section.append(
+      el('h2', { text: 'Diagnostics' }),
+      el('p', { className: 'small muted', text: 'Field detection, the session log, and the ACE selector table.' }),
+      actionButton('Open', 'diagnostics'),
+    );
+  }
+
+  return section;
+}
+
 function renderImport(): HTMLElement {
   const section = el('section', { className: 'panel-section' });
 
   if (!importer) {
     appendAll(
       section,
-      el('h2', { text: 'Import Excel' }),
+      el('h2', { text: 'Import' }),
       el('p', { className: 'muted', text: 'Chrome closes an extension popup when a file picker opens, so importing happens in the panel.' }),
       buildOpenPanelButton('Open the panel to import'),
     );
@@ -319,8 +595,9 @@ function renderImport(): HTMLElement {
   }
 
   section.append(
-    el('h2', { text: 'Import Excel' }),
+    el('h2', { text: 'Import' }),
     el('p', { className: 'muted small', text: 'The workbook is parsed in this browser. Nothing is uploaded anywhere.' }),
+    el('p', { className: 'small muted', text: 'Two kinds of workbook are recognised: one you filled in from the template, and one the QuickBooks companion wrote. Both are read exactly the same way; only the label differs.' }),
   );
 
   const fileInput = el('input', {
@@ -333,6 +610,7 @@ function renderImport(): HTMLElement {
   });
 
   section.append(el('label', { className: 'field' }, [el('span', { text: 'Workbook (.xlsx)' }), fileInput]));
+  section.append(buildDropZone());
 
   const templateLink = el('a', {
     className: 'link',
@@ -340,6 +618,15 @@ function renderImport(): HTMLElement {
     attrs: { href: chrome.runtime.getURL('templates/ACE_Import_Template.xlsx'), download: 'ACE_Import_Template.xlsx' },
   });
   section.append(el('p', { className: 'small' }, [templateLink]));
+
+  if (state.workbook) {
+    section.append(
+      el('div', { className: 'card small' }, [
+        el('strong', { text: state.workbook.source.label }),
+        el('span', { className: 'muted', text: ` - ${state.workbook.source.detail}` }),
+      ]),
+    );
+  }
 
   if (state.workbook && state.workbook.sheetNames.length > 1) {
     const select = el('select', { className: 'select', attrs: { id: 'sheet-select' } });
@@ -372,6 +659,52 @@ function renderImport(): HTMLElement {
   }
 
   return section;
+}
+
+/**
+ * Drag the workbook onto the panel instead of walking the file picker to it.
+ *
+ * A Chrome extension cannot watch the folder the companion writes into - that
+ * would need a native messaging host, which is a much larger thing to install
+ * and a much larger thing to trust. Dropping the file is the honest way to cut
+ * the step down: the export window tells you where it wrote the file, and this
+ * is one drag from there.
+ *
+ * The file is read exactly as a picked one is: same reader, same source
+ * registry, nothing uploaded.
+ */
+function buildDropZone(): HTMLElement {
+  const zone = el('div', { className: 'dropzone', attrs: { id: 'dropzone' } }, [
+    el('span', { text: 'or drag ' }),
+    el('code', { text: 'ACE_Invoice_<number>.xlsx' }),
+    el('span', { text: ' here from the folder the export window named' }),
+  ]);
+
+  const stop = (event: DragEvent): void => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  zone.addEventListener('dragover', (event) => {
+    stop(event as DragEvent);
+    zone.classList.add('dropzone-over');
+  });
+  zone.addEventListener('dragleave', (event) => {
+    stop(event as DragEvent);
+    zone.classList.remove('dropzone-over');
+  });
+  zone.addEventListener('drop', (event) => {
+    stop(event as DragEvent);
+    zone.classList.remove('dropzone-over');
+    const file = (event as DragEvent).dataTransfer?.files?.[0];
+    if (!file) {
+      setStatus('That drop carried no file.', 'warn');
+      return;
+    }
+    void onFileChosen(file);
+  });
+
+  return zone;
 }
 
 function renderNotes(notes: MapperNote[]): HTMLElement {
@@ -471,6 +804,52 @@ function buildOpenPanelButton(label: string): HTMLElement {
   return button;
 }
 
+/** The ten named data quality checks, directly above the Fill buttons. */
+function renderPreflight(result: PreflightResult): HTMLElement {
+  const card = el('details', {
+    className: `card preflight preflight-${result.ready ? 'ok' : 'bad'}`,
+    attrs: result.ready ? {} : { open: 'open' },
+  });
+
+  card.append(
+    el('summary', {}, [
+      el('strong', { text: 'Data quality checks' }),
+      el('span', {
+        className: `pill pill-${result.blocking.length ? 'red' : result.warnings.length ? 'yellow' : 'green'}`,
+        text: result.blocking.length
+          ? `${result.blocking.length} blocking`
+          : result.warnings.length
+            ? `${result.warnings.length} to review`
+            : 'all clear',
+      }),
+    ]),
+  );
+
+  card.append(el('p', { className: 'small muted', text: summarizePreflight(result) }));
+
+  card.append(
+    el(
+      'ul',
+      { className: 'check-list small' },
+      result.checks.map((check) =>
+        el('li', { className: `check check-${check.status}` }, [
+          el('span', { className: 'check-mark', text: tick(check.status) }),
+          el('span', { className: 'check-label', text: check.label }),
+          el('span', { className: 'muted', text: check.detail }),
+        ]),
+      ),
+    ),
+  );
+
+  if (result.blocking.length) {
+    card.append(
+      el('p', { className: 'small error', text: 'Fields with a blocking issue are skipped during a fill - never guessed, never partially written. Fix them in the source data and import again.' }),
+    );
+  }
+
+  return card;
+}
+
 function renderFill(): HTMLElement {
   const section = el('section', { className: 'panel-section' });
   section.append(el('h2', { text: 'Fill ACE' }));
@@ -501,6 +880,11 @@ function renderFill(): HTMLElement {
         : el('div', { className: 'small error', text: 'No ACE tab detected. Open your ACE filing in another tab.' }),
     ]),
   );
+
+  // The quality gate goes above the buttons on purpose: it is the last thing
+  // read before the first thing clicked.
+  const check = preflight();
+  if (check) section.append(renderPreflight(check));
 
   // Commodity line picker
   const lineSelect = el('select', { className: 'select', attrs: { id: 'line-select' } });
@@ -565,6 +949,10 @@ function renderFill(): HTMLElement {
   });
   section.append(clearHighlights);
 
+  section.append(
+    el('p', { className: 'small muted', text: 'Save Line, Add New Line, Submit and Certify are never clicked by this extension. See docs/SECURITY.md.' }),
+  );
+
   if (state.report) section.append(renderReport(state.report));
 
   return section;
@@ -608,6 +996,89 @@ function renderReport(report: FillReport): HTMLElement {
   return card;
 }
 
+/**
+ * Mapping status: every ACE field, its source, what happened to the value, and
+ * which ACE control it resolves to.
+ */
+function renderMapping(): HTMLElement {
+  const section = el('section', { className: 'panel-section' });
+  section.append(el('h2', { text: 'Mapping status' }));
+
+  if (!state.data) {
+    section.append(el('p', { className: 'muted', text: 'Import a workbook to see the field mapping.' }));
+    return section;
+  }
+
+  const summary = summarizeMappingStatus(state.mapping);
+  section.append(
+    el('p', { className: 'small' }, [
+      el('span', { className: 'pill pill-green', text: `${summary.ready} ready` }),
+      el('span', { className: 'pill pill-yellow', text: `${summary.review} to review` }),
+      el('span', { className: `pill pill-${summary.blocked ? 'red' : 'grey'}`, text: `${summary.blocked} blocked` }),
+    ]),
+    el('p', {
+      className: 'small muted',
+      text: state.mappingChecked
+        ? 'Selectors below were resolved against the ACE page you have open. Nothing was written.'
+        : 'Selectors below are the configured candidates. Check against an open ACE page to see which one actually matches.',
+    }),
+  );
+
+  const checkButton = el('button', {
+    className: 'button',
+    text: 'Check against the open ACE page (writes nothing)',
+    attrs: { type: 'button' },
+  });
+  checkButton.addEventListener('click', () => void checkMappingAgainstPage());
+
+  const copyButton = el('button', { className: 'button button-small', text: 'Copy as text', attrs: { type: 'button' } });
+  copyButton.addEventListener('click', () => copyToClipboard(formatMappingStatus(state.mapping), 'Mapping status'));
+
+  section.append(el('div', { className: 'actions' }, [checkButton, copyButton]));
+
+  const pages: Array<[string, string]> = [
+    ['shipment', 'Step 1: Shipment'],
+    ['parties', 'Step 2: Parties'],
+    ['commodities', 'Step 3: Commodities'],
+    ['transportation', 'Step 4: Transportation'],
+  ];
+
+  for (const [page, label] of pages) {
+    const rows = state.mapping.filter((row) => row.page === page);
+    if (!rows.length) continue;
+
+    const table = el('div', { className: 'map-table' });
+    for (const row of rows) {
+      table.append(
+        el('div', { className: `map-row map-${row.status.toLowerCase().replace(/\s+/g, '-')}` }, [
+          el('div', { className: 'map-head' }, [
+            el('strong', { text: row.aceField }),
+            el('span', { className: 'pill pill-grey', text: row.status }),
+            row.line !== undefined ? el('span', { className: 'muted small', text: `line ${row.line}` }) : null,
+          ]),
+          el('dl', { className: 'map-fields small' }, [
+            el('dt', { text: 'Source' }),
+            el('dd', { text: row.source }),
+            el('dt', { text: 'Original' }),
+            el('dd', { text: row.original || '-' }),
+            el('dt', { text: 'Transformation' }),
+            el('dd', { text: row.transform ?? '(none)' }),
+            el('dt', { text: 'ACE value' }),
+            el('dd', { className: 'mono', text: row.aceValue || '-' }),
+            el('dt', { text: 'ACE selector' }),
+            el('dd', { className: 'mono', text: row.selector }),
+          ]),
+          row.message ? el('div', { className: 'small warn', text: row.message }) : null,
+        ]),
+      );
+    }
+
+    section.append(el('details', { className: 'card', attrs: { open: 'open' } }, [el('summary', { text: `${label} (${rows.length} fields)` }), table]));
+  }
+
+  return section;
+}
+
 function renderSettings(): HTMLElement {
   const section = el('section', { className: 'panel-section' });
   section.append(el('h2', { text: 'Settings' }));
@@ -641,14 +1112,20 @@ function renderSettings(): HTMLElement {
       persist({ dispatchBlur: value }),
     ),
     checkboxField('Treat unit-less weights as kilograms', state.settings.assumeWeightIsKg, (value) => persist({ assumeWeightIsKg: value })),
-    checkboxField('Developer mode (field diagnostics + console logging)', state.settings.debugMode, (value) => persist({ debugMode: value })),
+    checkboxField('Developer mode (verbose field detection + console logging)', state.settings.debugMode, (value) => persist({ debugMode: value })),
   );
 
   section.append(
     el('div', { className: 'notice notice-muted small' }, [
+      el('strong', { text: 'Automation: ' }),
+      el('span', {
+        text: 'Save Line, Add New Line, Submit and Certify are disabled and there is no setting that enables them. See src/content/automationPolicy.ts.',
+      }),
+    ]),
+    el('div', { className: 'notice notice-muted small' }, [
       el('strong', { text: 'Privacy: ' }),
       el('span', {
-        text: 'Settings are stored locally in this browser profile. Imported shipment data is held in session memory only, is never written to disk by this extension, and is dropped when the browser closes or you click Clear Imported Data.',
+        text: 'Settings are stored locally in this browser profile. Imported shipment data and the session log are held in session memory only, are never written to disk by this extension, and are dropped when the browser closes or you click Clear Imported Data.',
       }),
     ]),
   );
@@ -673,7 +1150,208 @@ function checkboxField(label: string, checked: boolean, onChange: (value: boolea
 
 async function persist(partial: Partial<AceHelperSettings>): Promise<void> {
   state.settings = await saveSettings(partial);
+  rebuildMapping();
   render();
+}
+
+// ------------------------------------------------------------- diagnostics
+
+/** Everything a support conversation needs, as one plain-text document. */
+function buildDiagnosticsDocument(): string {
+  const lines: string[] = [];
+  lines.push('ACE Helper diagnostics');
+  lines.push(`Generated ${new Date().toISOString()}`);
+  lines.push('ACE filing: current browser session. This file was written on this machine and uploaded nowhere.');
+  lines.push('');
+
+  if (state.data) {
+    const { shipment, validation, source } = state.data;
+    lines.push(`Invoice        ${shipment.invoice.invoiceNumber || '(none)'}`);
+    lines.push(`Customer       ${shipment.invoice.customerName || '(none)'}`);
+    lines.push(`Workbook       ${shipment.source.fileName} (sheet "${shipment.source.sheetName}")`);
+    if (source) lines.push(`Source         ${source.label} - ${source.detail}`);
+    lines.push(`Lines          ${shipment.commodities.length}`);
+    lines.push(`Validation     ${validation.errors} error(s), ${validation.warnings} warning(s)`);
+  } else {
+    lines.push('No workbook loaded.');
+  }
+
+  lines.push(`ACE tab        ${state.aceTab ? state.aceTab.url : '(none open)'}`);
+  lines.push(`ACE page       ${state.page ? `${state.page.label} (${state.page.confidence})` : '(not detected)'}`);
+  lines.push(
+    `Selectors      ${Object.keys(state.overrides.fields).length} operator-captured, ${unverifiedFieldKeys().length} of ${ALL_MAPPINGS.length} built-in still unverified`,
+  );
+  lines.push('');
+
+  if (state.mapping.length) {
+    lines.push('Mapping status');
+    lines.push(formatMappingStatus(state.mapping));
+    lines.push('');
+  }
+
+  lines.push('Session log');
+  lines.push(formatLog(state.log));
+  lines.push('');
+
+  if (state.diagnostics) {
+    lines.push('Field detection snapshot (JSON)');
+    lines.push(JSON.stringify(state.diagnostics, null, 2));
+  }
+
+  return lines.join('\n');
+}
+
+function renderSessionLog(): HTMLElement {
+  const card = el('details', { className: 'card', attrs: { open: 'open' } });
+  card.append(
+    el('summary', {}, [
+      el('strong', { text: 'Session log' }),
+      el('span', { className: 'muted small', text: ` (${state.log.length} entries, memory only)` }),
+    ]),
+  );
+
+  if (!state.log.length) {
+    card.append(el('p', { className: 'muted small', text: 'Nothing recorded yet. Importing, transforming and filling all leave a line here.' }));
+  } else {
+    card.append(
+      el(
+        'ul',
+        { className: 'log-list small mono' },
+        state.log
+          .slice()
+          .reverse()
+          .map((entry) =>
+            el('li', { className: `log log-${entry.kind}` }, [
+              el('span', { className: 'log-time', text: new Date(entry.at).toTimeString().slice(0, 8) }),
+              el('span', { className: 'log-kind', text: entry.kind }),
+              el('span', { text: entry.message }),
+              entry.detail ? el('div', { className: 'log-detail muted', text: entry.detail }) : null,
+            ]),
+          ),
+      ),
+    );
+  }
+
+  const copy = el('button', { className: 'button button-small', text: 'Copy diagnostics', attrs: { type: 'button' } });
+  copy.addEventListener('click', () => copyToClipboard(buildDiagnosticsDocument(), 'Diagnostics'));
+
+  const exportButton = el('button', { className: 'button button-small', text: 'Export diagnostics', attrs: { type: 'button' } });
+  exportButton.addEventListener('click', () => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    downloadText(buildDiagnosticsDocument(), `ace-helper-diagnostics-${stamp}.txt`);
+  });
+
+  const clearButton = el('button', { className: 'button button-small', text: 'Clear log', attrs: { type: 'button' } });
+  clearButton.addEventListener('click', () => {
+    void (async () => {
+      await sendToBackground({ type: 'log/clear' });
+      await refreshLog();
+      setStatus('Session log cleared.', 'ok');
+      render();
+    })();
+  });
+
+  card.append(
+    el('div', { className: 'actions' }, [copy, exportButton, clearButton]),
+    el('p', { className: 'small muted', text: 'Nothing here is uploaded. Copy puts it on your clipboard; Export writes a file to this machine. Clearing the imported data clears this log with it, so export it first if you need the trail.' }),
+  );
+
+  return card;
+}
+
+/**
+ * The selector table, and the editor that replaces it.
+ *
+ * This is the answer to "ACE changed and now nothing fills". A captured
+ * selector pasted here takes effect on the next fill, with no rebuild and no
+ * developer.
+ */
+function renderSelectorEditor(): HTMLElement {
+  const card = el('details', { className: 'card' });
+  const captured = Object.keys(state.overrides.fields);
+
+  card.append(
+    el('summary', {}, [
+      el('strong', { text: 'ACE selectors' }),
+      el('span', {
+        className: `pill pill-${captured.length ? 'green' : 'yellow'}`,
+        text: captured.length ? `${captured.length} captured` : `${unverifiedFieldKeys().length} unverified`,
+      }),
+    ]),
+    el('p', { className: 'small muted', text: 'The selectors that ship with this build are placeholders. Capture the real ones from the live ACE portal with DevTools (docs/ACE-MAPPING.md) and paste them here: they are tried first, take effect on the next fill, and need no rebuild.' }),
+  );
+
+  const draft =
+    state.overridesDraft ??
+    (captured.length ? serializeOverrides(state.overrides) : serializeOverrides(starterOverrides(ALL_MAPPINGS, unresolvedFieldKeys())));
+
+  const textarea = el('textarea', {
+    className: 'input mono textarea',
+    attrs: { rows: '12', spellcheck: 'false', id: 'overrides-input' },
+  }) as HTMLTextAreaElement;
+  textarea.value = draft;
+  textarea.addEventListener('input', () => {
+    state.overridesDraft = textarea.value;
+  });
+
+  card.append(el('label', { className: 'field' }, [el('span', { text: 'Selector overrides (JSON)' }), textarea]));
+
+  const save = el('button', { className: 'button button-primary', text: 'Save selectors', attrs: { type: 'button' } });
+  save.addEventListener('click', () => {
+    void (async () => {
+      try {
+        state.overrides = await saveOverrides(textarea.value, document);
+        state.overridesDraft = null;
+        await appendLog('selectors', `Selector overrides saved: ${Object.keys(state.overrides.fields).length} field(s).`);
+        await refreshLog();
+        setStatus('Selectors saved. They take effect on the next fill; reload the ACE tab if it was already open.', 'ok');
+      } catch (error) {
+        setStatus((error as Error).message, 'error');
+      }
+      render();
+    })();
+  });
+
+  const starter = el('button', { className: 'button button-small', text: 'Starter for unresolved fields', attrs: { type: 'button' } });
+  starter.addEventListener('click', () => {
+    state.overridesDraft = serializeOverrides(starterOverrides(ALL_MAPPINGS, unresolvedFieldKeys()));
+    render();
+  });
+
+  const exportButton = el('button', { className: 'button button-small', text: 'Export', attrs: { type: 'button' } });
+  exportButton.addEventListener('click', () => downloadText(serializeOverrides(state.overrides), 'ace-selectors.json'));
+
+  const reset = el('button', { className: 'button button-small button-danger', text: 'Remove all', attrs: { type: 'button' } });
+  reset.addEventListener('click', () => {
+    void (async () => {
+      await clearOverrides();
+      state.overrides = emptyOverrides();
+      state.overridesDraft = null;
+      await appendLog('selectors', 'Selector overrides removed; the built-in candidates are in force again.');
+      await refreshLog();
+      setStatus('Selector overrides removed.', 'ok');
+      render();
+    })();
+  });
+
+  card.append(el('div', { className: 'actions' }, [save, starter, exportButton, reset]));
+
+  if (state.diagnostics?.overrides.unknownKeys.length) {
+    card.append(
+      el('p', {
+        className: 'small warn',
+        text: `These override keys match no ACE field and are ignored: ${state.diagnostics.overrides.unknownKeys.join(', ')}.`,
+      }),
+    );
+  }
+
+  return card;
+}
+
+/** Field keys the last diagnostics run could not resolve on the ACE page. */
+function unresolvedFieldKeys(): string[] {
+  if (!state.diagnostics) return [];
+  return state.diagnostics.fields.filter((field) => field.detection.status !== 'FOUND').map((field) => field.key);
 }
 
 function renderDiagnosticsTab(): HTMLElement {
@@ -682,24 +1360,35 @@ function renderDiagnosticsTab(): HTMLElement {
 
   const run = el('button', { className: 'button', text: 'Run field detection on the ACE tab', attrs: { type: 'button' } });
   run.addEventListener('click', () => void runDiagnostics());
-  section.append(run);
+  section.append(el('div', { className: 'actions' }, [run]));
+
+  section.append(renderSessionLog());
+  section.append(renderSelectorEditor());
 
   const container = el('div', { className: 'diag-container' });
   renderDiagnostics(container, state.diagnostics);
-  section.append(container);
+  section.append(el('details', { className: 'card', attrs: state.diagnostics ? { open: 'open' } : {} }, [
+    el('summary', { text: 'Field detection' }),
+    container,
+  ]));
 
   if (state.diagnostics) {
-    const copy = el('button', { className: 'button button-small', text: 'Copy diagnostics JSON', attrs: { type: 'button' } });
-    copy.addEventListener('click', () => {
-      void navigator.clipboard
-        .writeText(JSON.stringify(state.diagnostics, null, 2))
-        .then(() => setStatus('Diagnostics JSON copied to the clipboard.', 'ok'))
-        .catch(() => setStatus('Could not copy to the clipboard.', 'error'));
-    });
+    const copy = el('button', { className: 'button button-small', text: 'Copy detection JSON', attrs: { type: 'button' } });
+    copy.addEventListener('click', () => copyToClipboard(JSON.stringify(state.diagnostics, null, 2), 'Detection JSON'));
     section.append(copy);
   }
 
   return section;
+}
+
+function renderCalculator(): HTMLElement {
+  return renderCalculatorPanel({
+    settings: state.settings,
+    onResult: (expression, result) => {
+      if (!result.ok) return;
+      void appendLog('calculator', `Panel calculator: ${expression} = ${result.insert}`);
+    },
+  });
 }
 
 // -------------------------------------------------------------------- render
@@ -714,11 +1403,20 @@ function render(): void {
   root.append(statusBar);
 
   switch (state.activeTab) {
+    case 'overview':
+      root.append(renderOverview());
+      break;
     case 'import':
       root.append(renderImport());
       break;
     case 'preview':
       root.append(renderPreview());
+      break;
+    case 'mapping':
+      root.append(renderMapping());
+      break;
+    case 'calculator':
+      root.append(renderCalculator());
       break;
     case 'settings':
       root.append(renderSettings());
@@ -733,7 +1431,7 @@ function render(): void {
   }
 
   if (state.surface === 'popup') {
-    const open = buildOpenPanelButton('Open full panel (import, preview, settings)');
+    const open = buildOpenPanelButton('Open full panel (import, preview, mapping, diagnostics)');
     open.classList.add('button-small');
     root.append(el('footer', { className: 'app-footer' }, [open]));
   }
@@ -744,15 +1442,20 @@ function render(): void {
 export async function startApp(surface: Surface, excelImporter: ExcelImporter | null = null): Promise<void> {
   state.surface = surface;
   importer = excelImporter;
-  state.activeTab = surface === 'panel' ? 'import' : 'fill';
+  // With nothing loaded, the panel's first screen is the one thing there is to
+  // do. This is where Phase 1 opened, and it stays there.
+  state.activeTab = surface === 'panel' && importer ? 'import' : 'overview';
 
   render();
 
   state.settings = await loadSettings();
+  state.overrides = await loadOverrides();
   await refreshData();
+  await refreshLog();
   await refreshAceTab();
 
-  if (state.data && surface === 'panel') state.activeTab = 'preview';
+  // Something is already imported, so the hub is more use than the file picker.
+  if (state.data) state.activeTab = 'overview';
 
   render();
 }

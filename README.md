@@ -13,6 +13,9 @@ It does four things, and stops there:
 | **Excel import** | A local `.xlsx` becomes a canonical shipment model, in your browser. No upload, no server. |
 | **Preview** | Traffic lights per field, with the original cell value beside the ACE value wherever something was transformed. |
 | **Fill** | **Fill Current Page** and **Fill Current Commodity Line**, on your click, into the ACE step you have open. |
+| **Mapping status** | One row per ACE field: source, original value, transformation, ACE value, ACE field, ACE selector, status. |
+| **Data quality checks** | Ten named checks above the Fill buttons, so nothing is typed off a sheet with a blank Schedule B by accident. |
+| **Session log** | What was loaded, what was converted, what was filled. Memory only, exportable, uploaded nowhere. |
 
 Alongside it, a **QuickBooks Desktop companion** (`ace-export`) turns an invoice
 in QuickBooks into that same `.xlsx`, so the spreadsheet does not have to be
@@ -32,11 +35,12 @@ typed either: **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md)
 
 ## Status
 
-**Phases 1 and 2 are built. Two caveats you must read.**
+**Phases 1, 2 and 3 are built. Two caveats you must read.**
 
-The extension and the companion build, install, and are covered by 451 unit
-tests plus an end-to-end smoke test that drives a real Chromium with a mocked
-ACE host.
+The extension and the companion build, install, and are covered by 545 unit
+tests - including an automated end-to-end fixture that runs the real chain from
+a QuickBooks invoice to a filled ACE form - plus a smoke test that drives a real
+Chromium with a mocked ACE host.
 
 1. **The ACE selectors are placeholders.** The mapping *architecture* is
    complete; the 24 selectors have not been captured from the live portal.
@@ -44,6 +48,8 @@ ACE host.
    mapping" for fields it cannot identify - and it never writes to a field it
    did not confidently find. Verifying one takes about a minute with DevTools:
    **[docs/ACE-MAPPING.md](docs/ACE-MAPPING.md)** lists exactly what to capture.
+   Since Phase 3 a captured selector is **pasted into the panel** and is in
+   force on the next fill, with no rebuild and no developer.
 
 2. **The QuickBooks COM call has not been run against a real QuickBooks.**
    There is no Windows machine with QuickBooks Desktop in this toolchain.
@@ -76,7 +82,9 @@ Full steps: **[docs/INSTALLATION.md](docs/INSTALLATION.md)**
    **Fill Current Commodity Line**.
 5. Check every field in ACE. **You** save and submit.
 
-Full guide: **[docs/USER-GUIDE.md](docs/USER-GUIDE.md)**
+Full guide: **[docs/USER-GUIDE.md](docs/USER-GUIDE.md)**.
+Everything in one place, QuickBooks included:
+**[docs/ACE-HELPER-GUIDE.md](docs/ACE-HELPER-GUIDE.md)**
 
 ## Starting from QuickBooks instead of a spreadsheet
 
@@ -118,15 +126,19 @@ Full guide: **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md)**
 extension/        manifest, HTML shells, CSS, icons   (static, copied to dist/)
 src/
   models/         CanonicalInvoice, AceField          (contracts)
+  sources/        InvoiceDataSource: Excel | QuickBooksExport | Web (declared)
   calculator/     parser, calculator, F2 overlay
   excel/          reader, column aliases, canonical mapper, validator
   ace/
     pages.ts      page signatures
-    mappings/     shipment | parties | commodities | transportation
+    mappings/     WHAT to fill: canonical field, transform, limits
+    selectors/    WHERE to find it: the ACE selectors, + operator overrides
     transformers/ numbers | weight | dates | text | codes + registry
-  content/        pageDetector, fieldDetector, fieldWriter, filler, highlight
-  ui/             app, popup, panel, preview, diagnostics, importer
-  core/           settings, messages, store, logger
+  content/        pageDetector, fieldDetector, fieldWriter, filler, highlight,
+                  automationPolicy (what is never clicked)
+  ui/             app, popup, panel, preview, mappingStatus, preflight,
+                  calculatorPanel, diagnostics, importer
+  core/           settings, messages, store, sessionLog, logger
   background/     service worker
 companion/        QuickBooks Desktop companion        (Node, not shipped in the extension)
   src/qbxml/      XML reader, request builders, response parsers
@@ -137,15 +149,20 @@ companion/        QuickBooks Desktop companion        (Node, not shipped in the 
   src/ui/         cli | preview | the local ACE Export Helper window
   powershell/     QbxmlRequest.ps1
 templates/        ACE_Import_Template.xlsx
-tests/            451 unit tests, security invariants, e2e smoke test, mock ACE + qbXML fixtures
-docs/             INSTALLATION | USER-GUIDE | ACE-MAPPING | ARCHITECTURE | SECURITY | QUICKBOOKS-INTEGRATION
+tests/            545 unit tests, security invariants, a Phase 1 regression suite,
+                  an end-to-end fixture, a Chromium smoke test, mock ACE + qbXML fixtures
+docs/             ACE-HELPER-GUIDE (start here) | INSTALLATION | USER-GUIDE |
+                  ACE-MAPPING | ARCHITECTURE | SECURITY | QUICKBOOKS-INTEGRATION
 .github/workflows CI: verify (Node 20 + 22), bundle check, e2e smoke
 ```
 
 Data flows one way: `QuickBooks -> canonical model -> Excel -> canonical model
 -> preview -> ACE`. The canonical model is the same object in both halves, so
 QuickBooks is simply a second producer of it and reuses the whole preview,
-validation and fill pipeline unchanged. Every ACE write goes through the single
+validation and fill pipeline unchanged. Inside the extension that seam is
+`InvoiceDataSource`: `ExcelSource` is the Phase 1 path and the fallback,
+`QuickBooksExportSource` recognises a companion-written workbook and labels it,
+and both parse it with identical code. Every ACE write goes through the single
 `setAceFieldValue` helper, which uses the native value setter and dispatches
 `input`/`change` so ACE's own framework registers the value.
 
@@ -160,7 +177,7 @@ More: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**,
 | `npm run build` / `build:watch` | build `dist/` (the extension) |
 | `npm run build:companion` | build `dist-companion/` (the QuickBooks companion) |
 | `npm run qb` | run the companion: `npm run qb -- --help` |
-| `npm test` / `test:watch` | vitest (451 tests) |
+| `npm test` / `test:watch` | vitest (545 tests) |
 | `npm run smoke` | end-to-end test in real Chromium against a mocked ACE host (needs Chrome for Testing or a Playwright Chromium; see docs/INSTALLATION.md) |
 | `npm run check:bundle` | supply-chain check on `dist/`: no eval, no network APIs, no unexpected URL hosts |
 | `npm run typecheck` | tsc, no emit |
