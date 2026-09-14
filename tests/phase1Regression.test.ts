@@ -22,7 +22,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as XLSX from 'xlsx';
 
@@ -343,7 +343,13 @@ describe('the extension stands alone', () => {
     return found;
   }
 
-  const sources = walk(SRC).map((path) => ({ path: path.replace(`${SRC}/`, ''), code: readFileSync(path, 'utf8') }));
+  // Forward slashes on every platform, so the path shown when an assertion
+  // fails is readable and comparable on Windows too.
+  const prefix = `${SRC.split(sep).join('/')}/`;
+  const sources = walk(SRC).map((path) => ({
+    path: path.split(sep).join('/').replace(prefix, ''),
+    code: readFileSync(path, 'utf8'),
+  }));
 
   it('imports nothing from the QuickBooks companion', () => {
     for (const { path, code } of sources) {
