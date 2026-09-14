@@ -3,6 +3,9 @@
  *
  * A flat navy rounded square with a white "A" glyph, drawn pixel by pixel and
  * written as a minimal PNG (zlib deflate + CRC32). Run: npm run icons
+ *
+ * With --inttra: the INTTRA Helper's icons, a teal square with a white "I",
+ * into inttra-extension/icons. Run: npm run icons:inttra
  */
 
 import { deflateSync } from 'node:zlib';
@@ -11,9 +14,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const outDir = join(here, '..', 'extension', 'icons');
+const inttra = process.argv.includes('--inttra');
+const outDir = inttra ? join(here, '..', 'inttra-extension', 'icons') : join(here, '..', 'extension', 'icons');
 
-const NAVY = [18, 58, 92];
+const NAVY = inttra ? [15, 92, 99] : [18, 58, 92];
 const WHITE = [255, 255, 255];
 
 function crc32(buffer) {
@@ -48,8 +52,25 @@ function insideRoundedRect(x, y, size, radius) {
   return Math.hypot(dx, dy) <= radius + 0.5;
 }
 
+/** The "I" glyph: a stem with serifs top and bottom, scaled to the icon size. */
+function insideGlyphI(x, y, size) {
+  const unit = size / 16;
+  const top = 3.2 * unit;
+  const bottom = 12.6 * unit;
+  if (y < top || y > bottom) return false;
+  const centre = size / 2;
+  const stroke = Math.max(unit * 1.6, 1.4);
+  const serif = Math.max(unit * 1.2, 1.2);
+  const halfSerif = 2.6 * unit;
+  const stem = Math.abs(x - centre) <= stroke / 2;
+  const topSerif = y <= top + serif && Math.abs(x - centre) <= halfSerif;
+  const bottomSerif = y >= bottom - serif && Math.abs(x - centre) <= halfSerif;
+  return stem || topSerif || bottomSerif;
+}
+
 /** The "A" glyph: two legs and a crossbar, scaled to the icon size. */
 function insideGlyph(x, y, size) {
+  if (inttra) return insideGlyphI(x, y, size);
   const unit = size / 16;
   const top = 3.2 * unit;
   const bottom = 12.6 * unit;

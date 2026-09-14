@@ -277,6 +277,22 @@ first if you want the trail.
 clears the highlighting. Imported data also disappears when the browser closes:
 it is held in session memory and never written to disk.
 
+## 6b. Deckhand and the filing package
+
+Two more tabs in the panel, neither needed for the workflows above:
+
+- **Deckhand** reads the booking, containers and seals out of a pasted email
+  (or a saved `.eml`) and shows them with a mark each. Nothing goes further
+  until you press **Approve Shipment Data**, and approval is refused while a
+  container number fails its check digit or a seal could not be paired.
+- **Package** combines the imported invoice with the approved extraction into
+  one filing package, every value labelled with its source, every disagreement
+  shown as a conflict you resolve. **Save filing-package.json** for the INTTRA
+  Helper; **Apply to the ACE fields** to fill ACE with the booking, vessel,
+  container and seal from the email.
+
+`docs/DECKHAND.md` and `docs/END-TO-END-FLOW.md` have the details.
+
 ## 7. When something does not work
 
 | Symptom | Cause and fix |

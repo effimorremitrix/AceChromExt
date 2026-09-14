@@ -5,12 +5,14 @@ import type { SourceLoadOptions, SourceLoadResult, WorkbookDataSource } from './
 import { ExcelSource } from './ExcelSource.js';
 import { QuickBooksExportSource } from './QuickBooksExportSource.js';
 import { WebSource } from './WebSource.js';
+import { FilingPackageSource } from './FilingPackageSource.js';
 
 export type { InvoiceDataSource, SourceDescriptor, SourceId, SourceLoadOptions, SourceLoadResult, WorkbookDataSource } from './InvoiceDataSource.js';
 export { SourceError } from './InvoiceDataSource.js';
 export { ExcelSource } from './ExcelSource.js';
 export { QuickBooksExportSource } from './QuickBooksExportSource.js';
 export { WebSource } from './WebSource.js';
+export { FilingPackageSource, loadFilingPackageText, type FilingPackageLoadResult } from './FilingPackageSource.js';
 
 /**
  * Order matters only for ties. QuickBooksExportSource scores 2 when it sees
@@ -19,7 +21,7 @@ export { WebSource } from './WebSource.js';
  */
 export const WORKBOOK_SOURCES: WorkbookDataSource[] = [new QuickBooksExportSource(), new ExcelSource()];
 
-export const ALL_SOURCES = [...WORKBOOK_SOURCES, new WebSource()];
+export const ALL_SOURCES = [...WORKBOOK_SOURCES, new FilingPackageSource(), new WebSource()];
 
 export function sourceForWorkbook(workbook: RawWorkbook): WorkbookDataSource {
   let best: WorkbookDataSource = WORKBOOK_SOURCES[WORKBOOK_SOURCES.length - 1] as WorkbookDataSource;

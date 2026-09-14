@@ -1,0 +1,11 @@
+/* INTTRA Helper: the shared ACE Helper stylesheet with its own brand colour. */
+:root { --navy: #0f5c63; --blue: #0f8b96; }
+.brand-mark { background: #fff; color: var(--navy); }
+.grid-table { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 6px; }
+.grid-table th, .grid-table td { border: 1px solid var(--line); padding: 3px 5px; text-align: left; vertical-align: top; }
+.grid-table th { background: var(--surface-alt); font-weight: 600; color: var(--ink-muted); }
+.grid-cell-filled { background: var(--green-bg); }
+.grid-cell-failed { background: var(--red-bg); }
+.grid-cell-warning, .grid-cell-unresolved { background: var(--yellow-bg); }
+.grid-cell-skipped { color: var(--ink-muted); }
+.capture-list li { margin-bottom: 3px; }

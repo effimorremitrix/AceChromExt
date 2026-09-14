@@ -1,11 +1,32 @@
-# ACE Helper
+# ACE Helper, INTTRA Helper, Deckhand
 
 [![CI](https://github.com/effimorremitrix/AceChromExt/actions/workflows/ci.yml/badge.svg)](https://github.com/effimorremitrix/AceChromExt/actions/workflows/ci.yml)
 
-A Chrome (Manifest V3) extension that cuts the manual typing out of preparing
-U.S. Customs **ACE / AES export filings**.
+Two Chrome (Manifest V3) extensions and two local programs that cut the manual
+typing out of preparing U.S. Customs **ACE / AES export filings** and **INTTRA
+shipping instructions**, fed by QuickBooks Desktop and by the emails the
+carrier and the producer send.
 
-It does four things, and stops there:
+```
+  QuickBooks Desktop ──▶ ace-export ──▶ CanonicalShipment ─┐
+                                                           ├──▶ FilingPackage ──▶ ACE Helper    ──▶ ACE     (you submit)
+  Email / document ────▶ Deckhand ────▶ DeckhandShipment ──┘   (filing-package.json) INTTRA Helper ──▶ INTTRA  (you submit)
+```
+
+- **ACE Helper** fills ACE from a spreadsheet or from a filing package, with an
+  F2 calculator, a preview, data quality checks and a mapping status screen.
+- **INTTRA Helper** fills the Shipping Instructions screens and the Copy
+  Container Details grid from the same filing package, one row per container,
+  every cell read back. **[docs/INTTRA-INTEGRATION.md](docs/INTTRA-INTEGRATION.md)**
+- **Deckhand** reads booking, containers, seals, vessel and ports out of an
+  email, pairs a seal with a container only when the document showed them
+  together, validates ISO 6346 check digits, and hands nothing on until a
+  person approves it. **[docs/DECKHAND.md](docs/DECKHAND.md)**
+- **The filing package** composes the invoice and the extraction, records
+  where every value came from, flags every disagreement, and is a plain JSON
+  file both extensions read. **[docs/END-TO-END-FLOW.md](docs/END-TO-END-FLOW.md)**
+
+The ACE Helper does four things, and stops there:
 
 | | |
 | --- | --- |
@@ -21,26 +42,29 @@ Alongside it, a **QuickBooks Desktop companion** (`ace-export`) turns an invoice
 in QuickBooks into that same `.xlsx`, so the spreadsheet does not have to be
 typed either: **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md)**.
 
-## What it will never do
+## What they will never do
 
-- **Never** saves a commodity line, submits, or certifies a filing. The last
-  click is always yours.
-- **Never** navigates ACE for you.
-- **Never** touches ACE sign-in, MFA, CAPTCHA, or any other security control.
-- **Never** sends shipment or customer data anywhere; it has no network
-  permission and its CSP forbids outbound connections.
-- **Never** stores ACE credentials, because it never sees them.
+- **Never** save a line, continue, submit, certify a filing, or accept a
+  declaration. The last click is always yours, in ACE and in INTTRA.
+- **Never** navigate a portal for you, or press Add Row in a grid.
+- **Never** touch a sign-in, MFA, CAPTCHA, or any other security control.
+- **Never** send shipment or customer data anywhere; neither extension has a
+  network permission and both CSPs forbid outbound connections.
+- **Never** store a credential, because they never see one.
+- **Never** pair a seal with a container by position, or correct a container
+  number that fails its check digit.
 - No `eval()`, no remote code: expressions go through a hand-written parser
   that can only produce a number.
 
 ## Status
 
-**Phases 1, 2 and 3 are built. Two caveats you must read.**
+**Phases 1 to 4 are built. Three caveats you must read.**
 
-The extension and the companion build, install, and are covered by 558 unit
-tests - including an automated end-to-end fixture that runs the real chain from
-a QuickBooks invoice to a filled ACE form - plus a smoke test that drives a real
-Chromium with a mocked ACE host.
+The two extensions and the companion build, install, and are covered by 700
+unit tests - including an automated end-to-end fixture that runs the real
+chain from a QuickBooks invoice plus a booking email to a filled ACE form and
+a filled INTTRA container grid - plus a smoke test that drives a real Chromium
+with a mocked ACE host.
 
 1. **The ACE selectors match by label, not yet by id.** The label wording of
    every field on Steps 1-3 (Shipment, Parties, Commodities) was captured
@@ -62,15 +86,25 @@ Chromium with a mocked ACE host.
    **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md) section 11**
    says exactly what to run on the QuickBooks PC and what you should see.
 
+3. **The INTTRA Helper has never seen the live portal.** Every selector, page
+   signature and the exact hostname are placeholders tested against mock
+   screens. The mechanics are tested; the selectors are not. A field that
+   does not resolve is never written, so on a real screen the helper will
+   mostly report "not found" until the selectors are captured.
+   **[docs/INTTRA-INTEGRATION.md](docs/INTTRA-INTEGRATION.md) section 6** is
+   the capture procedure. Deckhand likewise has been shown fixtures, not a
+   real inbox.
+
 ## Quick start
 
 ```bash
 npm install
-npm run verify        # typecheck + tests + template + build + bundle check -> dist/
+npm run verify        # typecheck + tests + template + both builds + bundle checks -> dist/, dist-inttra/
 ```
 
 Then `chrome://extensions` -> Developer mode -> **Load unpacked** -> pick
-`dist/`. Reload any ACE tab that was already open.
+`dist/` (ACE Helper) and again for `dist-inttra/` (INTTRA Helper). Reload any
+ACE or INTTRA tab that was already open.
 
 Full steps: **[docs/INSTALLATION.md](docs/INSTALLATION.md)**
 
@@ -123,10 +157,36 @@ once per item, and anything still missing is flagged rather than guessed.
 
 Full guide: **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md)**
 
+## Starting from an email
+
+Paste the carrier's or producer's email into the **Deckhand** tab of either
+panel (or load a saved `.eml`), press Extract, and read the review:
+
+```
+Booking reference      : EBKG18531408   ✓
+Vessel                 : MSC FIRENZE    ✓
+Voyage                 : 541W           ✓
+Containers
+   1. MSCU1234566  ✓  carrier seal SL-4471209  ✓  shipper seal SH-001
+   2. MSDU7654322  ✓  carrier seal SL-4471210  ✓
+   3. TGHU7654320  ✓  carrier seal SL-9        ✓
+Anything I am unsure of : 2 seal(s) appeared with no container beside them ...
+```
+
+Approve it, then **Package -> Build filing package**: the invoice and the
+extraction become one `filing-package.json` in which every value says where it
+came from and every disagreement is a conflict you resolve. The INTTRA Helper
+imports that file and fills the Shipping Instructions screens and the container
+grid; the ACE Helper imports it too. On the QuickBooks PC the same package
+comes from `node ace-export.mjs package CN-1042 --deckhand booking.eml`.
+
 ## Layout
 
 ```
-extension/        manifest, HTML shells, CSS, icons   (static, copied to dist/)
+extension/        ACE Helper manifest, HTML shells, CSS, icons   (static, copied to dist/)
+inttra-extension/ INTTRA Helper: manifest, HTML, icons, and src/ (pages, mappings, content, ui)
+deckhand/         email/document extraction: model, ISO 6346, rules extractor, readers, review
+shared/           the filing package: model, provenance, builder (merge + conflicts), JSON, ACE view
 src/
   models/         CanonicalInvoice, AceField          (contracts)
   sources/        InvoiceDataSource: Excel | QuickBooksExport | Web (declared)
@@ -140,7 +200,8 @@ src/
   content/        pageDetector, fieldDetector, fieldWriter, filler, highlight,
                   automationPolicy (what is never clicked)
   ui/             app, popup, panel, preview, mappingStatus, preflight,
-                  calculatorPanel, diagnostics, importer
+                  calculatorPanel, diagnostics, importer,
+                  deckhandTab + packageTab (shared with the INTTRA Helper)
   core/           settings, messages, store, sessionLog, logger
   background/     service worker
 companion/        QuickBooks Desktop companion        (Node, not shipped in the extension)
@@ -150,13 +211,17 @@ companion/        QuickBooks Desktop companion        (Node, not shipped in the 
   src/mapping/    QuickBooks -> canonical, with a field-origin record
   src/excel/      canonical -> ACE_Import.xlsx (+ Audit and Checks sheets)
   src/ui/         cli | preview | the local ACE Export Helper window
+  src/package/    ace-export package / deckhand: the filing package on disk
   powershell/     QbxmlRequest.ps1
 templates/        ACE_Import_Template.xlsx
-tests/            558 unit tests, security invariants, a Phase 1 regression suite,
-                  an end-to-end fixture, a Chromium smoke test, mock ACE + qbXML fixtures
+tests/            700 unit tests, security invariants for both extensions, a Phase 1
+                  regression suite, two end-to-end fixtures, a Chromium smoke test,
+                  mock ACE + INTTRA screens, qbXML and sanitized email fixtures,
+                  and an independence test (no dependency outside this repository)
 docs/             ACE-HELPER-GUIDE (start here) | INSTALLATION | USER-GUIDE |
-                  ACE-MAPPING | ARCHITECTURE | SECURITY | QUICKBOOKS-INTEGRATION
-.github/workflows CI: verify (Node 20 + 22), bundle check, e2e smoke
+                  ACE-MAPPING | ARCHITECTURE | SECURITY | QUICKBOOKS-INTEGRATION |
+                  DECKHAND | INTTRA-INTEGRATION | END-TO-END-FLOW
+.github/workflows CI: verify (Node 20 + 22), both bundle checks, e2e smoke
 ```
 
 Data flows one way: `QuickBooks -> canonical model -> Excel -> canonical model
@@ -176,19 +241,22 @@ More: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**,
 
 | Command | Does |
 | --- | --- |
-| `npm run verify` | typecheck + tests + template + build + bundle check + companion build |
-| `npm run build` / `build:watch` | build `dist/` (the extension) |
+| `npm run verify` | typecheck + tests + template + both extension builds + both bundle checks + companion build |
+| `npm run build` / `build:watch` | build `dist/` (the ACE Helper) |
+| `npm run build:inttra` / `build:inttra:watch` | build `dist-inttra/` (the INTTRA Helper) |
 | `npm run build:companion` | build `dist-companion/` (the QuickBooks companion) |
 | `npm run qb` | run the companion: `npm run qb -- --help` |
-| `npm test` / `test:watch` | vitest (558 tests) |
+| `npm test` / `test:watch` | vitest (700 tests) |
 | `npm run smoke` | end-to-end test in real Chromium against a mocked ACE host (needs Chrome for Testing or a Playwright Chromium; see docs/INSTALLATION.md) |
-| `npm run check:bundle` | supply-chain check on `dist/`: no eval, no network APIs, no unexpected URL hosts |
+| `npm run check:bundle` | supply-chain check on `dist/`: no eval, no network APIs, no URL host but CBP |
+| `npm run check:bundle:inttra` | the same on `dist-inttra/`, allowing only INTTRA and e2open hosts |
 | `npm run typecheck` | tsc, no emit |
 | `npm run template` | regenerate the import template |
-| `npm run icons` | regenerate the PNG icons |
+| `npm run icons` / `icons:inttra` | regenerate the PNG icons of either extension |
 
 ## Compliance note
 
-ACE Helper is a data-entry aid. It does not validate a filing, does not give
-customs advice, and does not replace the filer's review. The accuracy of every
-AES filing remains the filer's legal responsibility.
+ACE Helper and INTTRA Helper are data-entry aids. They do not validate a
+filing or a shipping instruction, do not give customs or shipping advice, and
+do not replace the filer's review. The accuracy of every AES filing and every
+shipping instruction remains the filer's legal responsibility.

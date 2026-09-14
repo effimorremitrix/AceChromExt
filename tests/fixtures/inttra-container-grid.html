@@ -1,0 +1,70 @@
+<!--
+  Mock INTTRA "Copy Container Details" grid: a table whose cells hold native
+  inputs, with two rows already added and an "Add Row" button the helper must
+  never press. Nothing here was captured from the live portal.
+-->
+<div id="si">
+  <ol class="steps">
+    <li class="wizard-step">General Details</li>
+    <li class="wizard-step">Container &amp; Cargo</li>
+    <li class="wizard-step active">Copy Container Details</li>
+  </ol>
+  <h2>Copy Container Details</h2>
+  <p>Paste rows from a spreadsheet, or type into the grid.</p>
+  <table id="containerDetailsGrid" class="container-grid">
+    <thead>
+      <tr>
+        <th>Container Number *</th>
+        <th>Carrier Seal #</th>
+        <th>Shipper Seal #</th>
+        <th>Cargo Description</th>
+        <th>Marks &amp; Numbers</th>
+        <th>HS Code</th>
+        <th>Package Type</th>
+        <th>No. of Packages</th>
+        <th>Gross Weight (KG)</th>
+        <th>Remarks</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><input type="text" name="rows[0].containerNumber" /></td>
+        <td><input type="text" name="rows[0].carrierSeal" /></td>
+        <td><input type="text" name="rows[0].shipperSeal" /></td>
+        <td><textarea name="rows[0].cargoDescription"></textarea></td>
+        <td><input type="text" name="rows[0].marks" /></td>
+        <td><input type="text" name="rows[0].hsCode" /></td>
+        <td>
+          <select name="rows[0].packageType">
+            <option value="">Select</option>
+            <option value="CT">CT - Carton</option>
+            <option value="PK">PK - Package</option>
+          </select>
+        </td>
+        <td><input type="text" name="rows[0].packageCount" /></td>
+        <td><input type="text" name="rows[0].grossWeight" /></td>
+        <td><input type="text" name="rows[0].remarks" /></td>
+      </tr>
+      <tr>
+        <td><input type="text" name="rows[1].containerNumber" /></td>
+        <td><input type="text" name="rows[1].carrierSeal" /></td>
+        <td><input type="text" name="rows[1].shipperSeal" /></td>
+        <td><textarea name="rows[1].cargoDescription"></textarea></td>
+        <td><input type="text" name="rows[1].marks" /></td>
+        <td><input type="text" name="rows[1].hsCode" /></td>
+        <td>
+          <select name="rows[1].packageType">
+            <option value="">Select</option>
+            <option value="CT">CT - Carton</option>
+            <option value="PK">PK - Package</option>
+          </select>
+        </td>
+        <td><input type="text" name="rows[1].packageCount" /></td>
+        <td><input type="text" name="rows[1].grossWeight" /></td>
+        <td><input type="text" name="rows[1].remarks" /></td>
+      </tr>
+    </tbody>
+  </table>
+  <button type="button" id="addRow">+ Add Row</button>
+  <button type="button" id="saveContinue">Save &amp; Continue</button>
+</div>

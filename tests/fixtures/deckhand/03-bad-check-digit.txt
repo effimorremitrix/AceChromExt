@@ -1,0 +1,15 @@
+From: Export Desk <exports@verdantfoods.example>
+To: Export Desk <exports@example-trader.example>
+Subject: Corrected container number - please use this one
+
+Ignore the number on the first notice, this is the corrected one.
+
+Booking Ref: SHPX-99133
+Vessel: Azure Tempest   Voyage: 16E
+Port of loading: Shanghai
+Port of discharge: Rotterdam
+
+Container TGHU7654321 | Seal No: SL-1
+
+Regards,
+Export Desk

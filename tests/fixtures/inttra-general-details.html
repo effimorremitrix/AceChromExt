@@ -1,0 +1,49 @@
+<!--
+  Mock INTTRA "General Details" screen. NOTHING here was captured from the
+  live portal: the step names follow the observed workflow, the ids are the
+  placeholder guesses in inttra-extension/src/mappings/generalDetails.ts, and
+  the whole file exists so the page detector, the field detector and the
+  writer can be exercised. Replace with a trimmed real snippet once captured
+  (docs/INTTRA-INTEGRATION.md).
+-->
+<div id="si">
+  <h1>Shipping Instructions</h1>
+  <ol class="steps">
+    <li class="wizard-step active">General Details</li>
+    <li class="wizard-step">Container &amp; Cargo</li>
+    <li class="wizard-step">Copy Container Details</li>
+    <li class="wizard-step">Print Instructions</li>
+    <li class="wizard-step">B/L Documents</li>
+    <li class="wizard-step">Notification Emails</li>
+  </ol>
+  <h2>General Details</h2>
+  <form>
+    <label for="bookingNumber">Booking Number *</label>
+    <input type="text" id="bookingNumber" name="bookingNumber" />
+
+    <label for="shipperReference">Shipper's Reference</label>
+    <input type="text" id="shipperReference" name="shipperReference" />
+
+    <label for="carrier">Carrier</label>
+    <select id="carrier" name="carrier">
+      <option value="">Select</option>
+      <option value="MSCU">MSCU - MSC Mediterranean Shipping Company</option>
+      <option value="MAEU">MAEU - Maersk Line</option>
+    </select>
+
+    <label for="vessel">Vessel</label>
+    <input type="text" id="vessel" name="vessel" />
+
+    <label for="voyage">Voyage</label>
+    <input type="text" id="voyage" name="voyage" />
+
+    <label for="portOfLoading">Port of Loading</label>
+    <input type="text" id="portOfLoading" name="portOfLoading" />
+
+    <label for="portOfDischarge">Port of Discharge</label>
+    <input type="text" id="portOfDischarge" name="portOfDischarge" />
+
+    <button type="button" id="saveContinue">Save &amp; Continue</button>
+    <button type="submit" id="submitSi">Submit</button>
+  </form>
+</div>

@@ -1,7 +1,9 @@
-# Installing ACE Helper
+# Installing ACE Helper and INTTRA Helper
 
-ACE Helper is an unpacked Chrome extension. It is not on the Chrome Web Store,
-so it is loaded in developer mode from a folder you build locally.
+Both are unpacked Chrome extensions. Neither is on the Chrome Web Store, so
+each is loaded in developer mode from a folder you build locally: `dist/` for
+the ACE Helper, `dist-inttra/` for the INTTRA Helper. Load one, the other, or
+both; they do not depend on each other.
 
 ## 1. Prerequisites
 
@@ -12,10 +14,13 @@ so it is loaded in developer mode from a folder you build locally.
 
 ```bash
 npm install
-npm run verify      # typecheck + tests + template + build
+npm run verify      # typecheck + tests + template + both builds + both bundle checks
 ```
 
-`npm run verify` ends by writing the unpacked extension to `dist/`:
+`npm run verify` writes the ACE Helper to `dist/` and the INTTRA Helper to
+`dist-inttra/` (same layout: `manifest.json`, `popup.html`, `panel.html`,
+`styles/`, `inttraContent.js`, `popup.js`, `panel.js`, `serviceWorker.js`,
+`icons/`):
 
 ```
 dist/
@@ -30,13 +35,15 @@ Individual steps, if you prefer:
 
 | Command | What it does |
 | --- | --- |
-| `npm run build` | builds `dist/` |
-| `npm run build:watch` | rebuilds on every change (then press the reload button in `chrome://extensions`) |
+| `npm run build` | builds `dist/` (ACE Helper) |
+| `npm run build:inttra` | builds `dist-inttra/` (INTTRA Helper) |
+| `npm run build:watch` / `build:inttra:watch` | rebuilds on every change (then press the reload button in `chrome://extensions`) |
 | `npm test` | runs the test suite |
 | `npm run typecheck` | TypeScript, no emit |
 | `npm run template` | regenerates `templates/ACE_Import_Template.xlsx` |
 | `npm run icons` | regenerates the PNG icons |
-| `npm run check:bundle` | checks the built `dist/` for eval, network APIs, and unexpected URL hosts - covers bundled dependencies, not just our own source |
+| `npm run check:bundle` | checks the built `dist/` for eval, network APIs, and any URL host but CBP - covers bundled dependencies, not just our own source |
+| `npm run check:bundle:inttra` | the same check on `dist-inttra/`, allowing only INTTRA and e2open hosts |
 | `npm run smoke` | end-to-end test: loads `dist/` into a real Chromium, serves the mock ACE screens *from the ACE host* by request interception, and drives F2, import, and both Fill buttons. Needs `dist/` built first; set `CHROME_PATH` if Chrome is not in a standard location. It never contacts the real ACE portal. See the note below on which Chrome build to point it at. |
 
 ## 3. Load it into Chrome
@@ -46,6 +53,7 @@ Individual steps, if you prefer:
 3. Click **Load unpacked**.
 4. Select the `dist/` folder (not the repository root).
 5. Pin "ACE Helper" to the toolbar so the popup is one click away.
+6. For the INTTRA Helper, repeat with the `dist-inttra/` folder.
 
 ## 4. Check it is alive
 
@@ -71,6 +79,11 @@ loaded *after* the extension was installed or reloaded.
 There is no `tabs`, no `<all_urls>`, no `scripting`, no `downloads`, and no
 network permission of any kind. The extension page CSP pins `connect-src` to
 `'none'`, so the extension cannot make a network request even by accident.
+
+The INTTRA Helper asks for the same single `storage` permission and for
+`https://*.inttra.com/*` and `https://*.e2open.com/*` only. The exact hostname
+of the Shipping Instructions screens has not been confirmed yet; if it is
+under neither domain, see `docs/INTTRA-INTEGRATION.md` section 2.
 
 If your agency reaches ACE through a different hostname, add it to both
 `host_permissions` and `content_scripts.matches` in `extension/manifest.json`,
@@ -99,8 +112,8 @@ Imported shipment data was only ever in memory, so nothing is left on disk.
 
 | Job | What it runs |
 | --- | --- |
-| **Verify** (Node 20 and 22) | typecheck, the 558 unit tests, both builds, and a check that the committed template and icons still match their generators |
-| **Bundle supply-chain check** | `npm run check:bundle` against the built `dist/` |
+| **Verify** (Node 20 and 22) | typecheck, the 700 unit tests, all three builds, and a check that the committed template and both icon sets still match their generators |
+| **Bundle supply-chain check** | `npm run check:bundle` against `dist/` and `npm run check:bundle:inttra` against `dist-inttra/` |
 | **End-to-end** | `npm run smoke` against the mocked ACE host, in a pinned Chrome for Testing build |
 
 The Verify job uploads the built unpacked extension as a workflow artifact

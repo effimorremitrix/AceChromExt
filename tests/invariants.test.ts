@@ -348,3 +348,51 @@ describe('the QuickBooks companion', () => {
     expect(transport).toMatch(/rmSync\(directory/);
   });
 });
+
+describe('Deckhand and the filing package', () => {
+  // Pure modules shared by three programs. They may not know about a DOM, a
+  // portal, a socket, or the companion, and the extension's own promises
+  // apply to them because they are bundled into it.
+  const shared = [join(__dirname, '..', 'deckhand', 'src'), join(__dirname, '..', 'shared', 'src')]
+    .flatMap((dir) => walk(dir, '.ts'))
+    .map((path) => ({ path: path.replace(`${posix(join(__dirname, '..'))}/`, ''), code: stripComments(readFileSync(path, 'utf8')) }));
+
+  it('exist and are covered', () => {
+    expect(shared.length).toBeGreaterThan(5);
+  });
+
+  it('never call eval, fetch, a socket, or a timer with a string', () => {
+    for (const { path, code } of shared) {
+      expect(code, path).not.toMatch(/\beval\s*\(|new\s+Function\s*\(/);
+      expect(code, path).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|new\s+WebSocket|sendBeacon/);
+      expect(code, path).not.toMatch(/set(?:Timeout|Interval)\s*\(\s*['"`]/);
+      expect(code.match(/https?:\/\/[^\s'"`)]+/g) ?? []).toEqual([]);
+    }
+  });
+
+  it('know nothing about a browser, ACE, INTTRA, QuickBooks COM, or the companion', () => {
+    for (const { path, code } of shared) {
+      // `document.` followed by a letter is a DOM call; "in this document." in a message is prose.
+      expect(code, path).not.toMatch(/\bchrome\.[a-z]|\bdocument\.[a-zA-Z]|\bwindow\.[a-zA-Z]|localStorage|sessionStorage/);
+      expect(code, path).not.toMatch(/from\s+['"][^'"]*(\/content\/|\/ui\/|inttra-extension|companion|qbxml)/);
+      expect(code, path).not.toMatch(/\bpassword\b/i);
+    }
+  });
+
+  it('are the only place the extension takes Deckhand and package logic from', () => {
+    // src/ may import deckhand/ and shared/, never the INTTRA extension or the companion.
+    for (const { path, code } of stripped) {
+      expect(code, path).not.toMatch(/from\s+['"][^'"]*inttra-extension/);
+    }
+  });
+
+  it('never pair a container with a seal by array position', () => {
+    // The one failure Deckhand exists to prevent, asserted structurally: no
+    // code in the extractor indexes a seal list by a container index.
+    const extractor = shared.filter(({ path }) => path.includes('deckhand/src/extract/'));
+    for (const { path, code } of extractor) {
+      expect(code, path).not.toMatch(/seals\s*\[\s*(index|i|n|position|idx)\s*\]/);
+      expect(code, path).not.toMatch(/\.map\s*\(\s*\(\s*\w+\s*,\s*(index|i)\s*\)\s*=>\s*[^)]*seals\s*\[/);
+    }
+  });
+});

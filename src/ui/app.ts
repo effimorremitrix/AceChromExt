@@ -44,6 +44,10 @@ import {
   type SelectorOverrides,
 } from '../ace/selectors/overrides.js';
 import { clearOverrides, loadOverrides, saveOverrides } from '../ace/selectors/overridesStore.js';
+import { renderDeckhandTab, type DeckhandState } from './deckhandTab.js';
+import { renderPackageTab } from './packageTab.js';
+import { buildFilingPackage, aceShipmentFromPackage, type CommercialSource, type FilingPackage } from '../../shared/src/index.js';
+import { validateShipment } from '../excel/validator.js';
 
 export type Surface = 'popup' | 'panel';
 
@@ -70,6 +74,10 @@ interface AppState {
   overrides: SelectorOverrides;
   /** Text in the selector-override editor, kept across re-renders. */
   overridesDraft: string | null;
+  /** The Deckhand extraction being reviewed. Mirrored into the stored import when one is loaded. */
+  deckhand: DeckhandState | null;
+  /** Text in the Deckhand paste box, kept across re-renders. */
+  deckhandDraft: string;
 }
 
 /** Injected by the panel surface only; the popup has no Import tab. */
@@ -92,6 +100,8 @@ const state: AppState = {
   log: [],
   overrides: emptyOverrides(),
   overridesDraft: null,
+  deckhand: null,
+  deckhandDraft: '',
 };
 
 // ---------------------------------------------------------------- utilities
@@ -169,6 +179,14 @@ function downloadText(text: string, fileName: string): void {
 async function refreshData(): Promise<void> {
   const response = await sendToBackground({ type: 'store/get' });
   state.data = response.ok && response.type === 'store/data' ? response.payload : null;
+  if (state.data?.deckhand) state.deckhand = state.data.deckhand;
+  rebuildMapping();
+}
+
+/** Store a new version of the import and keep the mapping in step. */
+async function storeData(next: StoredImport): Promise<void> {
+  const response = await sendToBackground({ type: 'store/set', payload: next });
+  state.data = response.ok && response.type === 'store/data' ? response.payload : next;
   rebuildMapping();
 }
 
@@ -220,7 +238,7 @@ async function onFileChosen(file: File): Promise<void> {
   }
 
   state.workbook = opened.value;
-  const firstSheet = opened.value.sheetNames[0] as string;
+  const firstSheet = opened.value.kind === 'package' ? '' : (opened.value.sheetNames[0] as string);
   await importSheet(firstSheet);
   state.busy = false;
   render();
@@ -237,15 +255,17 @@ async function importSheet(sheetName: string): Promise<void> {
   }
 
   const payload = result.value;
-  const response = await sendToBackground({ type: 'store/set', payload });
-  state.data = response.ok && response.type === 'store/data' ? response.payload : payload;
+  // A workbook import keeps the Deckhand extraction already on screen; a
+  // package import brings its own.
+  if (payload.package) state.deckhand = payload.deckhand ?? null;
+  else if (state.deckhand) payload.deckhand = state.deckhand;
+  await storeData(payload);
   state.report = null;
-  rebuildMapping();
 
   const source = payload.source;
   await appendLog(
     'import',
-    `Loaded ${payload.shipment.source.fileName} - ${payload.shipment.commodities.length} line(s) from "${sheetName}"${source ? ` via ${source.label}` : ''}.`,
+    `Loaded ${payload.shipment.source.fileName} - ${payload.shipment.commodities.length} line(s)${sheetName ? ` from "${sheetName}"` : ''}${source ? ` via ${source.label}` : ''}.`,
     source?.detail,
   );
   // The transformations are the part somebody will want to trace later, so
@@ -259,9 +279,9 @@ async function importSheet(sheetName: string): Promise<void> {
   }
   await refreshLog();
 
-  state.activeTab = 'preview';
+  state.activeTab = payload.package ? 'package' : 'preview';
   setStatus(
-    `Imported ${payload.shipment.commodities.length} line(s) from "${sheetName}" - ${summarize(payload.validation, payload.shipment.commodities.length)}. Nothing has been written to ACE yet.`,
+    `Imported ${payload.shipment.commodities.length} line(s)${sheetName ? ` from "${sheetName}"` : ` from ${payload.shipment.source.fileName}`} - ${summarize(payload.validation, payload.shipment.commodities.length)}. Nothing has been written to ACE yet.`,
     payload.validation.errors ? 'warn' : 'ok',
   );
 }
@@ -273,6 +293,7 @@ async function clearData(): Promise<void> {
   state.report = null;
   state.mapping = [];
   state.mappingChecked = false;
+  state.deckhand = null;
   importer?.reset();
   if (state.aceTab) await sendToTab(state.aceTab.id, { type: 'content/clearHighlights' });
   await refreshLog();
@@ -444,6 +465,8 @@ function renderTabs(): HTMLElement {
       ? [
           { id: 'overview', label: 'Overview' },
           { id: 'import', label: 'Import' },
+          { id: 'deckhand', label: 'Deckhand' },
+          { id: 'package', label: 'Package' },
           { id: 'preview', label: 'Preview' },
           { id: 'mapping', label: 'Mapping' },
           { id: 'fill', label: 'Fill ACE' },
@@ -534,6 +557,15 @@ function renderOverview(): HTMLElement {
   } else if (check && check.warnings.length) {
     lines.push({ status: 'warn', text: `${check.warnings.length} data quality warning(s)` });
   }
+  if (state.deckhand) {
+    lines.push({
+      status: state.deckhand.approvedAt ? 'pass' : 'warn',
+      text: state.deckhand.approvedAt ? 'Deckhand extraction approved' : 'Deckhand extraction awaiting review',
+    });
+  }
+  if (state.data.package) {
+    lines.push({ status: 'pass', text: `Filing package ${state.data.package.packageId} built` });
+  }
   if (!state.aceTab) lines.push({ status: 'warn', text: 'No ACE tab open' });
 
   section.append(
@@ -597,19 +629,19 @@ function renderImport(): HTMLElement {
   section.append(
     el('h2', { text: 'Import' }),
     el('p', { className: 'muted small', text: 'The workbook is parsed in this browser. Nothing is uploaded anywhere.' }),
-    el('p', { className: 'small muted', text: 'Two kinds of workbook are recognised: one you filled in from the template, and one the QuickBooks companion wrote. Both are read exactly the same way; only the label differs.' }),
+    el('p', { className: 'small muted', text: 'Two kinds of workbook are recognised: one you filled in from the template, and one the QuickBooks companion wrote. Both are read exactly the same way; only the label differs. A filing-package.json (from the Package tab, the INTTRA Helper, or "ace-export package") is accepted too.' }),
   );
 
   const fileInput = el('input', {
     className: 'file-input',
-    attrs: { type: 'file', accept: '.xlsx,.xlsm,.xltx', id: 'file-input', ...(state.busy ? { disabled: 'disabled' } : {}) },
+    attrs: { type: 'file', accept: '.xlsx,.xlsm,.xltx,.json', id: 'file-input', ...(state.busy ? { disabled: 'disabled' } : {}) },
   });
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
     if (file) void onFileChosen(file);
   });
 
-  section.append(el('label', { className: 'field' }, [el('span', { text: 'Workbook (.xlsx)' }), fileInput]));
+  section.append(el('label', { className: 'field' }, [el('span', { text: 'Workbook (.xlsx) or filing package (.json)' }), fileInput]));
   section.append(buildDropZone());
 
   const templateLink = el('a', {
@@ -1391,6 +1423,132 @@ function renderCalculator(): HTMLElement {
   });
 }
 
+// ------------------------------------------------------- deckhand + package
+
+/** Keep the Deckhand extraction with the stored import, when there is one. */
+async function persistDeckhand(next: DeckhandState | null): Promise<void> {
+  state.deckhand = next;
+  if (state.data) await storeData({ ...state.data, deckhand: next });
+}
+
+function renderDeckhand(): HTMLElement {
+  return renderDeckhandTab({
+    current: state.deckhand,
+    draft: state.deckhandDraft,
+    destination: 'ACE',
+    onDraftChange: (text) => {
+      state.deckhandDraft = text;
+    },
+    onExtracted: async (shipment) => {
+      await persistDeckhand({ shipment, approvedAt: null });
+      await appendLog('note', `Deckhand extracted ${shipment.containers.length} container(s) from ${shipment.source.name}.`);
+      await refreshLog();
+      render();
+    },
+    onApproved: async (approvedAt) => {
+      if (!state.deckhand) return;
+      await persistDeckhand({ shipment: state.deckhand.shipment, approvedAt });
+      await appendLog('note', `Deckhand extraction approved (${state.deckhand.shipment.containers.length} container(s)).`);
+      await refreshLog();
+      render();
+    },
+    onCleared: async () => {
+      await persistDeckhand(null);
+      render();
+    },
+    setStatus,
+    copyToClipboard,
+    downloadText,
+  });
+}
+
+function commercialSourceOfImport(): CommercialSource | null {
+  const source = state.data?.source;
+  if (!source) return null;
+  if (source.id === 'filing-package') return state.data?.package?.commercialSource ?? null;
+  if (source.id === 'excel' || source.id === 'quickbooks-export') return { id: source.id, label: source.label, detail: source.detail };
+  return null;
+}
+
+async function buildPackage(): Promise<void> {
+  if (!state.data) return;
+  const invoice = state.data.package?.invoice ?? state.data.shipment;
+  const pkg = buildFilingPackage({
+    invoice,
+    commercialSource: commercialSourceOfImport(),
+    shipment: state.deckhand?.shipment ?? null,
+    deckhandApproved: !!state.deckhand?.approvedAt,
+    approvedAt: state.deckhand?.approvedAt ?? null,
+    decisions: state.data.package?.decisions,
+  });
+  await storeData({ ...state.data, package: pkg });
+  await appendLog('note', `Filing package ${pkg.packageId} built: ${pkg.containers.length} container(s), ${pkg.conflicts.length} conflict(s).`);
+  await refreshLog();
+  setStatus(`Filing package ${pkg.packageId} built. Save it as filing-package.json for the INTTRA Helper, or apply it to the ACE fields.`, pkg.conflicts.length ? 'warn' : 'ok');
+  render();
+}
+
+/** Replace the ACE data with the package's view of it: booking, vessel, container and seal from the approved extraction. */
+async function applyPackageToAce(pkg: FilingPackage): Promise<void> {
+  if (!state.data) return;
+  try {
+    const view = aceShipmentFromPackage(pkg);
+    const validation = validateShipment(view.shipment);
+    await storeData({
+      ...state.data,
+      shipment: view.shipment,
+      validation,
+      notes: [...view.notes, ...state.data.notes.filter((note) => !note.message.startsWith('Package:'))],
+      source: { id: 'filing-package', label: 'Filing package', detail: `${pkg.packageId} - applied to the ACE fields` },
+      package: pkg,
+    });
+    state.report = null;
+    await appendLog('note', `Filing package ${pkg.packageId} applied to the ACE fields.`);
+    await refreshLog();
+    setStatus('The ACE fields now read from the filing package. Check the preview, then fill.', view.notes.length ? 'warn' : 'ok');
+  } catch (error) {
+    setStatus((error as Error).message, 'error');
+  }
+  render();
+}
+
+function renderPackage(): HTMLElement {
+  const pkg = state.data?.package ?? null;
+  const buildable = !state.data
+    ? { ok: false, reason: 'Import the ACE workbook (or a filing-package.json) first. ACE needs the invoice and its commodity lines; Deckhand adds the booking, containers and seals on top.' }
+    : { ok: true, reason: '' };
+
+  const apply = el('button', { className: 'button', text: 'Apply to the ACE fields', attrs: { type: 'button' } });
+  apply.addEventListener('click', () => {
+    if (pkg) void applyPackageToAce(pkg);
+  });
+
+  return renderPackageTab({
+    pkg,
+    buildable,
+    destination: 'ACE',
+    onBuild: buildPackage,
+    onChange: async (next) => {
+      if (!state.data) return;
+      if (next.review.deckhand === 'approved' && state.deckhand && !state.deckhand.approvedAt) {
+        state.deckhand = { shipment: state.deckhand.shipment, approvedAt: next.review.approvedAt };
+      }
+      await storeData({ ...state.data, package: next, deckhand: state.deckhand });
+      render();
+    },
+    onClear: async () => {
+      if (!state.data) return;
+      await storeData({ ...state.data, package: null });
+      setStatus('Filing package discarded. The imported data and the Deckhand extraction are still here.', 'ok');
+      render();
+    },
+    setStatus,
+    copyToClipboard,
+    downloadText,
+    actions: pkg ? [apply] : [],
+  });
+}
+
 // -------------------------------------------------------------------- render
 
 function render(): void {
@@ -1408,6 +1566,12 @@ function render(): void {
       break;
     case 'import':
       root.append(renderImport());
+      break;
+    case 'deckhand':
+      root.append(renderDeckhand());
+      break;
+    case 'package':
+      root.append(renderPackage());
       break;
     case 'preview':
       root.append(renderPreview());

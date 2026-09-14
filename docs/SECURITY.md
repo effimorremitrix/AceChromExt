@@ -1,10 +1,16 @@
 # Security and privacy
 
-This document covers two programs that ship from this repository:
+This document covers three programs that ship from this repository:
 
-- **the extension** (`src/` -> `dist/`), which runs in Chrome;
+- **the ACE Helper extension** (`src/` -> `dist/`), which runs in Chrome;
+- **the INTTRA Helper extension** (`inttra-extension/` -> `dist-inttra/`),
+  which runs in Chrome, separately; see [INTTRA Helper](#the-inttra-helper);
 - **the QuickBooks companion** (`companion/` -> `dist-companion/`), which runs
   on the Windows PC beside QuickBooks Desktop.
+
+Two pure modules are bundled into all three and carry no capability of their
+own: `deckhand/` (email extraction) and `shared/` (the filing package). See
+[Deckhand and the filing package](#deckhand-and-the-filing-package).
 
 They are built separately and on purpose. The extension's guarantees below are
 enforced by checks over `src/` and `dist/`; the companion legitimately needs to
@@ -207,9 +213,54 @@ ignored.
 real company's item catalogue and a real customer's shipment do not get
 committed by accident.
 
+## The INTTRA Helper
+
+A second extension, deliberately not merged into the first: the ACE Helper
+keeps its CBP-only reach and the INTTRA Helper its INTTRA-only reach, and
+each bundle is checked against its own host allowlist
+(`npm run check:bundle:inttra`).
+
+| Not done | Enforced by |
+| --- | --- |
+| Login, MFA, or any credential handling | never sees one; `tests/inttraInvariants.test.ts` forbids the words `password` and `credential` in its source |
+| Pressing Save, Continue, Next, Add Row, Submit, or accepting a declaration | `automationPolicy.ts` names each switch and freezes it off; no `.click()`, `.submit()`, `MouseEvent` or `PointerEvent` anywhere in its content layer |
+| Headless or unattended operation | it is a content script that answers a popup; there is nothing to run it |
+| Network access | no `fetch`, no network permission, `connect-src 'none'` |
+| Reaching outside INTTRA | `host_permissions` and `content_scripts.matches` are `https://*.inttra.com/*` and `https://*.e2open.com/*`; no `<all_urls>`; the tab helper re-checks the host |
+| Writing outside `setInttraFieldValue` | no `.value =` or `.textContent =` in the content layer outside `fieldWriter.ts` |
+| Guessing a field or a grid column | a field is written only when exactly one control matched; a grid column only when its heading was identified |
+
+| Data | Storage | Lifetime |
+| --- | --- | --- |
+| The loaded package and Deckhand extraction | `chrome.storage.session` | until the browser closes, or Clear Data |
+| Settings and captured selectors | `chrome.storage.local` | until uninstall; no shipment data, no credential |
+| INTTRA credentials | never touched | - |
+
+## Deckhand and the filing package
+
+`deckhand/` and `shared/` are data code. `tests/invariants.test.ts` and
+`tests/independence.test.ts` assert that neither calls `eval`, `fetch`, a
+socket or a string timer, names an http(s) URL, touches `chrome.*`, a DOM,
+`localStorage` or `sessionStorage`, imports from either extension's content
+layer or from the companion, or pairs a seal with a container by array index.
+
+An email is untrusted input. It is parsed by regular expressions into strings
+that only ever become text nodes and input values. A `.eml` is read without
+rendering: the text/plain part is decoded, an HTML-only part has its tags
+stripped. A `filing-package.json` and a `deckhand-*.json` are untrusted input
+too: both parsers check shapes, enumerations and sizes, drop unknown and
+`__proto__` keys, recompute every container's ISO 6346 status rather than
+trusting it, and the package parser rebuilds the merged values from the two
+halves and the operator's decisions, so a hand-edited merged value cannot get
+in.
+
+The companion's `ace-export package` and `ace-export deckhand` write files to
+the directory the operator names and nowhere else. `filing-package-*.json`
+and `deckhand-*.json` are in `.gitignore`.
+
 ## Reporting
 
-Security issues in this extension should go to the repository owner privately,
+Security issues in these extensions should go to the repository owner privately,
 not into a public issue.
 
 

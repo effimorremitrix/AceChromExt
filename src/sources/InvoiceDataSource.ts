@@ -11,6 +11,8 @@
  *
  *   ExcelSource             a workbook the user filled in by hand   (Phase 1)
  *   QuickBooksExportSource  a workbook the companion wrote          (Phase 2)
+ *   FilingPackageSource     a filing-package.json: the same commercial
+ *                           data plus an approved Deckhand extraction (Phase 4)
  *   WebSource               a future hosted hand-off                (not built)
  *
  * Backward-compatibility rule, and it is not negotiable: ExcelSource must keep
@@ -30,7 +32,7 @@ import type { RawWorkbook } from '../excel/excelReader.js';
 import type { ValidationResult } from '../excel/validator.js';
 import type { CanonicalShipment } from '../models/CanonicalInvoice.js';
 
-export type SourceId = 'excel' | 'quickbooks-export' | 'web';
+export type SourceId = 'excel' | 'quickbooks-export' | 'web' | 'filing-package';
 
 /** What produced the data now in the panel. Shown in the UI and the session log. */
 export interface SourceDescriptor {

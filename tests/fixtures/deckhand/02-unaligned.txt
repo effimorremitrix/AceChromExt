@@ -1,0 +1,14 @@
+From: Operations Desk <bookings@meridianline.example>
+To: Export Desk <exports@example-trader.example>
+Subject: RE: SHPX-99121 - container list
+
+Hi,
+
+Details for this one below. Same two boxes as last week.
+
+Booking Ref: SHPX-99121
+Containers: CSQU3054383, TGHU7654320
+Seals: SL-44821, SL-44822
+
+Thanks,
+Operations Desk

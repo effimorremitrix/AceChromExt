@@ -5,5 +5,8 @@ dist/
 .vitest/
 coverage/
 dist-companion/
+dist-inttra/
+filing-package-*.json
+deckhand-*.json
 ace-export.config.json
 ACE_Invoice_*.xlsx

@@ -1,0 +1,23 @@
+From: Operations Desk <bookings@meridianline.example>
+To: Export Desk <exports@example-trader.example>
+Subject: Container & seal details - SHPX-99120
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Booking Ref: SHPX-99120
+Vessel: Meridian Aurora   Voyage: 12E
+
+Container      | Seal
+CSQU3054383    | Seal No: SL-44821
+TGHU7654320    | Seal No: SL-44822
+
+Regards =E2=80=93 Operations Desk
+--b1
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>Booking Ref: SHPX-99120</p></body></html>
+--b1--
