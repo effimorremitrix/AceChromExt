@@ -1,37 +1,93 @@
 <!--
-  Mock ACE "Step 1: Shipment" screen. Placeholder ids, as above.
+  Mock ACE "Step 1: Shipment" screen, shaped after the live AESDirect portal
+  as captured on 2026-09-14: the real labels (with the required star, the
+  conditional diamond and the info icon ACE renders beside them), the real
+  field set, and "CODE - DESCRIPTION" dropdown options. The ids are stand-ins:
+  nothing here was copied from the live DOM.
 -->
 <div id="filing">
+  <h1>Create Export Filing (Filer ID 943488789, ITN TBD)</h1>
+  <p class="small">Draft last saved: 09/14/2026 08:00:03</p>
   <ul class="nav-tabs">
     <li class="active"><a href="#step1">Step 1: Shipment</a></li>
+    <li><a href="#step2">Step 2: Parties</a></li>
     <li><a href="#step3">Step 3: Commodities</a></li>
+    <li><a href="#step4">Step 4: Transportation</a></li>
   </ul>
 
-  <h2>Shipment Information</h2>
-
-  <div data-section="shipment">
-    <label for="shipmentReferenceNumber">Shipment Reference Number</label>
-    <input type="text" id="shipmentReferenceNumber" name="shipmentReferenceNumber" maxlength="17" />
-
-    <label for="estimatedExportDate">Date of Export</label>
-    <input type="text" id="estimatedExportDate" name="estimatedExportDate" />
-
-    <label for="poNumber">PO Number</label>
-    <input type="text" id="poNumber" name="poNumber" />
-
-    <label for="countryOfUltimateDestination">Country of Ultimate Destination</label>
-    <select id="countryOfUltimateDestination" name="countryOfUltimateDestination">
-      <option value="">-- select --</option>
-      <option value="IL">Israel</option>
-      <option value="CA">Canada</option>
-      <option value="TR">Turkey</option>
-    </select>
-
-    <label for="inCoTerms">INCO Terms</label>
-    <select id="inCoTerms" name="inCoTerms">
-      <option value="">-- select --</option>
-      <option value="CIF">CIF</option>
-      <option value="FOB">FOB</option>
-    </select>
+  <div data-section="shipment" class="tab-pane active">
+    <div class="form-group">
+      <label for="emailResponseAddress">Email Response Address(es) <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="emailResponseAddress" name="emailResponseAddress" value="YIGAL.TZFIRA@GALCO-INTL.COM" />
+    </div>
+    <div class="form-group">
+      <label for="shipmentReferenceNumber">Shipment Reference Number <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="shipmentReferenceNumber" name="shipmentReferenceNumber" maxlength="17" />
+    </div>
+    <div class="form-group">
+      <label for="filingOption">Filing Option <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <select id="filingOption" name="filingOption">
+        <option value="">Please Select</option>
+        <option value="2" selected>2 – PREDEPARTURE</option>
+        <option value="4">4 – POSTDEPARTURE</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="modeOfTransport">Mode of Transport (MOT) <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <select id="modeOfTransport" name="modeOfTransport">
+        <option value="">Please Select</option>
+        <option value="11" selected>11 – VESSEL, CONTAINERIZED</option>
+        <option value="40">40 – AIR</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="portOfExport">Port of Export <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="portOfExport" name="portOfExport" value="2811 – METROPOLITAN OAKLAND INT" />
+    </div>
+    <div class="form-group">
+      <label for="portOfUnlading">Port of Unlading <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="portOfUnlading" name="portOfUnlading" />
+    </div>
+    <div class="form-group">
+      <label for="departureDate">Departure Date <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <div class="input-group">
+        <input type="text" id="departureDate" name="departureDate" placeholder="MM/DD/YYYY" />
+        <button type="button" class="calendar" aria-label="Open calendar"></button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="originState">Origin State <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <select id="originState" name="originState">
+        <option value="">Please Select</option>
+        <option value="CA">CA – CALIFORNIA</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="countryOfDestination">Country of Destination <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <select id="countryOfDestination" name="countryOfDestination">
+        <option value="">Please Select</option>
+        <option value="IL">IL – ISRAEL</option>
+        <option value="CA">CA – CANADA</option>
+        <option value="TR">TR – TURKIYE</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="inbondType">Inbond Type <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <select id="inbondType" name="inbondType">
+        <option value="70" selected>70 – MERCHANDISE NOT SHIPPED INBOND</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="foreignTradeZone">Foreign Trade Zone <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="foreignTradeZone" name="foreignTradeZone" />
+    </div>
+    <div class="form-group">
+      <label for="importEntryNumber">Import Entry # <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="importEntryNumber" name="importEntryNumber" />
+    </div>
+    <div class="form-group">
+      <label for="originalItn">Original ITN <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="originalItn" name="originalItn" />
+    </div>
   </div>
 </div>

@@ -274,7 +274,7 @@ try {
       quantity1: '79833',
       uom1: 'KG',
       origin: 'D',
-      value: '633600.00',
+      value: '633600',
       weight: '79832',
       eccn: 'EAR99',
       license: 'C33',
@@ -305,12 +305,12 @@ try {
     'the shipment form is populated',
     await ace.evaluate(() => ({
       reference: document.getElementById('shipmentReferenceNumber').value,
-      exportDate: document.getElementById('estimatedExportDate').value,
-      po: document.getElementById('poNumber').value,
-      destination: document.getElementById('countryOfUltimateDestination').value,
-      incoTerms: document.getElementById('inCoTerms').value,
+      departureDate: document.getElementById('departureDate').value,
+      destination: document.getElementById('countryOfDestination').value,
+      // ACE has no PO / INCO boxes; the columns are reference data only.
+      portOfUnlading: document.getElementById('portOfUnlading').value,
     })),
-    { reference: 'INV-20451', exportDate: '03/12/2026', po: 'PO-88213', destination: 'IL', incoTerms: 'CIF' },
+    { reference: 'INV-20451', departureDate: '03/12/2026', destination: 'IL', portOfUnlading: '' },
   );
 
   // --- 4b. Phase 3 screens ---------------------------------------------

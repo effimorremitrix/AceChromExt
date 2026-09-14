@@ -17,20 +17,32 @@
  */
 
 import type { AceFieldMapping, AceSelectorCandidate, FieldDetection } from '../models/AceField.js';
+import { describeLabelCandidate } from '../ace/selectors/types.js';
 import { isVisible, isWritable } from './fieldWriter.js';
 
 const CONTROL_SELECTOR = 'input, select, textarea';
 
-function normalizeLabel(text: string): string {
+/**
+ * Label text as ACE renders it, reduced to the words.
+ *
+ * Live AESDirect labels carry a required star, a conditional diamond, an
+ * info icon and sometimes a bracketed link ("Schedule B or HTS Number
+ * [Schedule B Search Engine]"). None of that is the label. Everything that is
+ * not a letter or a digit becomes a space, so "Value of Goods (whole US
+ * Dollars) *" and "value of goods whole us dollars" compare equal, and
+ * "Schedule B/HTS Number" equals "Schedule B / HTS Number". Matching stays
+ * exact after this: "1st Quantity" never matches "Quantity".
+ */
+export function normalizeLabel(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[*:()]/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
 }
 
 function candidateQueryDescription(candidate: AceSelectorCandidate): string {
-  if (candidate.strategy === 'label') return `label: ${(candidate.labelText ?? []).join(' | ')}`;
+  if (candidate.strategy === 'label') return describeLabelCandidate(candidate);
   if (candidate.strategy === 'placeholder') return `placeholder: ${candidate.placeholder ?? candidate.selector ?? ''}`;
   if (candidate.strategy === 'nearby') return `${candidate.selector ?? ''} >> ${candidate.within ?? CONTROL_SELECTOR}`;
   return candidate.selector ?? '';
@@ -50,10 +62,59 @@ function usableControls(elements: Element[]): Element[] {
   return elements.filter((element) => isVisible(element) && isWritable(element));
 }
 
+/** Elements that can carry a panel or section title. */
+const HEADING_SELECTOR =
+  'h1, h2, h3, h4, h5, h6, legend, [role="heading"], .panel-title, .panel-heading, .card-header, .card-title, .section-title, .box-title';
+
+/** Longest text still treated as a heading, so a paragraph never qualifies. */
+const MAX_HEADING_LENGTH = 80;
+
+function headingMatches(element: Element, wanted: string[]): boolean {
+  const text = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+  if (text === '' || text.length > MAX_HEADING_LENGTH) return false;
+  const normalized = normalizeLabel(text);
+  if (wanted.includes(normalized)) return true;
+  // "Line 1 Details" is expressed as "Line N Details" in the signature.
+  const digitsAsN = normalized.replace(/\b\d+\b/g, 'n');
+  return wanted.includes(digitsAsN);
+}
+
+/**
+ * The panels headed by one of `headings`.
+ *
+ * From each matching heading element, walk up until an ancestor contains a
+ * form control; that ancestor is the panel. A heading that is a sibling of
+ * its panel body resolves to their common parent, which is still the panel.
+ * If the common parent turns out to hold several parties, the label search
+ * inside it finds several controls and the caller reports AMBIGUOUS - the
+ * write is refused rather than guessed. No positional logic is involved.
+ */
+export function findSectionRoots(root: ParentNode, headings: string[]): Element[] {
+  const wanted = headings.map(normalizeLabel).filter((text) => text !== '');
+  if (!wanted.length) return [];
+
+  const roots: Element[] = [];
+  for (const heading of safeQueryAll(root, HEADING_SELECTOR)) {
+    if (!headingMatches(heading, wanted)) continue;
+    let ancestor: Element | null = heading.parentElement;
+    while (ancestor && !ancestor.querySelector(CONTROL_SELECTOR)) ancestor = ancestor.parentElement;
+    if (ancestor && !roots.includes(ancestor)) roots.push(ancestor);
+  }
+  return roots;
+}
+
 /** Find controls whose associated label matches any of `labelTexts`. */
-function findByLabel(root: ParentNode, labelTexts: string[]): Element[] {
+function findByLabel(root: ParentNode, labelTexts: string[], section?: string[]): Element[] {
   const wanted = labelTexts.map(normalizeLabel).filter((text) => text !== '');
   if (!wanted.length) return [];
+
+  // A scoped candidate looks only inside its panel(s). No panel on the page
+  // means no match - the unscoped fallback candidates take it from there.
+  if (section?.length) {
+    const roots = findSectionRoots(root, section);
+    const scoped = roots.flatMap((panel) => findByLabel(panel, labelTexts));
+    return [...new Set(scoped)];
+  }
 
   const matches: Element[] = [];
   const doc = (root as Element).ownerDocument ?? (root as Document);
@@ -197,6 +258,7 @@ export interface DetectOptions {
 export function detectField(field: AceFieldMapping, options: DetectOptions = {}): FieldDetection {
   const root: ParentNode = options.root ?? document;
   const attempts: FieldDetection['attempts'] = [];
+  let unwritable: HTMLElement | null = null;
 
   for (const candidate of field.candidates) {
     const query = candidateQueryDescription(candidate);
@@ -209,7 +271,7 @@ export function detectField(field: AceFieldMapping, options: DetectOptions = {})
         raw = candidate.selector ? safeQueryAll(root, candidate.selector) : [];
         break;
       case 'label':
-        raw = findByLabel(root, candidate.labelText ?? []);
+        raw = findByLabel(root, candidate.labelText ?? [], candidate.section);
         break;
       case 'placeholder':
         raw = findByPlaceholder(root, candidate.placeholder ?? candidate.selector ?? '');
@@ -254,6 +316,8 @@ export function detectField(field: AceFieldMapping, options: DetectOptions = {})
 
     // Matched something, but it cannot be written (disabled/hidden). Keep
     // trying later candidates; report NOT_WRITABLE only if nothing else works.
+    // A single visible read-only control is remembered so a field that ACE
+    // derives itself (1st UOM) can be read back and compared - never written.
     if (raw.length > 0) {
       attempts[attempts.length - 1] = {
         strategy: candidate.strategy,
@@ -261,6 +325,8 @@ export function detectField(field: AceFieldMapping, options: DetectOptions = {})
         matches: 0,
         verified: candidate.verified,
       };
+      const visible = raw.filter((element) => isVisible(element));
+      if (!unwritable && visible.length === 1) unwritable = visible[0] as HTMLElement;
     }
   }
 
@@ -271,6 +337,7 @@ export function detectField(field: AceFieldMapping, options: DetectOptions = {})
     label: field.label,
     status: matchedButUnwritable ? 'NOT_WRITABLE' : 'NOT_FOUND',
     element: null,
+    ...(matchedButUnwritable ? { unwritableElement: unwritable } : {}),
     matchedBy: null,
     matchedWith: null,
     confidence: 'none',

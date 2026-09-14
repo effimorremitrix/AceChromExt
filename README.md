@@ -37,16 +37,19 @@ typed either: **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md)
 
 **Phases 1, 2 and 3 are built. Two caveats you must read.**
 
-The extension and the companion build, install, and are covered by 545 unit
+The extension and the companion build, install, and are covered by 558 unit
 tests - including an automated end-to-end fixture that runs the real chain from
 a QuickBooks invoice to a filled ACE form - plus a smoke test that drives a real
 Chromium with a mocked ACE host.
 
-1. **The ACE selectors are placeholders.** The mapping *architecture* is
-   complete; the 24 selectors have not been captured from the live portal.
-   Until they are verified, filling reports "no field on this page matched the
-   mapping" for fields it cannot identify - and it never writes to a field it
-   did not confidently find. Verifying one takes about a minute with DevTools:
+1. **The ACE selectors match by label, not yet by id.** The label wording of
+   every field on Steps 1-3 (Shipment, Parties, Commodities) was captured
+   from the live AESDirect screens on 2026-09-14 and the extension resolves
+   fields by it; the element ids, the dropdown option values and the
+   Transportation step (5 fields) are still uncaptured, so 22 of the 27 fields
+   are verified by label and 5 are placeholders. Filling never writes to a
+   field it did not confidently find. A DevTools capture lifts a field from
+   medium to high confidence in about a minute:
    **[docs/ACE-MAPPING.md](docs/ACE-MAPPING.md)** lists exactly what to capture.
    Since Phase 3 a captured selector is **pasted into the panel** and is in
    force on the next fill, with no rebuild and no developer.
@@ -149,7 +152,7 @@ companion/        QuickBooks Desktop companion        (Node, not shipped in the 
   src/ui/         cli | preview | the local ACE Export Helper window
   powershell/     QbxmlRequest.ps1
 templates/        ACE_Import_Template.xlsx
-tests/            545 unit tests, security invariants, a Phase 1 regression suite,
+tests/            558 unit tests, security invariants, a Phase 1 regression suite,
                   an end-to-end fixture, a Chromium smoke test, mock ACE + qbXML fixtures
 docs/             ACE-HELPER-GUIDE (start here) | INSTALLATION | USER-GUIDE |
                   ACE-MAPPING | ARCHITECTURE | SECURITY | QUICKBOOKS-INTEGRATION
@@ -177,7 +180,7 @@ More: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**,
 | `npm run build` / `build:watch` | build `dist/` (the extension) |
 | `npm run build:companion` | build `dist-companion/` (the QuickBooks companion) |
 | `npm run qb` | run the companion: `npm run qb -- --help` |
-| `npm test` / `test:watch` | vitest (545 tests) |
+| `npm test` / `test:watch` | vitest (558 tests) |
 | `npm run smoke` | end-to-end test in real Chromium against a mocked ACE host (needs Chrome for Testing or a Playwright Chromium; see docs/INSTALLATION.md) |
 | `npm run check:bundle` | supply-chain check on `dist/`: no eval, no network APIs, no unexpected URL hosts |
 | `npm run typecheck` | tsc, no emit |

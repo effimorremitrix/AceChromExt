@@ -14,7 +14,7 @@
 import type { AceFieldMapping } from '../../models/AceField.js';
 import { statusFor, type SelectorTable } from '../selectors/types.js';
 
-export { byLabel, byNearby, placeholder, statusFor, verified } from '../selectors/types.js';
+export { byLabel, byNearby, capturedLabel, placeholder, statusFor, verified } from '../selectors/types.js';
 export type { SelectorEntry, SelectorTable } from '../selectors/types.js';
 
 export type FieldDefinition = Omit<AceFieldMapping, 'candidates' | 'verificationStatus' | 'devtoolsHint'> & {

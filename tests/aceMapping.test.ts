@@ -35,7 +35,12 @@ function shipment(): CanonicalShipment {
       invoiceNumber: 'INV-20451',
       invoiceDate: '2026-03-12',
       customerName: 'MEDITERRANEAN FOODS LTD',
-      billTo: '14 HARBOUR ROAD, HAIFA, ISRAEL',
+      billTo: '14 HARBOUR ROAD',
+      billToAddress2: 'PORT INDUSTRIAL ZONE',
+      billToCity: 'HAIFA',
+      billToState: '',
+      billToPostalCode: '3303201',
+      billToCountry: 'IL',
       poNumber: 'PO-88213',
       freightTerms: 'CIF',
       paymentTerms: 'NET 30',
@@ -110,9 +115,18 @@ describe('mapping registry', () => {
   });
 
   it('reports which selectors still need verification', () => {
-    // Phase 1 ships with placeholders only; this test is the tripwire that
-    // keeps the count honest as fields are verified against live ACE.
-    expect(unverifiedFieldKeys().length).toBe(ALL_MAPPINGS.length);
+    // Steps 1-3 carry labels captured from the live portal on 2026-09-14;
+    // Step 4 was not captured. This test is the tripwire that keeps the list
+    // honest as fields are verified against live ACE.
+    expect(unverifiedFieldKeys()).toEqual(['Carrier', 'Vessel', 'BookingNumber', 'ContainerNumber', 'SealNumber']);
+  });
+
+  it('marks a captured label as verified without pretending it is an id', () => {
+    const scheduleB = fieldByKey('ScheduleB') as AceFieldMapping;
+    expect(scheduleB.verificationStatus).toBe('verified');
+    const captured = scheduleB.candidates.filter((candidate) => candidate.verified);
+    expect(captured.every((candidate) => candidate.strategy === 'label')).toBe(true);
+    expect(captured[0]?.labelText).toContain('Schedule B or HTS Number');
   });
 
   it('filters fields by page and scope', () => {
@@ -142,6 +156,26 @@ describe('page detection', () => {
     const detection = detectPage(document);
     expect(detection.page).toBe('commodities');
     expect(['medium', 'high']).toContain(detection.confidence);
+    // No data-section marker: the "Line 1 Details" heading scopes the line.
+    expect(detection.lineContainerFound).toBe(true);
+  });
+
+  it('identifies the parties step from its tab and panel headings', () => {
+    mount('ace-parties');
+    const detection = detectPage(document);
+    expect(detection.page).toBe('parties');
+    expect(detection.confidence).toBe('high');
+  });
+
+  it('finds the open Line Details panel by its heading when no marker attribute exists', () => {
+    mount('ace-commodities-labels-only');
+    const container = findLineContainer('commodities', document) as Element;
+    expect(container).not.toBeNull();
+    expect(container.querySelector('#f-a91')).not.toBeNull();
+
+    // Two open lines would be as good as none: nothing is scoped by guessing.
+    document.body.innerHTML = `${fixture('ace-commodities-labels-only')}${fixture('ace-commodities-labels-only').replace('Line 1 Details', 'Line 2 Details')}`;
+    expect(findLineContainer('commodities', document)).toBeNull();
   });
 
   it('returns unknown for an unrelated page', () => {
@@ -192,6 +226,66 @@ describe('field detection', () => {
     expect(detection.element).toBeNull();
   });
 
+  it('ignores the required star, the conditional diamond, the info icon and a bracketed link in a label', () => {
+    document.body.innerHTML = `
+      <div class="wizard-step active">Step 3: Commodities</div>
+      <label for="x1">Value of Goods (whole US Dollars) <span>*</span> <i class="fa fa-info-circle"></i></label><input id="x1" />
+      <label for="x2">Schedule B or HTS Number <span>◆</span> <a href="#">[Schedule B Search Engine]</a></label><input id="x2" />
+      <label for="x3">1st Quantity ◆</label><input id="x3" />
+      <label for="x4">Quantity</label><input id="x4" />`;
+    expect((detectField(fieldByKey('ValueOfGoods') as AceFieldMapping).element as HTMLElement).id).toBe('x1');
+    expect((detectField(fieldByKey('ScheduleB') as AceFieldMapping).element as HTMLElement).id).toBe('x2');
+    // Exact after normalization: "Quantity" is not "1st Quantity".
+    expect((detectField(fieldByKey('Quantity1') as AceFieldMapping).element as HTMLElement).id).toBe('x3');
+  });
+
+  it('matches a captured label at medium confidence, not degraded', () => {
+    mount('ace-commodities-labels-only');
+    const detection = detectField(fieldByKey('ShippingWeight') as AceFieldMapping);
+    expect(detection.matchedBy).toBe('label');
+    expect(detection.confidence).toBe('medium');
+    expect(detection.attempts.find((attempt) => attempt.matches === 1)?.verified).toBe(true);
+  });
+
+  it('keeps the read-only control of a NOT_WRITABLE field, without exposing it as writable', () => {
+    mount('ace-commodities');
+    const detection = detectField(fieldByKey('UOM1') as AceFieldMapping);
+    expect(detection.status).toBe('NOT_WRITABLE');
+    expect(detection.element).toBeNull();
+    expect((detection.unwritableElement as HTMLInputElement).value).toBe('KG');
+  });
+
+  it('scopes a label to the panel named in the candidate', () => {
+    mount('ace-parties');
+    const name = detectField(fieldByKey('UltimateConsigneeName') as AceFieldMapping);
+    expect(name.status).toBe('FOUND');
+    expect((name.element as HTMLInputElement).id).toBe('p-c3');
+    expect(name.matchedWith).toContain('section: Ultimate Consignee');
+
+    const city = detectField(fieldByKey('UltimateConsigneeCity') as AceFieldMapping);
+    expect((city.element as HTMLInputElement).id).toBe('p-c8');
+
+    // The greyed-out State box is reported, never forced.
+    expect(detectField(fieldByKey('UltimateConsigneeState') as AceFieldMapping).status).toBe('NOT_WRITABLE');
+  });
+
+  it('refuses to guess between parties when the panel heading is missing', () => {
+    mount('ace-parties');
+    for (const heading of Array.from(document.querySelectorAll('.panel-heading'))) heading.remove();
+    const detection = detectField(fieldByKey('UltimateConsigneeName') as AceFieldMapping);
+    expect(detection.status).toBe('NOT_FOUND');
+    expect(detection.element).toBeNull();
+  });
+
+  it('never settles on another party when the consignee box is greyed out', () => {
+    mount('ace-parties');
+    // The consignee State is disabled (TR has no states); the USPPI State is
+    // enabled and carries the same label. Reporting is the only safe answer.
+    const detection = detectField(fieldByKey('UltimateConsigneeState') as AceFieldMapping);
+    expect(detection.status).toBe('NOT_WRITABLE');
+    expect(detection.element).toBeNull();
+  });
+
   it('reports ambiguity instead of picking one of several matches', () => {
     mount('ace-ambiguous');
     const detection = detectField(fieldByKey('ShippingWeight') as AceFieldMapping);
@@ -231,9 +325,10 @@ describe('fillFields - commodity line', () => {
     expect((document.getElementById('scheduleBNumber') as HTMLInputElement).value).toBe('0802.12.0000');
     expect((document.getElementById('commodityDescription') as HTMLInputElement).value).toBe('SHELLED ALMONDS');
     expect((document.getElementById('quantity1') as HTMLInputElement).value).toBe('79833');
-    expect((document.getElementById('unitOfMeasure1') as HTMLSelectElement).value).toBe('KG');
+    expect((document.getElementById('unitOfMeasure1') as HTMLInputElement).value).toBe('KG');
     expect((document.getElementById('originOfGoods') as HTMLSelectElement).value).toBe('D');
-    expect((document.getElementById('valueOfGoods') as HTMLInputElement).value).toBe('633600.00');
+    // The live label says whole US dollars.
+    expect((document.getElementById('valueOfGoods') as HTMLInputElement).value).toBe('633600');
     expect((document.getElementById('shippingWeight') as HTMLInputElement).value).toBe('79832');
     expect((document.getElementById('licenseCode') as HTMLSelectElement).value).toBe('C33');
     expect((document.getElementById('eccn') as HTMLInputElement).value).toBe('EAR99');
@@ -270,6 +365,23 @@ describe('fillFields - commodity line', () => {
     expect(report.outcomes.find((outcome) => outcome.key === 'Quantity2')?.status).toBe('skipped');
     expect(report.outcomes.find((outcome) => outcome.key === 'LicenseCode')?.status).toBe('warning');
     expect((document.getElementById('quantity2') as HTMLInputElement).value).toBe('');
+  });
+
+  it('compares a field ACE derives itself instead of writing it', () => {
+    const uom = document.getElementById('unitOfMeasure1') as HTMLInputElement;
+    const report = fillFields({ shipment: shipment(), page: 'commodities', scope: 'commodityLine', line: 1, settings }, document);
+    const outcome = report.outcomes.find((item) => item.key === 'UOM1');
+    expect(uom.value).toBe('KG');
+    expect(outcome?.status).toBe('skipped');
+    expect(outcome?.aceDerived).toBe(true);
+    expect(outcome?.message).toMatch(/derives this from the Schedule B number.*matching/);
+
+    uom.value = 'NO';
+    const mismatch = fillFields({ shipment: shipment(), page: 'commodities', scope: 'commodityLine', line: 1, settings }, document);
+    const warned = mismatch.outcomes.find((item) => item.key === 'UOM1');
+    expect(uom.value).toBe('NO');
+    expect(warned?.status).toBe('warning');
+    expect(warned?.message).toMatch(/shows "NO", but the imported value is "KG"/);
   });
 
   it('leaves a field ACE already populated alone unless overwrite is on', () => {
@@ -344,11 +456,15 @@ describe('fillFields - shipment level', () => {
     const report = fillFields({ shipment: shipment(), page: 'shipment', scope: 'shipment', settings }, document);
 
     expect((document.getElementById('shipmentReferenceNumber') as HTMLInputElement).value).toBe('INV-20451');
-    expect((document.getElementById('estimatedExportDate') as HTMLInputElement).value).toBe('03/12/2026');
-    expect((document.getElementById('poNumber') as HTMLInputElement).value).toBe('PO-88213');
-    expect((document.getElementById('countryOfUltimateDestination') as HTMLSelectElement).value).toBe('IL');
-    expect((document.getElementById('inCoTerms') as HTMLSelectElement).value).toBe('CIF');
+    expect((document.getElementById('departureDate') as HTMLInputElement).value).toBe('03/12/2026');
+    expect((document.getElementById('countryOfDestination') as HTMLSelectElement).value).toBe('IL');
     expect(report.errors).toBe(0);
+
+    // ACE fields the template does not cover are never touched, and the
+    // columns ACE has no box for (PO number, INCO terms) are not filed.
+    expect((document.getElementById('portOfUnlading') as HTMLInputElement).value).toBe('');
+    expect((document.getElementById('modeOfTransport') as HTMLSelectElement).value).toBe('11');
+    expect(report.outcomes.some((outcome) => outcome.key === 'PONumber' || outcome.key === 'FreightTerms')).toBe(false);
 
     // No commodity-line field is touched on this page.
     expect(report.outcomes.some((outcome) => outcome.key === 'ScheduleB')).toBe(false);
@@ -368,6 +484,34 @@ describe('fillFields - shipment level', () => {
   it('reports when no fields are mapped for the requested scope', () => {
     const report = fillFields({ shipment: shipment(), page: 'shipment', scope: 'commodityLine', line: 1, settings }, document);
     expect(report.outcomes[0]?.message).toMatch(/No commodity-line fields are mapped/);
+  });
+});
+
+describe('fillFields - parties', () => {
+  beforeEach(() => {
+    mount('ace-parties');
+  });
+
+  it('fills only the Ultimate Consignee panel, never the USPPI', () => {
+    const report = fillFields({ shipment: shipment(), page: 'parties', scope: 'shipment', settings }, document);
+    const value = (id: string): string => (document.getElementById(id) as HTMLInputElement | HTMLSelectElement).value;
+
+    expect(report.errors).toBe(0);
+    expect(value('p-c3')).toBe('MEDITERRANEAN FOODS LTD');
+    expect(value('p-c4')).toBe('14 HARBOUR ROAD');
+    expect(value('p-c5')).toBe('PORT INDUSTRIAL ZONE');
+    expect(value('p-c8')).toBe('HAIFA');
+    expect(value('p-c7')).toBe('3303201');
+    expect(value('p-c6')).toBe('IL');
+
+    // The USPPI keeps what the filer's profile put there.
+    expect(value('p-u3')).toBe('GALCO INTERNATIONAL');
+    expect(value('p-u4')).toBe('1 MAIN ST');
+    expect(value('p-u8')).toBe('OAKLAND');
+
+    // Identity data is not mapped at all.
+    expect(value('p-c2')).toBe('');
+    expect(value('p-c0')).toBe('R');
   });
 });
 

@@ -195,7 +195,28 @@ function builtInCandidates(invoice: QbInvoice, field: InvoiceField): Candidate[]
     case 'customerName':
       return qb('InvoiceRet/CustomerRef/FullName', invoice.customer.fullName);
     case 'billTo':
-      return qb('InvoiceRet/BillAddress', formatAddress(invoice.billAddress));
+      // With a structured address, line 1 is Addr1 and the rest go to their
+      // own ACE boxes below. The one-line block is only for the odd invoice
+      // whose address has no structured parts.
+      return invoice.billAddress?.addr1.trim()
+        ? qb('InvoiceRet/BillAddress/Addr1', invoice.billAddress.addr1)
+        : qb('InvoiceRet/BillAddress', formatAddress(invoice.billAddress));
+    case 'billToAddress2':
+      return qb(
+        'InvoiceRet/BillAddress/Addr2',
+        [invoice.billAddress?.addr2, invoice.billAddress?.addr3, invoice.billAddress?.addr4, invoice.billAddress?.addr5]
+          .map((part) => (part ?? '').trim())
+          .filter((part) => part !== '')
+          .join(', '),
+      );
+    case 'billToCity':
+      return qb('InvoiceRet/BillAddress/City', invoice.billAddress?.city ?? '');
+    case 'billToState':
+      return qb('InvoiceRet/BillAddress/State', invoice.billAddress?.state ?? '');
+    case 'billToPostalCode':
+      return qb('InvoiceRet/BillAddress/PostalCode', invoice.billAddress?.postalCode ?? '');
+    case 'billToCountry':
+      return qb('InvoiceRet/BillAddress/Country', invoice.billAddress?.country ?? '');
     case 'poNumber':
       return qb('InvoiceRet/PONumber', invoice.poNumber);
     case 'freightTerms':

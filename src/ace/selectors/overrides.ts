@@ -1,11 +1,11 @@
 /**
  * Verified selectors, installed without a rebuild.
  *
- * The selectors shipped in this folder are placeholders, and they will stay
- * placeholders until somebody sits in front of the live ACE portal with
- * DevTools open. That capture is a one-hour job, but it is a job that happens
- * on an operator's machine, not in this repository - and it will happen again
- * every time CBP redeploys the portal.
+ * The selectors shipped in this folder match the live portal by label wording
+ * (Steps 1-3, captured 2026-09-14) but their ids and names are still guesses,
+ * and Step 4 is untouched. Turning a label match into an id match is a
+ * DevTools job that happens on an operator's machine, not in this repository -
+ * and it will happen again every time CBP redeploys the portal.
  *
  * So the fix must not require a developer. This module lets a captured
  * selector be pasted into the panel as JSON and take effect on the next fill:
@@ -38,6 +38,7 @@ const MAX_FIELDS = 200;
 const MAX_CANDIDATES_PER_FIELD = 10;
 const MAX_SELECTOR_LENGTH = 500;
 const MAX_LABELS = 12;
+const MAX_SECTIONS = 4;
 /** Notes carry the DevTools capture hint, which is a sentence or two. */
 const MAX_NOTE_LENGTH = 600;
 
@@ -109,6 +110,14 @@ function readCandidate(raw: unknown, where: string, doc?: Document): AceSelector
     }
     if (labels.length > MAX_LABELS) throw new OverrideError(`${where}.labelText has more than ${MAX_LABELS} entries.`);
     candidate.labelText = labels.map((label, index) => readString(label, `${where}.labelText[${index}]`, 200));
+    const sections = raw['section'];
+    if (sections !== undefined) {
+      if (!Array.isArray(sections) || sections.length === 0) {
+        throw new OverrideError(`${where}.section must be a non-empty array of panel headings when present.`);
+      }
+      if (sections.length > MAX_SECTIONS) throw new OverrideError(`${where}.section has more than ${MAX_SECTIONS} entries.`);
+      candidate.section = sections.map((heading, index) => readString(heading, `${where}.section[${index}]`, 200));
+    }
   } else if (strategy === 'placeholder') {
     const text = readString(raw['placeholder'] ?? raw['selector'], `${where}.placeholder`, 200);
     if (text === '') throw new OverrideError(`${where}.placeholder must not be empty.`);

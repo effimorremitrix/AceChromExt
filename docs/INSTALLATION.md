@@ -99,7 +99,7 @@ Imported shipment data was only ever in memory, so nothing is left on disk.
 
 | Job | What it runs |
 | --- | --- |
-| **Verify** (Node 20 and 22) | typecheck, the 451 unit tests, both builds, and a check that the committed template and icons still match their generators |
+| **Verify** (Node 20 and 22) | typecheck, the 558 unit tests, both builds, and a check that the committed template and icons still match their generators |
 | **Bundle supply-chain check** | `npm run check:bundle` against the built `dist/` |
 | **End-to-end** | `npm run smoke` against the mocked ACE host, in a pinned Chrome for Testing build |
 

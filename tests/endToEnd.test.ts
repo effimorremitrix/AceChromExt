@@ -225,7 +225,7 @@ describe('end to end: QuickBooks invoice CN-1042 to a filled ACE form', () => {
       expect(value('quantity1')).toBe('79832');
       expect(value('unitOfMeasure1')).toBe('KG');
       expect(value('originOfGoods')).toBe('D');
-      expect(value('valueOfGoods')).toBe('651217.60');
+      expect(value('valueOfGoods')).toBe('651218');
       expect(value('shippingWeight')).toBe('79832');
       expect(value('licenseCode')).toBe('C33');
       expect(value('exportInformationCode')).toBe('OS');
@@ -272,7 +272,7 @@ describe('end to end: QuickBooks invoice CN-1042 to a filled ACE form', () => {
 
       expect(weight?.source).toContain('QuickBooks export');
       expect(weight?.aceValue).toBe('79832');
-      expect(weight?.aceField).toBe('Shipping Weight (kg)');
+      expect(weight?.aceField).toBe('Shipping Weight (whole Kilograms)');
       expect(weight?.selector).toContain('shippingWeight');
       expect(weight?.status).toBe('READY');
 

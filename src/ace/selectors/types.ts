@@ -33,6 +33,32 @@ export function verified(strategy: 'id' | 'name' | 'attribute', selector: string
   return { strategy, selector, verified: true, ...(note ? { note } : {}) };
 }
 
+/**
+ * A label whose wording was read off the live AESDirect screen.
+ *
+ * This is the honest middle state between a guess and a DevTools capture: the
+ * text is known to be what ACE shows, so the detector trusts it at label
+ * confidence (medium) instead of degrading it, and the field counts as
+ * verified. Ids, names and option values still need a DevTools capture to
+ * reach high confidence.
+ *
+ * `section` scopes the match to the panel headed by that text, for steps that
+ * repeat the same label for several parties.
+ */
+export function capturedLabel(
+  labelText: string[],
+  note = 'Label wording captured from the live AESDirect screen on 2026-09-14; DOM id not yet captured.',
+  options: { section?: string[] } = {},
+): AceSelectorCandidate {
+  return {
+    strategy: 'label',
+    labelText,
+    ...(options.section ? { section: options.section } : {}),
+    verified: true,
+    note,
+  };
+}
+
 /** A placeholder selector that still needs confirming against live ACE. */
 export function placeholder(
   strategy: 'id' | 'name' | 'attribute' | 'nearby' | 'placeholder',
@@ -52,8 +78,15 @@ export function placeholder(
 export function byLabel(
   labelText: string[],
   note = 'Label wording taken from the AESDirect UI; confirm exact text.',
+  options: { section?: string[] } = {},
 ): AceSelectorCandidate {
-  return { strategy: 'label', labelText, verified: false, note };
+  return {
+    strategy: 'label',
+    labelText,
+    ...(options.section ? { section: options.section } : {}),
+    verified: false,
+    note,
+  };
 }
 
 /** Match the first enabled control inside a named container. */
@@ -118,9 +151,15 @@ export function byIdSuffix(name: string): AceSelectorCandidate {
 export function describeCandidate(candidates: AceSelectorCandidate[]): string {
   const first = candidates[0];
   if (!first) return '(no selector configured)';
-  if (first.strategy === 'label') return `label: ${(first.labelText ?? []).join(' | ')}`;
+  if (first.strategy === 'label') return describeLabelCandidate(first);
   if (first.strategy === 'placeholder') return `placeholder: ${first.placeholder ?? ''}`;
   return first.selector ?? '(no selector configured)';
+}
+
+/** `label: A | B @ section: Ultimate Consignee` - the same text everywhere a label candidate is shown. */
+export function describeLabelCandidate(candidate: AceSelectorCandidate): string {
+  const labels = `label: ${(candidate.labelText ?? []).join(' | ')}`;
+  return candidate.section?.length ? `${labels} @ section: ${candidate.section.join(' | ')}` : labels;
 }
 
 /** True when any candidate has been verified against live ACE. */

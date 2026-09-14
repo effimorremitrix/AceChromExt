@@ -1,0 +1,92 @@
+<!--
+  Mock ACE "Step 2: Parties" screen, shaped after the live AESDirect portal
+  as captured on 2026-09-14. The USPPI panel and the Ultimate Consignee panel
+  use the same labels ("Company Name", "Address Line 1", "City", ...), which
+  is why the parties selectors are scoped to the panel heading. The ids are
+  stand-ins and deliberately do NOT match the guessed selector ids, so this
+  fixture exercises the label path.
+-->
+<div id="filing">
+  <h1>Create Export Filing (Filer ID 943488789, ITN TBD)</h1>
+  <ul class="nav-tabs">
+    <li><a href="#step1">Step 1: Shipment</a></li>
+    <li class="active"><a href="#step2">Step 2: Parties</a></li>
+    <li><a href="#step3">Step 3: Commodities</a></li>
+    <li><a href="#step4">Step 4: Transportation</a></li>
+  </ul>
+
+  <div class="panel" id="usppi-panel">
+    <div class="panel-heading">
+      <h4 class="panel-title">USPPI <span class="required">*</span> <i class="fa fa-info-circle"></i></h4>
+      <a href="#" class="pull-right">Load from Profile</a>
+    </div>
+    <div class="panel-body">
+      <label for="p-u1">ID Number Type <i class="fa fa-info-circle"></i></label>
+      <select id="p-u1"><option value="E">E – EIN</option></select>
+      <label for="p-u2">ID Number <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="p-u2" value="12-3456789" />
+      <label for="p-u3">Company Name <span class="required">*</span></label>
+      <input type="text" id="p-u3" value="GALCO INTERNATIONAL" />
+      <label for="p-u4">Address Line 1 <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="p-u4" value="1 MAIN ST" />
+      <label for="p-u5">Address Line 2</label>
+      <input type="text" id="p-u5" />
+      <label for="p-u6">Country <span class="required">*</span></label>
+      <select id="p-u6"><option value="US" selected>US – UNITED STATES</option></select>
+      <label for="p-u7">Postal Code <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="p-u7" value="94612" />
+      <label for="p-u8">City <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="p-u8" value="OAKLAND" />
+      <label for="p-u9">State <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+      <select id="p-u9"><option value="CA" selected>CA – CALIFORNIA</option></select>
+    </div>
+  </div>
+
+  <div class="panel" id="consignee-panel">
+    <div class="panel-heading">
+      <h4 class="panel-title">Ultimate Consignee <span class="required">*</span> <i class="fa fa-info-circle"></i></h4>
+      <a href="#" class="small">[Consolidated Screening List]</a>
+      <a href="#" class="pull-right">Load from Profile</a>
+    </div>
+    <div class="panel-body">
+      <fieldset class="radio-group">
+        <legend>Sold En Route? <span class="required">*</span> <i class="fa fa-info-circle"></i></legend>
+        <label><input type="radio" name="soldEnRoute" value="Y" /> Yes</label>
+        <label><input type="radio" name="soldEnRoute" value="N" checked /> No</label>
+      </fieldset>
+      <label for="p-c0">Consignee Type <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <select id="p-c0"><option value="">Please Select</option><option value="R" selected>R – RESELLER</option></select>
+      <label for="p-c1">ID Number Type <i class="fa fa-info-circle"></i></label>
+      <select id="p-c1"><option value="">Please Select</option></select>
+      <label for="p-c2">ID Number <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="p-c2" />
+      <label for="p-c3">Company Name <span class="required">*</span></label>
+      <input type="text" id="p-c3" />
+      <label for="p-c3a">First Name <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="p-c3a" />
+      <label for="p-c3b">Last Name <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="p-c3b" />
+      <label for="p-c3c">Phone Number</label>
+      <input type="text" id="p-c3c" />
+      <label for="p-c4">Address Line 1 <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="p-c4" />
+      <label for="p-c5">Address Line 2</label>
+      <input type="text" id="p-c5" />
+      <label for="p-c6">Country <span class="required">*</span></label>
+      <select id="p-c6">
+        <option value="">Please Select</option>
+        <option value="IL">IL – ISRAEL</option>
+        <option value="TR">TR – TURKIYE</option>
+        <option value="US">US – UNITED STATES</option>
+      </select>
+      <label for="p-c7">Postal Code <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="p-c7" />
+      <label for="p-c8">City <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <input type="text" id="p-c8" />
+      <label for="p-c9">State <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+      <select id="p-c9" disabled><option value="">Please Select</option></select>
+    </div>
+    <a href="#" class="small">Clear Ultimate Consignee</a>
+    <a href="#" class="small pull-right">Save to Profile</a>
+  </div>
+</div>

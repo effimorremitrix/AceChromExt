@@ -87,6 +87,22 @@ export const TRANSFORMERS: Record<string, Transformer> = {
     return out(text, parsed.currency || text !== input ? 'Currency cleanup' : null, notes);
   },
 
+  /**
+   * ACE's Value of Goods box is labelled "whole US Dollars": currency cleanup
+   * as `money`, then rounded half-up to a whole number regardless of the
+   * value-decimals setting (which still governs the preview).
+   */
+  wholeDollars: (input) => {
+    if (input.trim() === '') return out('');
+    const parsed = parseNumeric(input);
+    if (!parsed.ok || parsed.value === null) {
+      return { text: '', transform: null, notes: [], error: `"${input}" is not a monetary value.` };
+    }
+    const text = formatNumber(roundHalfUp(parsed.value, 0), 0);
+    const notes = parsed.value < 0 ? ['Value is negative. Confirm before filing.'] : [];
+    return out(text, parsed.currency || text !== input ? 'Whole US dollars' : null, notes);
+  },
+
   /** Quantity: kept as imported unless a decimal setting says otherwise. */
   quantity: (input, ctx) => numeric(input, ctx.settings.quantityDecimals, 'quantity'),
 

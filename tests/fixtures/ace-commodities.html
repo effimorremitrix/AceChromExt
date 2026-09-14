@@ -1,12 +1,17 @@
 <!--
-  Mock ACE "Step 3: Commodities -> Line Details" screen.
+  Mock ACE "Step 3: Commodities" screen, shaped after the live AESDirect portal
+  as captured on 2026-09-14: the Line Summary sub-tab (table, Add New Line,
+  Edit | Delete) and the Line Details sub-tab with the open line headed
+  "Line 1 Details", the real labels, the read-only 1st UOM that ACE derives
+  from the Schedule B number, the disabled 2nd Quantity, and
+  "CODE - DESCRIPTION" dropdown options.
 
-  This is NOT captured from the live portal: it is a stand-in that uses the
-  placeholder ids from src/ace/mappings/commodities.ts so the detector, writer,
-  and filler can be tested without ACE. Replace it with a real captured
-  snippet when the live DOM is available (see docs/ACE-MAPPING.md).
+  The ids are stand-ins from src/ace/selectors/commodities.ts: nothing here
+  was copied from the live DOM. Replace with a trimmed real snippet when the
+  DOM is captured (see docs/ACE-MAPPING.md).
 -->
 <div id="filing">
+  <h1>Create Export Filing (Filer ID 943488789, ITN TBD)</h1>
   <ul class="nav-tabs">
     <li><a href="#step1">Step 1: Shipment</a></li>
     <li><a href="#step2">Step 2: Parties</a></li>
@@ -14,63 +19,86 @@
     <li><a href="#step4">Step 4: Transportation</a></li>
   </ul>
 
-  <h2>Commodity Line Details</h2>
+  <ul class="nav-pills sub-tabs">
+    <li><a href="#lineSummary">Line Summary</a></li>
+    <li class="active"><a href="#lineDetailsTab">Line Details</a></li>
+  </ul>
 
-  <div data-section="commodityLine">
-    <label for="exportInformationCode">Export Information Code</label>
+  <div id="lineSummary" class="tab-pane" hidden>
+    <button type="button" id="addNewLineSummary">+ Add New Line</button>
+    <label for="lineSearch">Search:</label>
+    <input type="search" id="lineSearch" />
+    <table class="line-summary">
+      <thead>
+        <tr><th>Line No.</th><th>Sch B/HTS Code</th><th>Description</th><th>Quantity</th><th>Weight(KG)</th><th>Value($)</th><th>Lic. Type</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>0802.12.0000</td><td>SHELLED ALMONDS</td><td>6</td><td>100335</td><td>41708</td><td>C33</td><td><a href="#">Edit</a> | <a href="#">Delete</a></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="line-actions">
+    <button type="button" id="saveLine">Save Line</button>
+    <button type="button" id="deleteLine">Delete Line</button>
+    <button type="button" id="addNewLine">+ Add New Line</button>
+  </div>
+
+  <div data-section="commodityLine" class="panel">
+    <h2>Line 1 Details</h2>
+
+    <label for="exportInformationCode">Export Information Code <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
     <select id="exportInformationCode" name="exportInformationCode">
-      <option value="">-- select --</option>
-      <option value="OS">OS - All other exports</option>
-      <option value="HH">HH - Household goods</option>
+      <option value="">Please Select</option>
+      <option value="OS">OS – ALL OTHER EXPORTS</option>
+      <option value="HH">HH – HOUSEHOLD GOODS</option>
     </select>
 
-    <label for="scheduleBNumber">Schedule B/HTS Number</label>
+    <label for="scheduleBNumber">Schedule B or HTS Number <span class="conditional">◆</span> <i class="fa fa-info-circle"></i> <a href="#">[Schedule B Search Engine]</a></label>
     <input type="text" id="scheduleBNumber" name="scheduleBNumber" maxlength="12" />
 
-    <label for="commodityDescription">Commodity Description</label>
+    <label for="commodityDescription">Commodity Description <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
     <input type="text" id="commodityDescription" name="commodityDescription" maxlength="45" />
 
-    <label for="quantity1">Quantity 1</label>
+    <label for="quantity1">1st Quantity <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
     <input type="text" id="quantity1" name="quantity1" />
 
-    <label for="unitOfMeasure1">Unit of Measure 1</label>
-    <select id="unitOfMeasure1" name="unitOfMeasure1">
-      <option value="">-- select --</option>
-      <option value="KG">KG - Kilograms</option>
-      <option value="NO">NO - Number</option>
-    </select>
+    <label for="unitOfMeasure1">1st UOM <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+    <input type="text" id="unitOfMeasure1" name="unitOfMeasure1" value="KG" readonly />
 
-    <label for="quantity2">Quantity 2</label>
-    <input type="text" id="quantity2" name="quantity2" />
+    <label for="quantity2">2nd Quantity <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+    <input type="text" id="quantity2" name="quantity2" disabled />
 
-    <label for="unitOfMeasure2">Unit of Measure 2</label>
-    <select id="unitOfMeasure2" name="unitOfMeasure2">
-      <option value="">-- select --</option>
-      <option value="NO">NO - Number</option>
-    </select>
+    <label for="unitOfMeasure2">2nd UOM <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+    <input type="text" id="unitOfMeasure2" name="unitOfMeasure2" value="" readonly />
 
-    <label for="originOfGoods">Origin of Goods</label>
+    <label for="originOfGoods">Origin of Goods<span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
     <select id="originOfGoods" name="originOfGoods">
-      <option value="">-- select --</option>
-      <option value="D">D - Domestic</option>
-      <option value="F">F - Foreign</option>
+      <option value="">Please Select</option>
+      <option value="D">D – DOMESTIC</option>
+      <option value="F">F – FOREIGN</option>
     </select>
 
-    <label for="valueOfGoods">Value of Goods</label>
+    <label for="valueOfGoods">Value of Goods (whole US Dollars) <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
     <input type="text" id="valueOfGoods" name="valueOfGoods" />
 
-    <label for="shippingWeight">Shipping Weight</label>
+    <label for="shippingWeight">Shipping Weight (whole Kilograms) <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
     <input type="text" id="shippingWeight" name="shippingWeight" />
 
-    <label for="eccn">ECCN</label>
+    <label for="eccn">ECCN <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
     <input type="text" id="eccn" name="eccn" />
 
-    <label for="licenseCode">License Code</label>
+    <label for="licenseCode">License Type Code/License Exemption Code <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
     <select id="licenseCode" name="licenseCode">
-      <option value="">-- select --</option>
-      <option value="C33">C33 - License Exception</option>
+      <option value="">Please Select</option>
+      <option value="C33">C33 – NLR NO LICENSE REQUIRED, …</option>
+      <option value="C30">C30 – LICENSE EXCEPTION</option>
     </select>
 
-    <button type="button" id="saveLine">Save Line</button>
+    <fieldset class="radio-group">
+      <legend>Does this filing require Participating Government agency data? <i class="fa fa-info-circle"></i></legend>
+      <label><input type="radio" name="pgaRequired" value="Y" /> Yes</label>
+      <label><input type="radio" name="pgaRequired" value="N" checked /> No</label>
+    </fieldset>
   </div>
 </div>

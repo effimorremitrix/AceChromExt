@@ -11,6 +11,7 @@
 
 import type { AcePageId } from '../models/AceField.js';
 import { PAGE_SIGNATURES, signatureFor, type PageSignature } from '../ace/pages.js';
+import { findSectionRoots } from './fieldDetector.js';
 
 export interface PageDetection {
   page: AcePageId;
@@ -61,7 +62,7 @@ function activeTabTexts(doc: Document): string[] {
 
 function headingTexts(doc: Document): string[] {
   const texts: string[] = [];
-  for (const heading of Array.from(doc.querySelectorAll('h1, h2, h3, legend, [role="heading"]'))) {
+  for (const heading of Array.from(doc.querySelectorAll('h1, h2, h3, h4, h5, h6, legend, [role="heading"]'))) {
     const text = textOf(heading);
     if (text && text.length <= 120) texts.push(text);
   }
@@ -179,14 +180,21 @@ export function detectPage(doc: Document = document): PageDetection {
  */
 export function findLineContainer(page: AcePageId, doc: Document = document): ParentNode | null {
   const signature = signatureFor(page);
-  if (!signature?.lineContainerSelectors) return null;
-  for (const selector of signature.lineContainerSelectors) {
+  if (!signature) return null;
+  for (const selector of signature.lineContainerSelectors ?? []) {
     try {
       const element = doc.querySelector(selector);
       if (element) return element;
     } catch {
       continue;
     }
+  }
+  // The live screen has no marker attribute, but it does have a heading:
+  // "Line 1 Details". Exactly one such panel scopes the fill; two open panels
+  // (which ACE does not do) would be as good as none.
+  if (signature.lineContainerHeadings?.length) {
+    const panels = findSectionRoots(doc, signature.lineContainerHeadings);
+    if (panels.length === 1) return panels[0] as Element;
   }
   return null;
 }

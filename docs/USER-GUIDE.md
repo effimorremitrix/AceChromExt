@@ -86,8 +86,18 @@ Commodity line: `Line`, `ExportInformationCode`, `ScheduleB`,
 `ValueOfGoods`, `ShippingWeight`, `ShippingWeightUOM`, `ECCN`, `LicenseCode`.
 
 Shipment level: `CustomerName`, `InvoiceNumber`, `InvoiceDate`, `BillTo`,
-`FreightTerms`, `PaymentTerms`, `PaymentDueDate`, `PONumber`, `Carrier`,
-`Vessel`, `BookingNumber`, `ContainerNumber`, `SealNumber`, `Destination`.
+`BillToAddress2`, `BillToCity`, `BillToState`, `BillToPostalCode`,
+`BillToCountry`, `FreightTerms`, `PaymentTerms`, `PaymentDueDate`, `PONumber`,
+`Carrier`, `Vessel`, `BookingNumber`, `ContainerNumber`, `SealNumber`,
+`Destination`.
+
+Where they land in ACE: `InvoiceNumber` is the Shipment Reference Number,
+`InvoiceDate` the Departure Date and `Destination` the Country of Destination
+(Step 1); `CustomerName` and the `BillTo*` columns fill the Ultimate Consignee
+panel's Company Name, Address Line 1 / 2, City, State, Postal Code and Country
+(Step 2); the commodity columns fill the open Line Details form (Step 3).
+`FreightTerms`, `PONumber`, `PaymentTerms` and `PaymentDueDate` have no box in
+ACE and are carried for reference only.
 
 Header matching ignores case, spaces, and punctuation, and common aliases are
 accepted (`Qty 1`, `HTS Number`, `Ultimate Consignee`, `Gross Weight`, ...).

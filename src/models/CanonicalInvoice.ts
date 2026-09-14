@@ -11,7 +11,14 @@ export interface CanonicalInvoice {
   invoiceNumber: string;
   invoiceDate: string;
   customerName: string;
+  /** Consignee street address, line 1. */
   billTo: string;
+  billToAddress2: string;
+  billToCity: string;
+  billToState: string;
+  billToPostalCode: string;
+  /** ISO 3166-1 alpha-2 country of the consignee address. */
+  billToCountry: string;
   poNumber: string;
   freightTerms: string;
   paymentTerms: string;
@@ -89,6 +96,11 @@ export function emptyInvoice(): CanonicalInvoice {
     invoiceDate: '',
     customerName: '',
     billTo: '',
+    billToAddress2: '',
+    billToCity: '',
+    billToState: '',
+    billToPostalCode: '',
+    billToCountry: '',
     poNumber: '',
     freightTerms: '',
     paymentTerms: '',
@@ -130,6 +142,11 @@ export const INVOICE_FIELDS = [
   'invoiceDate',
   'customerName',
   'billTo',
+  'billToAddress2',
+  'billToCity',
+  'billToState',
+  'billToPostalCode',
+  'billToCountry',
   'poNumber',
   'freightTerms',
   'paymentTerms',

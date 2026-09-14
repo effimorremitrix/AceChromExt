@@ -288,7 +288,7 @@ Aydin Kuruyemis San Ve Tic A.S
 
 Status
 ✓ QuickBooks export loaded
-✓ 24 of 24 ACE fields mapped
+✓ 27 of 27 ACE fields mapped
 ⚠ 2 fields require review
 
 Actions
@@ -465,8 +465,10 @@ rebuild.
 4. For a `<select>`, copy two `<option>` tags as well: the writer needs to know
    whether the values are codes (`KG`) or descriptions (`Kilograms`).
 
-`docs/ACE-MAPPING.md` lists exactly what to capture for each of the 24 fields,
-and the panel shows the same hint beside any field that did not resolve.
+`docs/ACE-MAPPING.md` lists exactly what to capture for each of the 27 fields
+(Steps 1-3 already match by the label wording captured from the live screens;
+Step 4 is still uncaptured), and the panel shows the same hint beside any field
+that did not resolve.
 
 ### Install
 

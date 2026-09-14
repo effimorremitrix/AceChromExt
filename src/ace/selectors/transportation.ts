@@ -1,7 +1,9 @@
 /**
  * Step 4: Transportation - ACE selectors.
  *
- * SELECTOR STATUS: placeholders only. See docs/ACE-MAPPING.md.
+ * SELECTOR STATUS: placeholders only. The Transportation step has not been
+ * captured from the live portal yet (Steps 1-3 were, on 2026-09-14). See
+ * docs/ACE-MAPPING.md.
  */
 
 import { byFrameworkName, byIdSuffix, byLabel, byNearby, placeholder, type SelectorTable } from './types.js';

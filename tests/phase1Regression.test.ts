@@ -75,7 +75,12 @@ function handBuiltWorkbook(): { bytes: Uint8Array; fileName: string } {
     header('Aydin Kuruyemis San Ve Tic A.S'),
     header('CN-1042'),
     header('2026-09-21'),
-    header('Organize Sanayi Bolgesi 3. Cadde No 14, Aydin'),
+    header('Organize Sanayi Bolgesi 3. Cadde No 14'),
+    header(''),
+    header('Aydin'),
+    header(''),
+    header('09100'),
+    header('Turkey'),
     header('CIF'),
     header('NET 120'),
     header('2027-01-19'),
@@ -193,8 +198,8 @@ describe('3. Fill Current ACE Page', () => {
     );
     expect(report.errors).toBe(0);
     expect((document.getElementById('shipmentReferenceNumber') as HTMLInputElement).value).toBe('CN-1042');
-    expect((document.getElementById('poNumber') as HTMLInputElement).value).toBe('3993');
-    expect((document.getElementById('inCoTerms') as HTMLSelectElement).value).toBe('CIF');
+    expect((document.getElementById('departureDate') as HTMLInputElement).value).toBe('09/21/2026');
+    expect((document.getElementById('countryOfDestination') as HTMLSelectElement).value).toBe('TR');
   });
 
   it('works with no selector overrides configured', () => {
@@ -220,7 +225,7 @@ describe('4. Fill Current Commodity Line', () => {
     expect(report.errors).toBe(0);
     expect((document.getElementById('scheduleBNumber') as HTMLInputElement).value).toBe('0802.12.0000');
     expect((document.getElementById('quantity1') as HTMLInputElement).value).toBe('79832');
-    expect((document.getElementById('valueOfGoods') as HTMLInputElement).value).toBe('651217.60');
+    expect((document.getElementById('valueOfGoods') as HTMLInputElement).value).toBe('651218');
     expect((document.getElementById('licenseCode') as HTMLSelectElement).value).toBe('C33');
   });
 
@@ -283,12 +288,12 @@ describe('6. mappings, transformations, validation and diagnostics are unchanged
   });
 
   it('keeps the same field keys on every page', () => {
+    // PONumber and FreightTerms left this list on 2026-09-14: the live
+    // Shipment step has no such boxes.
     expect(fieldsForPage('shipment').map((field) => field.key)).toEqual([
       'ShipmentReferenceNumber',
       'InvoiceDate',
-      'PONumber',
       'Destination',
-      'FreightTerms',
     ]);
     expect(fieldsForPage('commodities').map((field) => field.key)).toEqual([
       'ExportInformationCode',
@@ -307,6 +312,11 @@ describe('6. mappings, transformations, validation and diagnostics are unchanged
     expect(fieldsForPage('parties').map((field) => field.key)).toEqual([
       'UltimateConsigneeName',
       'UltimateConsigneeAddress',
+      'UltimateConsigneeAddress2',
+      'UltimateConsigneeCity',
+      'UltimateConsigneeState',
+      'UltimateConsigneePostalCode',
+      'UltimateConsigneeCountry',
     ]);
     expect(fieldsForPage('transportation').map((field) => field.key)).toEqual([
       'Carrier',
@@ -326,7 +336,11 @@ describe('6. mappings, transformations, validation and diagnostics are unchanged
 
   it('detects every commodity field on the mock ACE page', () => {
     const detections = detectFields(fieldsForPage('commodities'), { root: document });
-    expect(detections.filter((detection) => detection.status !== 'FOUND')).toEqual([]);
+    // ACE derives both UOMs from the Schedule B number and greys out the 2nd
+    // quantity until one is needed; those are found but not writable.
+    const notWritable = detections.filter((detection) => detection.status === 'NOT_WRITABLE').map((detection) => detection.key);
+    expect(notWritable.sort()).toEqual(['Quantity2', 'UOM1', 'UOM2']);
+    expect(detections.filter((detection) => detection.status !== 'FOUND' && detection.status !== 'NOT_WRITABLE')).toEqual([]);
   });
 });
 
