@@ -3,6 +3,13 @@
  *
  * These are the fields that "Fill Current Commodity Line" writes. Scope is
  * 'commodityLine': values come from one canonical commodity, not the invoice.
+ * They exist only once a line is open in the Line Details form (Edit on the
+ * Line Summary table, or Add New Line).
+ *
+ * Labels are the live AESDirect wording (captured 2026-09-14). Two of them
+ * are read-only on the live screen because ACE derives them from the Schedule
+ * B number (`aceDerived`): the filler reads them back and compares instead of
+ * writing.
  *
  * Selectors: src/ace/selectors/commodities.ts.
  */
@@ -26,7 +33,7 @@ export const COMMODITY_FIELDS: AceFieldMapping[] = [
 
   defineField({
     key: 'ScheduleB',
-    label: 'Schedule B / HTS Number',
+    label: 'Schedule B or HTS Number',
     page: 'commodities',
     scope: 'commodityLine',
     source: 'commodity.scheduleB',
@@ -52,7 +59,7 @@ export const COMMODITY_FIELDS: AceFieldMapping[] = [
 
   defineField({
     key: 'Quantity1',
-    label: 'Quantity 1',
+    label: '1st Quantity',
     page: 'commodities',
     scope: 'commodityLine',
     source: 'commodity.quantity1',
@@ -64,19 +71,20 @@ export const COMMODITY_FIELDS: AceFieldMapping[] = [
 
   defineField({
     key: 'UOM1',
-    label: 'Unit of Measure 1',
+    label: '1st UOM',
     page: 'commodities',
     scope: 'commodityLine',
     source: 'commodity.uom1',
     type: 'select',
     transforms: ['uom'],
     expected: true,
+    aceDerived: true,
     selectors: COMMODITY_SELECTORS,
   }),
 
   defineField({
     key: 'Quantity2',
-    label: 'Quantity 2',
+    label: '2nd Quantity',
     page: 'commodities',
     scope: 'commodityLine',
     source: 'commodity.quantity2',
@@ -87,12 +95,13 @@ export const COMMODITY_FIELDS: AceFieldMapping[] = [
 
   defineField({
     key: 'UOM2',
-    label: 'Unit of Measure 2',
+    label: '2nd UOM',
     page: 'commodities',
     scope: 'commodityLine',
     source: 'commodity.uom2',
     type: 'select',
     transforms: ['uom'],
+    aceDerived: true,
     selectors: COMMODITY_SELECTORS,
   }),
 
@@ -111,19 +120,19 @@ export const COMMODITY_FIELDS: AceFieldMapping[] = [
 
   defineField({
     key: 'ValueOfGoods',
-    label: 'Value of Goods',
+    label: 'Value of Goods (whole US Dollars)',
     page: 'commodities',
     scope: 'commodityLine',
     source: 'commodity.valueOfGoods',
     type: 'number',
-    transforms: ['money'],
+    transforms: ['wholeDollars'],
     expected: true,
     selectors: COMMODITY_SELECTORS,
   }),
 
   defineField({
     key: 'ShippingWeight',
-    label: 'Shipping Weight (kg)',
+    label: 'Shipping Weight (whole Kilograms)',
     page: 'commodities',
     scope: 'commodityLine',
     source: 'commodity.shippingWeight',
@@ -147,7 +156,7 @@ export const COMMODITY_FIELDS: AceFieldMapping[] = [
 
   defineField({
     key: 'LicenseCode',
-    label: 'License Code / Exemption',
+    label: 'License Type Code/License Exemption Code',
     page: 'commodities',
     scope: 'commodityLine',
     source: 'commodity.licenseCode',

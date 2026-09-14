@@ -1,12 +1,14 @@
 /**
  * Declarative description of an ACE form field.
  *
- * IMPORTANT: selectors in src/ace/mappings/* are *candidates*, tried in
+ * IMPORTANT: selectors in src/ace/selectors/* are *candidates*, tried in
  * priority order by src/content/fieldDetector.ts. A candidate carries a
- * `verified` flag which is true ONLY when the selector was captured from the
- * real ACE DOM. Unverified candidates are still tried, but a field whose match
- * came from an unverified candidate is reported with reduced confidence, and a
- * field with no match is never written to.
+ * `verified` flag which is true ONLY when the selector, or the label wording
+ * it matches, was captured from the live ACE portal - a DevTools capture of
+ * the element, or the label text read off the real screen. Unverified
+ * candidates are still tried, but a field whose match came from an unverified
+ * candidate is reported with reduced confidence, and a field with no match is
+ * never written to.
  */
 
 export type AcePageId = 'shipment' | 'parties' | 'commodities' | 'transportation' | 'unknown';
@@ -36,11 +38,18 @@ export interface AceSelectorCandidate {
   selector?: string;
   /** Label text(s) to match, case-insensitive, punctuation-insensitive. */
   labelText?: string[];
+  /**
+   * For 'label': only look inside the panel whose heading reads one of these
+   * (case- and punctuation-insensitive). ACE repeats "Company Name" and
+   * "Address Line 1" for every party on the Parties step; scoping to the
+   * "Ultimate Consignee" panel is what makes the label unambiguous.
+   */
+  section?: string[];
   /** For 'nearby': the control to pick inside the container. Defaults to the first enabled control. */
   within?: string;
   /** For 'placeholder': placeholder text to match. */
   placeholder?: string;
-  /** True only if captured from the live ACE DOM and checked in. */
+  /** True only if captured from the live ACE portal (element or label wording) and checked in. */
   verified: boolean;
   note?: string;
 }
@@ -64,9 +73,17 @@ export interface AceFieldMapping {
   maxLength?: number;
   /** A warning (never a hard failure) is raised when the source value is empty. */
   expected?: boolean;
+  /**
+   * ACE computes this field itself and shows it read-only (the 1st UOM is
+   * derived from the Schedule B number). The filler never writes it; it reads
+   * what ACE shows and reports whether it matches the imported value.
+   */
+  aceDerived?: boolean;
   candidates: AceSelectorCandidate[];
   /**
-   * 'verified'    - at least one candidate was captured from live ACE.
+   * 'verified'    - at least one candidate was captured from live ACE (an
+   *                 element from DevTools, or the label wording from the
+   *                 real screen).
    * 'placeholder' - nothing here has been confirmed against live ACE yet.
    */
   verificationStatus: 'verified' | 'placeholder';
@@ -81,6 +98,11 @@ export interface FieldDetection {
   label: string;
   status: DetectionStatus;
   element: HTMLElement | null;
+  /**
+   * For NOT_WRITABLE: the single disabled/read-only control that matched, so a
+   * derived field can be read and compared. Never written to.
+   */
+  unwritableElement?: HTMLElement | null;
   /** Which strategy matched. */
   matchedBy: SelectorStrategy | null;
   /** The selector or label text that matched, for diagnostics. */
@@ -119,6 +141,8 @@ export interface FillOutcome {
   message?: string;
   matchedWith?: string | null;
   confidence?: FieldDetection['confidence'];
+  /** True when the outcome is a read-back comparison of a field ACE derives itself, not a write. */
+  aceDerived?: boolean;
 }
 
 export interface FillReport {

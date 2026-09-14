@@ -219,7 +219,8 @@ export function applyFillReport(rows: MappingStatusRow[], report: FillReport): M
         break;
       case 'skipped':
       default:
-        next.status = row.status === 'NOT CHECKED' ? 'EMPTY' : row.status;
+        // A derived field that agrees with ACE is as good as filled.
+        next.status = outcome.aceDerived ? 'READY' : row.status === 'NOT CHECKED' ? 'EMPTY' : row.status;
         break;
     }
     return next;

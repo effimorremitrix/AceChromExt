@@ -937,7 +937,7 @@ function renderFill(): HTMLElement {
     );
   } else if (!onCommodities) {
     section.append(
-      el('p', { className: 'small muted', text: 'Commodity-line fill is available on the Commodities step, with the Line Details form open.' }),
+      el('p', { className: 'small muted', text: 'Commodity-line fill is available on the Commodities step once a line is open in the Line Details form (Edit on the Line Summary table, or Add New Line).' }),
     );
   }
 
@@ -1278,7 +1278,7 @@ function renderSelectorEditor(): HTMLElement {
         text: captured.length ? `${captured.length} captured` : `${unverifiedFieldKeys().length} unverified`,
       }),
     ]),
-    el('p', { className: 'small muted', text: 'The selectors that ship with this build are placeholders. Capture the real ones from the live ACE portal with DevTools (docs/ACE-MAPPING.md) and paste them here: they are tried first, take effect on the next fill, and need no rebuild.' }),
+    el('p', { className: 'small muted', text: 'The selectors that ship with this build match Steps 1-3 by the label wording captured from the live portal; their ids are still guesses, and Step 4 is uncaptured. Capture the real elements with DevTools (docs/ACE-MAPPING.md) and paste them here: they are tried first, take effect on the next fill, and need no rebuild.' }),
   );
 
   const draft =

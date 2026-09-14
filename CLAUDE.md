@@ -85,7 +85,7 @@ a locally imported spreadsheet. See `README.md` for what it does and
 
 | Command | Use |
 | --- | --- |
-| `npm run verify` | typecheck + 451 tests + template + build + bundle check + companion build. Run before every push. |
+| `npm run verify` | typecheck + 558 tests + template + build + bundle check + companion build. Run before every push. |
 | `npm run build` / `build:watch` | build `dist/` (the extension) |
 | `npm run build:companion` | build `dist-companion/` (the QuickBooks companion) |
 | `npm run qb -- --help` | run the companion |
@@ -149,10 +149,16 @@ transformation engine.
 Two things are built but not verified against the real system, and both must
 stay honestly described:
 
-1. All 24 ACE selectors are **placeholders** - none captured from the live
-   portal. `docs/ACE-MAPPING.md` lists exactly what to capture, field by field.
-   Never replace a `placeholder(...)` with `verified(...)` unless the selector
-   really was copied from live ACE.
+1. The ACE selectors are **verified by label wording only**. The labels of
+   Steps 1-3 were captured from live AESDirect screenshots on 2026-09-14 and
+   live in `capturedLabel(...)` candidates; the element ids/names are still
+   `placeholder(...)` guesses, the dropdowns may be combobox widgets over a
+   hidden `<select>`, and Step 4 (Transportation) was never captured.
+   `docs/ACE-MAPPING.md` lists what is still missing, field by field. Never
+   replace a `placeholder(...)` with `verified(...)` unless the selector really
+   was copied from the live DOM, and never write `capturedLabel(...)` for a
+   wording that was not read off the real screen. `PONumber` and
+   `FreightTerms` are template columns with no ACE field: do not map them.
 
 2. The QuickBooks **COM hop has never run against a real QuickBooks** - there is
    no Windows machine with QuickBooks Desktop in this toolchain. Everything

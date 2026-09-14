@@ -4,6 +4,10 @@
  * Canonical field, transformation, ACE length limit and expectation only.
  * The selectors are in src/ace/selectors/shipment.ts; the validation rules are
  * in src/excel/validator.ts, shared with the QuickBooks companion.
+ *
+ * The live Shipment step (captured 2026-09-14) has no PO Number and no INCO
+ * Terms control, so `PONumber` and `FreightTerms` are not ACE fields: the
+ * columns stay in the template as reference data only.
  */
 
 import type { AceFieldMapping } from '../../models/AceField.js';
@@ -26,7 +30,7 @@ export const SHIPMENT_FIELDS: AceFieldMapping[] = [
 
   defineField({
     key: 'InvoiceDate',
-    label: 'Invoice / Export Date',
+    label: 'Departure Date',
     page: 'shipment',
     scope: 'shipment',
     source: 'invoice.invoiceDate',
@@ -36,21 +40,10 @@ export const SHIPMENT_FIELDS: AceFieldMapping[] = [
     selectors: SHIPMENT_SELECTORS,
   }),
 
-  defineField({
-    key: 'PONumber',
-    label: 'PO Number',
-    page: 'shipment',
-    scope: 'shipment',
-    source: 'invoice.poNumber',
-    type: 'text',
-    transforms: ['text'],
-    maxLength: 35,
-    selectors: SHIPMENT_SELECTORS,
-  }),
 
   defineField({
     key: 'Destination',
-    label: 'Country of Ultimate Destination',
+    label: 'Country of Destination',
     page: 'shipment',
     scope: 'shipment',
     source: 'invoice.destination',
@@ -60,15 +53,4 @@ export const SHIPMENT_FIELDS: AceFieldMapping[] = [
     selectors: SHIPMENT_SELECTORS,
   }),
 
-  defineField({
-    key: 'FreightTerms',
-    label: 'Freight / INCO Terms',
-    page: 'shipment',
-    scope: 'shipment',
-    source: 'invoice.freightTerms',
-    type: 'text',
-    transforms: ['text', 'upper'],
-    maxLength: 10,
-    selectors: SHIPMENT_SELECTORS,
-  }),
 ];

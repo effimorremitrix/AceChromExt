@@ -90,6 +90,16 @@ function provenanceFor(
   return { original: '', transform: null };
 }
 
+/** "KG" agrees with "KG", "kg" and "KG - Kilograms"; nothing agrees with empty. */
+function sameCode(shown: string, expected: string): boolean {
+  const a = shown.trim().toLowerCase();
+  const b = expected.trim().toLowerCase();
+  if (a === '' || b === '') return false;
+  if (a === b) return true;
+  const code = a.split(/\s*[-\u2013:]\s*/)[0] ?? '';
+  return code === b;
+}
+
 function detectionMessage(detection: FieldDetection): string {
   switch (detection.status) {
     case 'AMBIGUOUS':
@@ -190,6 +200,27 @@ function fillOne(mapping: AceFieldMapping, ctx: FillOneContext, root: ParentNode
   if (truncated) notes.push(`Truncated to ${mapping.maxLength} characters for ACE.`);
 
   const detection = detectField(mapping, { root });
+
+  // A field ACE derives itself (1st UOM from the Schedule B number) is shown
+  // read-only. It is never written; what ACE shows is compared with the
+  // imported value so a wrong Schedule B / unit pairing is caught here.
+  if (mapping.aceDerived && detection.status === 'NOT_WRITABLE' && detection.unwritableElement) {
+    const shown = readAceFieldValue(detection.unwritableElement).trim();
+    const agrees = sameCode(shown, finalValue);
+    return {
+      ...base,
+      status: agrees ? 'skipped' : 'warning',
+      message: agrees
+        ? `ACE derives this from the Schedule B number and shows "${shown}", matching the imported value.`
+        : `ACE derives this from the Schedule B number and shows "${shown || '(empty)'}", but the imported value is "${finalValue}". Check the Schedule B number and the unit.`,
+      original,
+      written: finalValue,
+      transform: combinedTransform,
+      matchedWith: detection.matchedWith,
+      confidence: detection.confidence,
+      aceDerived: true,
+    };
+  }
 
   if (detection.status !== 'FOUND' || !detection.element) {
     return {

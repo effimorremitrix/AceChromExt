@@ -1,30 +1,31 @@
 <!--
-  Same screen with none of the ids/names the mappings expect: only visible
-  labels. Exercises the label-text fallback strategy.
+  Same screen with none of the ids/names the mappings expect: only the visible
+  labels, in the live wording. Exercises the label-text fallback strategy and
+  the heading-based Line Details container.
 -->
 <div id="filing">
   <div class="wizard-step active">Step 3: Commodities</div>
-  <h3>Line Details</h3>
+  <h3>Line 1 Details</h3>
 
   <table>
     <tr>
-      <td><label for="f-a91">Schedule B/HTS Number</label></td>
+      <td><label for="f-a91">Schedule B or HTS Number <span class="conditional">◆</span> <i class="fa fa-info-circle"></i> <a href="#">[Schedule B Search Engine]</a></label></td>
       <td><input type="text" id="f-a91" class="ng-pristine" /></td>
     </tr>
     <tr>
-      <td><label for="f-b42">Commodity Description</label></td>
+      <td><label for="f-b42">Commodity Description <span class="required">*</span></label></td>
       <td><input type="text" id="f-b42" /></td>
     </tr>
     <tr>
-      <td><label for="f-c17">Quantity 1</label></td>
+      <td><label for="f-c17">1st Quantity <span class="conditional">◆</span></label></td>
       <td><input type="text" id="f-c17" /></td>
     </tr>
     <tr>
-      <td><label for="f-d55">Shipping Weight</label></td>
+      <td><label for="f-d55">Shipping Weight (whole Kilograms) <span class="conditional">◆</span></label></td>
       <td><input type="text" id="f-d55" /></td>
     </tr>
     <tr>
-      <td><label for="f-e09">Value of Goods</label></td>
+      <td><label for="f-e09">Value of Goods (whole US Dollars) <span class="required">*</span></label></td>
       <td><input type="text" id="f-e09" disabled /></td>
     </tr>
   </table>

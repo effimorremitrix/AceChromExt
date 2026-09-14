@@ -168,7 +168,9 @@ Present on every invoice, no configuration needed.
 | `invoiceNumber` | `InvoiceRet/RefNumber` |
 | `invoiceDate` | `InvoiceRet/TxnDate` |
 | `customerName` | `InvoiceRet/CustomerRef/FullName` |
-| `billTo` | `InvoiceRet/BillAddress` (the printed `BillAddressBlock` when present) |
+| `billTo` | `InvoiceRet/BillAddress/Addr1` (the printed `BillAddressBlock` only when the address has no structured parts) |
+| `billToAddress2` | `InvoiceRet/BillAddress/Addr2` (Addr2-Addr5, joined) |
+| `billToCity`, `billToState`, `billToPostalCode`, `billToCountry` | `InvoiceRet/BillAddress/City`, `/State`, `/PostalCode`, `/Country` |
 | `poNumber` | `InvoiceRet/PONumber` |
 | `freightTerms` | `InvoiceRet/FOB` - the built-in field, which is where "FOB dock" already lives |
 | `paymentTerms` | `InvoiceRet/TermsRef/FullName` |

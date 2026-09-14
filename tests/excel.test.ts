@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import { ExcelReadError, readWorkbookBytes, sheetByName } from '../src/excel/excelReader.js';
@@ -88,6 +90,24 @@ describe('column aliases', () => {
     for (const column of TEMPLATE_COLUMNS) {
       expect(specForHeader(column), column).toBeDefined();
     }
+  });
+
+  it('keeps the template generator on the same column list', () => {
+    // scripts/generate-template.mjs cannot import TypeScript, so it carries
+    // its own copy of the column list. This is what stops the two drifting.
+    const script = readFileSync(join(__dirname, '..', 'scripts', 'generate-template.mjs'), 'utf8');
+    const match = /const COLUMNS = \[([^\]]+)\]/.exec(script);
+    const generated = (match?.[1] ?? '').match(/'([A-Za-z0-9]+)'/g)?.map((name) => name.replace(/'/g, '')) ?? [];
+    expect(generated).toEqual([...TEMPLATE_COLUMNS]);
+  });
+
+  it('accepts the split consignee address columns and the live ACE wordings', () => {
+    expect(specForHeader('Address Line 1')?.column).toBe('BillTo');
+    expect(specForHeader('Address Line 2')?.column).toBe('BillToAddress2');
+    expect(specForHeader('City')?.column).toBe('BillToCity');
+    expect(specForHeader('Postal Code')?.column).toBe('BillToPostalCode');
+    expect(specForHeader('Consignee Country')?.column).toBe('BillToCountry');
+    expect(specForHeader('Departure Date')?.column).toBe('InvoiceDate');
   });
 
   it('matches aliases case- and punctuation-insensitively', () => {

@@ -1,14 +1,19 @@
 /**
  * Step 1: Shipment - ACE selectors.
  *
- * SELECTOR STATUS: every candidate here is a PLACEHOLDER. The mapping
- * architecture is complete; these 24 strings are what one hour with DevTools
- * on the live portal replaces. See docs/ACE-MAPPING.md for the capture
- * procedure, and `overrides.ts` for installing a captured selector without a
- * rebuild.
+ * SELECTOR STATUS: label wording captured from the live AESDirect screen on
+ * 2026-09-14 (`capturedLabel`). The id/name candidates above each label are
+ * still guesses: one DevTools capture per field turns them into
+ * `verified(...)` and lifts the match from medium to high confidence. See
+ * docs/ACE-MAPPING.md for the procedure, and `overrides.ts` for installing a
+ * captured selector without a rebuild.
+ *
+ * The live Shipment step has no PO Number and no INCO Terms control, so those
+ * two template columns are not filed from this step (they stay in the
+ * spreadsheet as reference data).
  */
 
-import { byFrameworkName, byIdSuffix, byLabel, byNearby, placeholder, type SelectorTable } from './types.js';
+import { byFrameworkName, byIdSuffix, byLabel, byNearby, capturedLabel, placeholder, type SelectorTable } from './types.js';
 
 export const SHIPMENT_SELECTORS: SelectorTable = {
   ShipmentReferenceNumber: {
@@ -17,13 +22,8 @@ export const SHIPMENT_SELECTORS: SelectorTable = {
       placeholder('name', "input[name='shipmentReferenceNumber']"),
       byFrameworkName('shipmentReferenceNumber'),
       byIdSuffix('shipmentReferenceNumber'),
-      byLabel([
-        'Shipment Reference Number',
-        'Shipment Ref Number',
-        'Shipment Reference No',
-        'Shipment Reference',
-        'Filer Reference Number',
-      ]),
+      capturedLabel(['Shipment Reference Number']),
+      byLabel(['Shipment Ref Number', 'Shipment Reference No', 'Shipment Reference', 'Filer Reference Number']),
       byNearby("[data-section='shipment']", "input[name*='reference' i]"),
     ],
     devtoolsHint:
@@ -32,58 +32,27 @@ export const SHIPMENT_SELECTORS: SelectorTable = {
 
   InvoiceDate: {
     candidates: [
-      placeholder('id', '#estimatedExportDate'),
-      placeholder('name', "input[name='estimatedExportDate']"),
-      byFrameworkName('estimatedExportDate'),
-      byIdSuffix('estimatedExportDate'),
-      byLabel([
-        'Date of Export',
-        'Estimated Date of Export',
-        'Export Date',
-        'Invoice Date',
-        'Estimated Export Date',
-      ]),
+      placeholder('id', '#departureDate'),
+      placeholder('name', "input[name='departureDate']"),
+      byFrameworkName('departureDate'),
+      byIdSuffix('departureDate'),
+      capturedLabel(['Departure Date']),
+      byLabel(['Date of Export', 'Estimated Date of Export', 'Export Date', 'Estimated Export Date']),
     ],
     devtoolsHint:
-      'Shipment tab -> inspect the date box. Note whether ACE uses a plain text input or a date picker component, and whether it accepts MM/DD/YYYY typed directly.',
-  },
-
-  PONumber: {
-    candidates: [
-      placeholder('id', '#poNumber'),
-      placeholder('name', "input[name='poNumber']"),
-      byFrameworkName('poNumber'),
-      byIdSuffix('poNumber'),
-      byLabel(['PO Number', 'Purchase Order Number', 'Reference Number']),
-    ],
-    devtoolsHint: 'Shipment tab -> inspect the PO / reference number box.',
+      'Shipment tab -> inspect the Departure Date box. It shows an MM/DD/YYYY placeholder and a calendar button; confirm that a typed MM/DD/YYYY is kept after the box loses focus.',
   },
 
   Destination: {
     candidates: [
-      placeholder('id', '#countryOfUltimateDestination'),
-      placeholder('name', "select[name='countryOfUltimateDestination']"),
-      byFrameworkName('countryOfUltimateDestination'),
-      byIdSuffix('countryOfUltimateDestination'),
-      byLabel([
-        'Country of Ultimate Destination',
-        'Ultimate Destination',
-        'Destination Country',
-        'Country of Destination',
-      ]),
+      placeholder('id', '#countryOfDestination'),
+      placeholder('name', "select[name='countryOfDestination']"),
+      byFrameworkName('countryOfDestination'),
+      byIdSuffix('countryOfDestination'),
+      capturedLabel(['Country of Destination']),
+      byLabel(['Country of Ultimate Destination', 'Ultimate Destination', 'Destination Country']),
     ],
     devtoolsHint:
-      'Shipment tab -> inspect the destination dropdown. Capture the <select> tag AND two sample <option> tags so the writer knows whether options carry ISO codes or full country names.',
-  },
-
-  FreightTerms: {
-    candidates: [
-      placeholder('id', '#inCoTerms'),
-      placeholder('name', "select[name='inCoTerms']"),
-      byFrameworkName('inCoTerms'),
-      byIdSuffix('inCoTerms'),
-      byLabel(['INCO Terms', 'Inco Terms', 'Freight Terms', 'Terms of Sale', 'Incoterms']),
-    ],
-    devtoolsHint: 'Shipment tab -> inspect the Terms of Sale / INCO Terms control (usually a dropdown).',
+      'Shipment tab -> inspect the Country of Destination control. It renders "TR - TURKIYE"; capture the underlying <select> (it may be hidden behind a combobox widget) AND two <option> tags so the writer knows whether option values are ISO codes.',
   },
 };

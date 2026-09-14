@@ -54,8 +54,10 @@ function buildDiagnostics(): DiagnosticsSnapshot {
   for (const mapping of resolveFields(page.page, undefined, overrides)) {
     const root = mapping.scope === 'commodityLine' ? findLineContainer(page.page) ?? document : document;
     const detection = detectField(mapping, { root });
-    const { element: _element, ...rest } = detection;
+    // No DOM element may leak into the snapshot: it must be serialisable.
+    const { element: _element, unwritableElement: _unwritable, ...rest } = detection;
     void _element;
+    void _unwritable;
     fields.push({
       key: mapping.key,
       label: mapping.label,

@@ -5,9 +5,12 @@
  * looking at right now?" so that Fill Current Page touches only the fields
  * that belong to that step.
  *
- * Like the field selectors, these signatures are placeholders until confirmed
- * against the live portal; detection therefore reports a confidence level and
- * the UI refuses to fill when confidence is 'none'.
+ * The tab and heading wordings for Steps 1-3 match the live portal (captured
+ * 2026-09-14: tabs read "Step 1: Shipment" ... "Step 4: Transportation"; the
+ * Commodities step has "Line Summary" / "Line Details" sub-tabs and the open
+ * line is headed "Line N Details"). The marker selectors are still
+ * placeholders; detection therefore reports a confidence level and the UI
+ * refuses to fill when confidence is 'none'.
  */
 
 import type { AcePageId } from '../models/AceField.js';
@@ -28,6 +31,12 @@ export interface PageSignature {
    * has one. Used to keep line-level writes inside the open line.
    */
   lineContainerSelectors?: string[];
+  /**
+   * Heading text of that form ("Line 1 Details" on the live screen; `N`
+   * stands for the line number). Tried after the CSS selectors: the panel
+   * headed by one of these is the container.
+   */
+  lineContainerHeadings?: string[];
 }
 
 export const PAGE_SIGNATURES: PageSignature[] = [
@@ -51,10 +60,11 @@ export const PAGE_SIGNATURES: PageSignature[] = [
     page: 'commodities',
     label: 'Step 3: Commodities',
     tabText: ['commodities', 'commodity', 'step 3'],
-    headingText: ['commodities', 'commodity lines', 'line details'],
+    headingText: ['commodities', 'commodity lines', 'line details', 'line summary', 'details'],
     urlHints: ['commodit', 'step3', 'line'],
     markerSelectors: ['#scheduleBNumber', "[data-section='commodityLine']"],
     lineContainerSelectors: ["[data-section='commodityLine']", '#lineDetails', "[aria-label='Line Details']"],
+    lineContainerHeadings: ['Line Details', 'Line N Details'],
   },
   {
     page: 'transportation',

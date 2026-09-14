@@ -75,7 +75,10 @@ describe('content script', () => {
 
     const scheduleB = snapshot.fields.find((field) => field.key === 'ScheduleB');
     expect(scheduleB?.detection.status).toBe('FOUND');
-    expect(scheduleB?.verificationStatus).toBe('placeholder');
+    // The label wording was captured from the live portal; the id was not.
+    expect(scheduleB?.verificationStatus).toBe('verified');
+    const carrier = snapshot.fields.find((field) => field.key === 'Carrier');
+    if (carrier) expect(carrier.verificationStatus).toBe('placeholder');
     // The snapshot must be serialisable: no DOM element may leak into it.
     expect(JSON.stringify(snapshot)).toContain('ScheduleB');
     expect((scheduleB?.detection as unknown as { element?: unknown }).element).toBeUndefined();
@@ -126,6 +129,11 @@ describe('content script', () => {
           invoiceDate: '',
           customerName: '',
           billTo: '',
+          billToAddress2: '',
+          billToCity: '',
+          billToState: '',
+          billToPostalCode: '',
+          billToCountry: '',
           poNumber: '',
           freightTerms: '',
           paymentTerms: '',
