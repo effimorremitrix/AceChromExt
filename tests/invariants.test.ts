@@ -6,12 +6,28 @@
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const SRC = join(__dirname, '..', 'src');
 const EXTENSION = join(__dirname, '..', 'extension');
 const COMPANION = join(__dirname, '..', 'companion');
+
+/**
+ * Forward slashes, on every platform.
+ *
+ * These tests match on path *fragments* - "/sources/", "src/ui/page.ts" - so
+ * on Windows, where join() produces backslashes, an un-normalized path matches
+ * nothing. That fails in the worst possible direction: a rule silently checks
+ * an empty list and passes. Normalizing here is what keeps the invariants
+ * honest on a Windows machine, which is where the QuickBooks companion runs.
+ */
+function posix(path: string): string {
+  return path.split(sep).join('/');
+}
+
+const SRC_PREFIX = `${posix(SRC)}/`;
+const COMPANION_PREFIX = `${posix(COMPANION)}/`;
 
 function walk(dir: string, extension: string): string[] {
   const found: string[] = [];
@@ -20,7 +36,7 @@ function walk(dir: string, extension: string): string[] {
     if (statSync(path).isDirectory()) {
       found.push(...walk(path, extension));
     } else if (path.endsWith(extension)) {
-      found.push(path);
+      found.push(posix(path));
     }
   }
   return found;
@@ -36,7 +52,7 @@ function stripComments(code: string): string {
 const stripped = sources.map(({ path, code }) => ({ path, code: stripComments(code) }));
 
 function offenders(pattern: RegExp): string[] {
-  return stripped.filter(({ code }) => pattern.test(code)).map(({ path }) => path.replace(`${SRC}/`, ''));
+  return stripped.filter(({ code }) => pattern.test(code)).map(({ path }) => path.replace(SRC_PREFIX, ''));
 }
 
 describe('no dynamic code execution', () => {
@@ -231,7 +247,7 @@ describe('the QuickBooks companion', () => {
   // spawns PowerShell and opens a loopback socket. These are its own promises,
   // from docs/SECURITY.md.
   const companionSources = walk(join(COMPANION, 'src'), '.ts').map((path) => ({
-    path: path.replace(`${COMPANION}/`, ''),
+    path: path.replace(COMPANION_PREFIX, ''),
     code: stripComments(readFileSync(path, 'utf8')),
   }));
 
