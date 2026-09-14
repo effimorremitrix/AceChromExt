@@ -75,24 +75,32 @@ empty.
 
 ---
 
-# ACE Helper
+# ACE Helper, INTTRA Helper, Deckhand
 
-A Chrome MV3 extension that fills U.S. Customs ACE/AES export filing forms from
-a locally imported spreadsheet. See `README.md` for what it does and
-`docs/ARCHITECTURE.md` for how it is put together.
+Two Chrome MV3 extensions (ACE Helper in `extension/` + `src/`, INTTRA Helper in
+`inttra-extension/`), a QuickBooks Desktop companion (`companion/`), an email
+extraction module (`deckhand/`) and the filing package that ties them together
+(`shared/`). See `README.md` for what they do, `docs/ARCHITECTURE.md` for how
+they fit, and `docs/END-TO-END-FLOW.md` for the whole chain.
+
+**This repository stands alone.** Deckhand was migrated in from a retired
+repository; `tests/independence.test.ts` fails on any import outside this
+tree, any hosted-service dependency, and any mention of the retired
+repository outside the one history note in `docs/DECKHAND.md`. Keep it that way.
 
 ## Commands
 
 | Command | Use |
 | --- | --- |
-| `npm run verify` | typecheck + 558 tests + template + build + bundle check + companion build. Run before every push. |
-| `npm run build` / `build:watch` | build `dist/` (the extension) |
+| `npm run verify` | typecheck + 700 tests + template + both extension builds + both bundle checks + companion build. Run before every push. |
+| `npm run build` / `build:watch` | build `dist/` (the ACE Helper) |
+| `npm run build:inttra` | build `dist-inttra/` (the INTTRA Helper) |
 | `npm run build:companion` | build `dist-companion/` (the QuickBooks companion) |
 | `npm run qb -- --help` | run the companion |
 | `npm test` / `test:watch` | vitest |
 | `npm run smoke` | end-to-end in real Chrome against a mocked ACE host. Needs Chrome for Testing or a Playwright Chromium - **branded Chrome 137+ will not work** (see `docs/INSTALLATION.md`). |
-| `npm run check:bundle` | supply-chain check on `dist/` |
-| `npm run template` / `icons` | regenerate the committed generated files |
+| `npm run check:bundle` / `check:bundle:inttra` | supply-chain check on `dist/` (CBP hosts only) and `dist-inttra/` (INTTRA/e2open hosts only) |
+| `npm run template` / `icons` / `icons:inttra` | regenerate the committed generated files |
 
 CI runs all of this on every pull request; `.github/workflows/ci.yml`.
 
@@ -115,6 +123,13 @@ of these, so do not work around them - fix the cause:
 - the manifest keeps `permissions: ["storage"]`, CBP-only hosts, and a CSP with
   `script-src 'self'` + `connect-src 'none'`.
 
+`tests/inttraInvariants.test.ts` holds the same promises for the INTTRA Helper:
+INTTRA/e2open hosts only and never `<all_urls>`, no `.click()` anywhere in its
+content layer (not even Add Row), every write through `setInttraFieldValue`,
+no credential handling. `deckhand/` and `shared/` are pure: no `chrome.*`, no
+DOM, no network, no import from either extension's content layer or from the
+companion, and no code path that pairs a seal with a container by position.
+
 ## Where things live
 
 Data flows one way: `QuickBooks → canonical model → Excel → canonical model →
@@ -124,6 +139,11 @@ preview → ACE`.
 | --- | --- |
 | a spreadsheet column | `src/excel/columnAliases.ts` |
 | an ACE field | `src/ace/mappings/<page>.ts` |
+| an INTTRA field | `inttra-extension/src/mappings/<screen>.ts` (placeholders until captured live) |
+| a grid column on Copy Container Details | `GRID_COLUMNS` in `inttra-extension/src/mappings/containerGrid.ts` |
+| an email shape Deckhand should read | a rule in `deckhand/src/extract/` + a fixture in `tests/fixtures/deckhand/`; never a rule that pairs by position |
+| a field in the filing package, or the merge policy | `shared/src/filingPackage.ts` + `shared/src/builder.ts` |
+| a document reader (PDF, mailbox) | implement `DocumentReader` in `deckhand/src/readers/`, register in `deckhand/src/extractor.ts` |
 | a transformation rule | `src/ace/transformers/` + register in `index.ts` |
 | a validation rule | `src/excel/validator.ts` |
 | a selector that ACE changed | the mapping's `candidates`, per `docs/ACE-MAPPING.md` |
@@ -146,7 +166,7 @@ transformation engine.
 
 ## Current state
 
-Two things are built but not verified against the real system, and both must
+Four things are built but not verified against the real system, and all must
 stay honestly described:
 
 1. The ACE selectors are **verified by label wording only**. The labels of
@@ -165,3 +185,17 @@ stay honestly described:
    above the transport is tested against saved qbXML fixtures. Do not describe
    the live integration as working; `docs/QUICKBOOKS-INTEGRATION.md` section 11
    is the procedure for verifying it on the QuickBooks PC.
+
+3. The INTTRA Helper has **never seen the live portal**. Every selector in
+   `inttra-extension/src/mappings/` is `placeholder(...)`, every page
+   signature is guessed wording, and the hostname is unconfirmed. Never mark
+   an INTTRA candidate `verified(...)` unless it was copied from the live DOM;
+   `docs/INTTRA-INTEGRATION.md` section 6 is the capture procedure and
+   section 7 the list of what is untested. The helper never presses Add Row,
+   Save, Continue or Submit; that is policy in
+   `inttra-extension/src/content/automationPolicy.ts`, not a gap.
+
+4. Deckhand's rules extractor has been shown **fixtures, not a real inbox**.
+   PDF and image reading are declared and unavailable, on purpose, because
+   both would need a network service or a dependency that fails the bundle
+   check. Do not describe them as supported.

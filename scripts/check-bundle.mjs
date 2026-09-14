@@ -7,17 +7,30 @@
  * dependency that introduced eval() or a network call would be caught here
  * even though no source file of ours changed.
  *
- *   npm run check:bundle     (after npm run build)
+ *   npm run check:bundle             dist/        (the ACE Helper; cbp.dhs.gov only)
+ *   npm run check:bundle:inttra      dist-inttra/ (the INTTRA Helper; inttra.com and e2open.com only)
+ *
+ * The two extensions are checked separately, each against its own host
+ * allowlist, so neither can pick up the other's hosts.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
+const argv = process.argv.slice(2);
+function argument(name, fallback) {
+  const index = argv.indexOf(name);
+  return index === -1 ? fallback : argv[index + 1] ?? fallback;
+}
+
+const distName = argument('--dist', 'dist');
+const dist = join(dirname(fileURLToPath(import.meta.url)), '..', distName);
+/** Our own content-script match patterns, for whichever extension is being checked. */
+const OWN_HOSTS = argument('--allow', 'cbp.dhs.gov').split(',').map((host) => host.trim()).filter(Boolean);
 
 if (!existsSync(dist)) {
-  console.error('dist/ is missing. Run: npm run build');
+  console.error(`${distName}/ is missing. Run: npm run ${distName === 'dist' ? 'build' : 'build:inttra'}`);
   process.exit(1);
 }
 
@@ -54,7 +67,7 @@ const ALLOWED_URL_DOMAINS = [
   'purl.oclc.org',
   'w3.org',
   'sheetjs.com',
-  'cbp.dhs.gov',
+  ...OWN_HOSTS,
 ];
 
 function isAllowedHost(host) {
@@ -93,7 +106,7 @@ for (const name of files) {
   }
 }
 
-console.log(`Checked ${files.length} bundled script(s): ${files.join(', ')}`);
+console.log(`Checked ${files.length} bundled script(s) in ${distName}/ (hosts allowed: ${OWN_HOSTS.join(', ')}): ${files.join(', ')}`);
 
 if (problems.length) {
   console.error('\nBundle check FAILED:');

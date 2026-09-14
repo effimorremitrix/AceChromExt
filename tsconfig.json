@@ -19,5 +19,13 @@
     "noEmit": true,
     "types": ["chrome", "node"]
   },
-  "include": ["src/**/*.ts", "companion/**/*.ts", "tests/**/*.ts", "scripts/**/*.mjs"]
+  "include": [
+    "src/**/*.ts",
+    "deckhand/**/*.ts",
+    "shared/**/*.ts",
+    "inttra-extension/**/*.ts",
+    "companion/**/*.ts",
+    "tests/**/*.ts",
+    "scripts/**/*.mjs"
+  ]
 }

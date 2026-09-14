@@ -1,0 +1,28 @@
+<!--
+  Mock ACE "Step 4: Transportation" screen. The Transportation step was NEVER
+  captured from the live portal (docs/ACE-MAPPING.md); the ids here are the
+  placeholder guesses in src/ace/selectors/transportation.ts, so this fixture
+  proves the fill path from a filing package, not the live selectors.
+-->
+<div id="filing">
+  <ul class="nav-tabs">
+    <li><a href="#step1">Step 1: Shipment</a></li>
+    <li><a href="#step2">Step 2: Parties</a></li>
+    <li><a href="#step3">Step 3: Commodities</a></li>
+    <li class="active"><a href="#step4">Step 4: Transportation</a></li>
+  </ul>
+  <h2>Transportation</h2>
+  <label for="carrierName">Carrier Name</label>
+  <input type="text" id="carrierName" name="carrierName" />
+  <label for="conveyanceName">Conveyance Name</label>
+  <input type="text" id="conveyanceName" name="conveyanceName" />
+  <label for="bookingNumber">Booking Number</label>
+  <input type="text" id="bookingNumber" name="bookingNumber" />
+  <div data-section="container">
+    <label for="containerNumber">Container Number</label>
+    <input type="text" id="containerNumber" name="containerNumber" />
+    <label for="sealNumber">Seal Number</label>
+    <input type="text" id="sealNumber" name="sealNumber" />
+  </div>
+  <button type="button" id="saveTransportation">Save</button>
+</div>

@@ -16,7 +16,7 @@
  *   - no positional heuristics ("the third textbox") exist anywhere in this file.
  */
 
-import type { AceFieldMapping, AceSelectorCandidate, FieldDetection } from '../models/AceField.js';
+import type { AceSelectorCandidate, FieldDetection } from '../models/AceField.js';
 import { describeLabelCandidate } from '../ace/selectors/types.js';
 import { isVisible, isWritable } from './fieldWriter.js';
 
@@ -246,6 +246,17 @@ function degrade(confidence: FieldDetection['confidence']): FieldDetection['conf
   return 'low';
 }
 
+/**
+ * The part of a mapping the detector needs. AceFieldMapping satisfies it; so
+ * does the INTTRA Helper's mapping type, which is why the detector is typed on
+ * this rather than on the ACE mapping.
+ */
+export interface DetectableField {
+  key: string;
+  label: string;
+  candidates: AceSelectorCandidate[];
+}
+
 export interface DetectOptions {
   /**
    * Restrict the search to this element. Used for commodity-line fields so a
@@ -255,7 +266,7 @@ export interface DetectOptions {
 }
 
 /** Resolve one mapping against the DOM. */
-export function detectField(field: AceFieldMapping, options: DetectOptions = {}): FieldDetection {
+export function detectField(field: DetectableField, options: DetectOptions = {}): FieldDetection {
   const root: ParentNode = options.root ?? document;
   const attempts: FieldDetection['attempts'] = [];
   let unwritable: HTMLElement | null = null;
@@ -346,6 +357,6 @@ export function detectField(field: AceFieldMapping, options: DetectOptions = {})
 }
 
 /** Resolve a set of mappings. Used by both the filler and the diagnostics panel. */
-export function detectFields(fields: AceFieldMapping[], options: DetectOptions = {}): FieldDetection[] {
+export function detectFields(fields: DetectableField[], options: DetectOptions = {}): FieldDetection[] {
   return fields.map((field) => detectField(field, options));
 }

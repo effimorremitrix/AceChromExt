@@ -27,6 +27,9 @@ import { FileQbxmlTransport } from '../transport/FileTransport.js';
 import type { QbxmlTransport } from '../transport/QbxmlTransport.js';
 import { renderInvoiceList, renderPreview } from './preview.js';
 import { runGui } from './server.js';
+import { buildReview, deckhandFileName, formatBlock, serializeDeckhandShipment } from '../../../deckhand/src/index.js';
+import { describeProvenance, fillGate } from '../../../shared/src/index.js';
+import { extractFromFile, packageFromMapping, writeDeckhandJson, writeFilingPackage } from '../package/filingPackageExport.js';
 
 export const DEFAULT_CONFIG_FILE = 'ace-export.config.json';
 
@@ -56,6 +59,8 @@ export interface ResolvedOptions {
   dateFrom: string | null;
   dateTo: string | null;
   port: number | null;
+  /** An email or document on disk to extract with Deckhand, for `package`. Optional so older callers need not name it. */
+  deckhandFile?: string | null;
 }
 
 export interface ParsedArgs {
@@ -83,6 +88,7 @@ const VALUE_FLAGS = new Set([
   'qbxml-version',
   'weight-uom',
   'port',
+  'deckhand',
 ]);
 
 export class CliError extends Error {
@@ -212,6 +218,7 @@ export function resolveOptions(args: ParsedArgs): ResolvedOptions {
     dateFrom: single(args, 'from'),
     dateTo: single(args, 'to'),
     port: integer(args, 'port'),
+    deckhandFile: single(args, 'deckhand'),
   };
 }
 
@@ -238,6 +245,10 @@ Usage
   ace-export show <invoice>                 preview one invoice, export nothing
   ace-export fields <invoice>               list the custom fields QuickBooks returns
   ace-export export <invoice> [options]     write ACE_Invoice_<number>.xlsx
+  ace-export package <invoice> [options]    write filing-package-<number>.json for the
+                                            ACE Helper and the INTTRA Helper
+  ace-export deckhand <file> [options]      read an email (.eml/.txt) with Deckhand and
+                                            print the review block
   ace-export gui [--port N]                 the local ACE Export Helper form
   ace-export init [--config path]           write a starter configuration file
 
@@ -264,6 +275,13 @@ Export options
                         cannot be overridden here.)
   --force               replace an existing file
   --dry-run             preview and validate, write nothing
+
+Package options (in addition to the export options above)
+  --deckhand FILE       the carrier's or producer's email, saved as .eml or .txt;
+                        Deckhand reads the booking, containers and seals out of
+                        it and they go into the package as "pending review".
+                        The extension shows the review and you press Approve
+                        there, in front of the form.
 
 Everywhere
   --config PATH         configuration file (default: ./ace-export.config.json)
@@ -356,6 +374,88 @@ async function commandFields(invoiceId: string, options: ResolvedOptions, io: Cl
   }
 }
 
+async function commandDeckhand(file: string, options: ResolvedOptions, io: CliIo): Promise<number> {
+  const shipment = extractFromFile(file);
+  const review = buildReview(shipment);
+  io.out(formatBlock(shipment, { ascii: options.ascii }));
+  io.out('');
+  io.out(review.canApprove ? 'Read it against the source before it goes anywhere.' : 'This extraction has problems that must be fixed in the source; it cannot be approved as it stands.');
+  if (options.dryRun) return review.blocking.length ? 1 : 0;
+  const written = writeDeckhandJson(
+    serializeDeckhandShipment(shipment),
+    options.outputDirectory ?? options.config.output.directory,
+    options.fileName ?? deckhandFileName(shipment, 'json'),
+    !options.force,
+  );
+  io.out(`Wrote ${written.path} (${(written.bytes / 1024).toFixed(1)} kB)`);
+  return review.blocking.length ? 1 : 0;
+}
+
+async function commandPackage(invoiceId: string, options: ResolvedOptions, io: CliIo): Promise<number> {
+  const adapter = buildAdapter(options, io);
+  try {
+    const invoice = await adapter.getInvoice(invoiceId);
+    const mapping = adapter.toCanonicalInvoice(invoice, {
+      overrides: options.overrides,
+      lineOverrides: options.lineOverrides,
+    });
+    const validation = validateShipment(mapping.shipment);
+    io.out(renderPreview(mapping, validation, { ascii: options.ascii }));
+    io.out('');
+
+    let shipment = null;
+    if (options.deckhandFile) {
+      shipment = extractFromFile(options.deckhandFile);
+      io.out(`Deckhand read ${options.deckhandFile}:`);
+      io.out('');
+      io.out(formatBlock(shipment, { ascii: options.ascii }));
+      io.out('');
+    }
+
+    const pkg = packageFromMapping({ mapping, shipment, generatedBy: adapter.label });
+    const check = options.ascii ? { ok: 'v', warn: '!' } : { ok: '✓', warn: '⚠' };
+
+    io.out(`Filing package ${pkg.packageId}`);
+    for (const [label, item] of [
+      ['Booking', pkg.header.bookingReference],
+      ['Vessel', pkg.header.vessel],
+      ['Voyage', pkg.header.voyage],
+      ['POL -> POD', { ...pkg.header.portOfLoading, value: `${pkg.header.portOfLoading.value || '(missing)'} -> ${pkg.header.portOfDischarge.value || '(missing)'}` }],
+      ['Containers', { value: String(pkg.containers.length), source: pkg.containers.length ? (pkg.containers[0]?.containerNumber.source ?? 'missing') : 'missing' }],
+    ] as const) {
+      io.out(`  ${item.value ? check.ok : check.warn} ${label.padEnd(14)} ${item.value || '(missing)'}   [${describeProvenance(item)}]`);
+    }
+    for (const container of pkg.containers) {
+      io.out(`      ${container.containerNumber.value.padEnd(13)} carrier seal ${container.carrierSeal.value || '(missing)'}${container.shipperSeal.value ? `  shipper seal ${container.shipperSeal.value}` : ''}   [${describeProvenance(container.containerNumber)}]`);
+    }
+    for (const conflict of pkg.conflicts) io.out(`  ${check.warn} CONFLICT ${conflict.message}`);
+    for (const note of pkg.notes) {
+      if (note.severity !== 'info') io.out(`  ${check.warn} ${note.message}`);
+    }
+    const gate = fillGate(pkg);
+    io.out('');
+    io.out(gate.ok ? 'Ready to fill once loaded into an extension.' : `Before filling, in the extension: ${gate.reasons.join(' ')}`);
+
+    if (options.dryRun) {
+      io.out('--dry-run: nothing was written.');
+      return validation.errors > 0 ? 1 : 0;
+    }
+
+    const written = writeFilingPackage(pkg, {
+      directory: options.outputDirectory ?? options.config.output.directory,
+      fileName: options.fileName,
+      failIfExists: !options.force,
+    });
+    io.out(`Wrote ${written.path} (${(written.bytes / 1024).toFixed(1)} kB)`);
+    io.out('');
+    io.out('Next: open the ACE Helper or the INTTRA Helper panel, Import, and choose that file.');
+    io.out('Review the Deckhand extraction there and press Approve; then fill, and submit yourself.');
+    return validation.errors > 0 ? 1 : 0;
+  } finally {
+    await adapter.close();
+  }
+}
+
 async function commandExport(invoiceId: string, options: ResolvedOptions, io: CliIo): Promise<number> {
   const adapter = buildAdapter(options, io);
   try {
@@ -440,6 +540,12 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       case 'export':
         if (!first) throw new CliError('Which invoice? e.g. "ace-export export CN-1042".');
         return await commandExport(first, options, io);
+      case 'package':
+        if (!first) throw new CliError('Which invoice? e.g. "ace-export package CN-1042 --deckhand booking.eml".');
+        return await commandPackage(first, options, io);
+      case 'deckhand':
+        if (!first) throw new CliError('Which file? e.g. "ace-export deckhand booking.eml".');
+        return await commandDeckhand(first, options, io);
       case 'init':
         return commandInit(options, io);
       case 'gui':

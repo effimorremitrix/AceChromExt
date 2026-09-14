@@ -1,0 +1,22 @@
+From: Operations Desk <bookings@meridianline.example>
+To: Export Desk <exports@example-trader.example>
+Subject: Container & seal details - SHPX-99120
+
+Dear Export Desk,
+
+Please find below the container and seal details for the sailing referenced above.
+
+Booking Ref: SHPX-99120
+Vessel: Meridian Aurora   Voyage: 12E
+Port of loading: Shanghai
+Port of discharge: Rotterdam
+
+Container      | Seal
+CSQU3054383    | Seal No: SL-44821
+TGHU7654320    | Seal No: SL-44822
+
+Kindly confirm receipt and file the shipping instructions at your earliest convenience.
+
+Best regards,
+Operations Desk
+Meridian Line

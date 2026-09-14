@@ -1,8 +1,8 @@
 # CI for ACE Helper.
 #
 # Three jobs, deliberately separate so a red run says *what* broke:
-#   verify  - typecheck, unit tests, both builds, generated files up to date (Node 20 and 22)
-#   bundle  - supply-chain check on what actually ships in dist/
+#   verify  - typecheck, unit tests, all three builds, generated files up to date (Node 20 and 22)
+#   bundle  - supply-chain check on what actually ships in dist/ and dist-inttra/
 #   smoke   - end-to-end in real Chrome against a mocked ACE host
 #
 # The unit suite includes tests/invariants.test.ts, which asserts the safety
@@ -55,6 +55,9 @@ jobs:
       - name: Build the unpacked extension
         run: npm run build
 
+      - name: Build the INTTRA Helper
+        run: npm run build:inttra
+
       - name: Build the QuickBooks companion
         # Separate output (dist-companion/), separate program: the bundle check
         # below is about dist/ only. Building it here catches a companion that
@@ -71,8 +74,9 @@ jobs:
         run: |
           npm run template
           npm run icons
-          if ! git diff --exit-code -- templates extension/icons; then
-            echo "::error::templates/ or extension/icons/ is out of date. Run 'npm run template' and 'npm run icons', then commit the result."
+          npm run icons:inttra
+          if ! git diff --exit-code -- templates extension/icons inttra-extension/icons; then
+            echo "::error::templates/, extension/icons/ or inttra-extension/icons/ is out of date. Run 'npm run template', 'npm run icons' and 'npm run icons:inttra', then commit the result."
             exit 1
           fi
 
@@ -82,6 +86,14 @@ jobs:
         with:
           name: ace-helper-unpacked
           path: dist/
+          retention-days: 14
+
+      - name: Upload the unpacked INTTRA Helper
+        if: matrix.node == '22'
+        uses: actions/upload-artifact@v4
+        with:
+          name: inttra-helper-unpacked
+          path: dist-inttra/
           retention-days: 14
 
   bundle:
@@ -102,6 +114,11 @@ jobs:
 
       - name: No eval, no network APIs, no unexpected hosts in dist/
         run: npm run check:bundle
+
+      - run: npm run build:inttra
+
+      - name: The same check on dist-inttra/, against the INTTRA host allowlist
+        run: npm run check:bundle:inttra
 
   smoke:
     name: End-to-end (real Chrome, mocked ACE host)

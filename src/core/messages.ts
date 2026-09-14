@@ -7,6 +7,8 @@ import type { ValidationResult } from '../excel/validator.js';
 import type { PageDetection } from '../content/pageDetector.js';
 import type { SourceDescriptor } from '../sources/InvoiceDataSource.js';
 import type { SessionLogEntry, SessionLogKind } from './sessionLog.js';
+import type { DeckhandShipment } from '../../deckhand/src/model.js';
+import type { FilingPackage } from '../../shared/src/filingPackage.js';
 
 export interface StoredImport {
   shipment: CanonicalShipment;
@@ -19,6 +21,13 @@ export interface StoredImport {
    * Phase 1/2 build still loads after an upgrade.
    */
   source?: SourceDescriptor;
+  /**
+   * The Deckhand extraction the operator is working on, and when it was
+   * approved. Optional: the ACE workflow never needs it.
+   */
+  deckhand?: { shipment: DeckhandShipment; approvedAt: string | null } | null;
+  /** The filing package built from the shipment above and the Deckhand extraction. Optional, for the same reason. */
+  package?: FilingPackage | null;
 }
 
 // ---- popup/panel -> background ------------------------------------------

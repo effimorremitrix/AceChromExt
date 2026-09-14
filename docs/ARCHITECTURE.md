@@ -54,6 +54,42 @@ Nothing flows backwards. The canonical model has no idea ACE exists; the
 mappings have no idea Excel exists; and the QuickBooks half has no idea either
 exists - it produces the canonical model and stops.
 
+## Phase 4: the second source and the second destination
+
+```
+  QuickBooks Desktop ──▶ companion ──▶ CanonicalShipment ─┐
+                                                          │  shared/src/builder.ts
+  Email / .eml ───▶ deckhand/ ───▶ DeckhandShipment ──────┤  ownership + matching + conflicts
+                     (rules extractor, review, approval)  │
+                                                          ▼
+                                                   FilingPackage  ─── filing-package.json
+                                                    /          \
+                        src/sources/FilingPackageSource        inttra-extension/
+                        (-> CanonicalShipment, the ACE         (Fill Current Page, InttraGridWriter)
+                         pipeline unchanged)                           │
+                               │                                       ▼
+                             ACE                                    INTTRA
+```
+
+Three rules keep this additive:
+
+- **ACE never depends on it.** `FilingPackageSource` is one more
+  `InvoiceDataSource`; it yields a `CanonicalShipment` and the preview,
+  checks, mapping status and fill run unchanged. Excel and the workbook path
+  are untouched. Tests assert the Phase 1 regression suite and the QuickBooks
+  export still pass with no package in sight.
+- **Deckhand and the package are pure.** `deckhand/` and `shared/` know
+  nothing about a DOM, a portal, `chrome.*`, or the companion; both
+  extensions and the companion import them and they import none of those.
+- **The INTTRA Helper is a separate extension.** Its own manifest, hosts,
+  build (`dist-inttra/`) and bundle check. It reuses the ACE Helper's field
+  detector, candidate constructors, override parser, highlight helper and
+  transformers by import, and has its own writer (`setInttraFieldValue`),
+  grid writer, page detector and automation policy.
+
+`docs/DECKHAND.md`, `docs/INTTRA-INTEGRATION.md` and `docs/END-TO-END-FLOW.md`
+describe each piece; the table below lists where they live.
+
 The QuickBooks half deliberately rejoins through the **spreadsheet**, not
 through a private channel into the extension. A workbook is inspectable,
 editable, e-mailable and archivable; a private channel would have meant a
@@ -120,6 +156,16 @@ layer data-only.
 | `companion/src/mapping/` | QuickBooks -> canonical, plus the `FieldOrigin` record |
 | `companion/src/excel/` | canonical -> the Phase 1 import workbook |
 | `companion/src/ui/` | the `ace-export` command and the local window |
+| `companion/src/package/` | `ace-export package` and `ace-export deckhand`: an email on disk, a filing package on disk |
+| `deckhand/src/` | extraction: model, ISO 6346, readers (.eml, text; PDF and image declared unavailable), the rules extractor, the review model, text outputs, JSON |
+| `shared/src/` | the filing package: provenanced values, the builder (ownership, matching, conflicts, manual values), JSON in and out (merged values rebuilt, never trusted), the ACE view |
+| `src/sources/FilingPackageSource.ts` | `filing-package.json` as an ACE data source |
+| `src/ui/deckhandTab.ts`, `src/ui/packageTab.ts` | the Deckhand review and the package screens, rendered by both panels |
+| `inttra-extension/src/pages.ts` | INTTRA screen signatures (wording guessed from the observed workflow) |
+| `inttra-extension/src/mappings/` | one file per screen, plus the container grid's columns and root candidates; all placeholders |
+| `inttra-extension/src/content/fieldWriter.ts` | `setInttraFieldValue`: native inputs and contenteditable, events, read-back, structured result |
+| `inttra-extension/src/content/gridWriter.ts` | columns identified by header text, one row per container, every cell verified, no Add Row |
+| `inttra-extension/src/content/automationPolicy.ts` | Add Row, Continue, Submit, login: named and frozen off |
 
 ## Why the companion is a separate program
 
@@ -217,3 +263,9 @@ an explicit user action; it does not require changing the fill path.
 | Fix a selector after an ACE change | the mapping's `candidates`, per `docs/ACE-MAPPING.md` |
 | Add a validation rule | `src/excel/validator.ts` |
 | Add QuickBooks (phase 2) | a new producer of `CanonicalShipment`; nothing downstream changes |
+| Teach Deckhand a new email shape | a rule in `deckhand/src/extract/` and a fixture in `tests/fixtures/deckhand/` |
+| Read PDFs or a mailbox | a `DocumentReader` in `deckhand/src/readers/`, registered in `deckhand/src/extractor.ts` |
+| Change what the package carries or how the halves merge | `shared/src/filingPackage.ts`, `shared/src/builder.ts` |
+| Add an INTTRA field | `inttra-extension/src/mappings/<screen>.ts` |
+| Fix an INTTRA selector after capture | paste it in the INTTRA panel's Diagnostics, then make it permanent in the mapping |
+| Add a destination (another portal) | a third extension reading `FilingPackage`; nothing upstream changes |

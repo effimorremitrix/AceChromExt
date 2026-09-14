@@ -1,0 +1,18 @@
+Subject: Booking Confirmation EBKG18531408 - MSC FIRENZE 541W
+
+Carrier Booking No: EBKG18531408
+Shipment ID: SID-2026-0042
+Vessel/Voyage: MSC FIRENZE / 541W
+POL: Los Angeles, CA
+POD: Derince
+
+Container No.     Carrier Seal     Shipper Seal
+MSCU1234566       SL-4471209       SH-001
+MSDU7654322       SL-4471210
+
+Container 3: TGHU7654320
+Seal: SL-9
+
+Please note that MSCU1234566 is the reefer unit on this booking.
+
+Spare seals: SL-99001, SL-99002

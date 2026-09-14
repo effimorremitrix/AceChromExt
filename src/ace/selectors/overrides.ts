@@ -28,7 +28,15 @@
  * unusable CSS selector is rejected at paste time rather than at fill time.
  */
 
-import type { AceFieldMapping, AceSelectorCandidate, SelectorStrategy } from '../../models/AceField.js';
+import type { AceSelectorCandidate, SelectorStrategy } from '../../models/AceField.js';
+
+/** The part of a mapping overrides act on. AceFieldMapping and the INTTRA mapping both satisfy it. */
+export interface OverridableField {
+  key: string;
+  candidates: AceSelectorCandidate[];
+  verificationStatus: 'verified' | 'placeholder';
+  devtoolsHint?: string;
+}
 
 export const OVERRIDES_STORAGE_KEY = 'aceHelper.selectorOverrides';
 export const OVERRIDES_VERSION = 1;
@@ -191,7 +199,7 @@ function readOptionalString(value: unknown): string {
  * verificationStatus becomes 'verified' for any field that got one - which is
  * what makes the diagnostics panel stop asking for that field to be captured.
  */
-export function applyOverrides(mappings: AceFieldMapping[], overrides: SelectorOverrides | null): AceFieldMapping[] {
+export function applyOverrides<T extends OverridableField>(mappings: T[], overrides: SelectorOverrides | null): T[] {
   if (!overrides || !Object.keys(overrides.fields).length) return mappings;
   return mappings.map((mapping) => {
     const extra = overrides.fields[mapping.key];
@@ -205,7 +213,7 @@ export function applyOverrides(mappings: AceFieldMapping[], overrides: SelectorO
 }
 
 /** Field keys the overrides claim but no mapping uses; surfaced as a warning. */
-export function unknownOverrideKeys(mappings: AceFieldMapping[], overrides: SelectorOverrides | null): string[] {
+export function unknownOverrideKeys(mappings: OverridableField[], overrides: SelectorOverrides | null): string[] {
   if (!overrides) return [];
   const known = new Set(mappings.map((mapping) => mapping.key));
   return Object.keys(overrides.fields).filter((key) => !known.has(key));
@@ -220,7 +228,7 @@ export function serializeOverrides(overrides: SelectorOverrides): string {
  * operator edits rather than composes. `unresolved` comes from a diagnostics
  * run: fields ACE Helper could not find on the page the operator is looking at.
  */
-export function starterOverrides(mappings: AceFieldMapping[], unresolved?: string[]): SelectorOverrides {
+export function starterOverrides(mappings: OverridableField[], unresolved?: string[], portal = 'ACE'): SelectorOverrides {
   const wanted = unresolved && unresolved.length ? new Set(unresolved) : null;
   const fields: Record<string, AceSelectorCandidate[]> = {};
   for (const mapping of mappings) {
@@ -228,9 +236,9 @@ export function starterOverrides(mappings: AceFieldMapping[], unresolved?: strin
     fields[mapping.key] = [
       {
         strategy: 'id',
-        selector: `#REPLACE_WITH_THE_ID_FROM_ACE_FOR_${mapping.key}`,
+        selector: `#REPLACE_WITH_THE_ID_FROM_${portal}_FOR_${mapping.key}`,
         verified: true,
-        note: mapping.devtoolsHint ?? 'Capture from the live ACE DOM.',
+        note: mapping.devtoolsHint ?? `Capture from the live ${portal} DOM.`,
       },
     ];
   }
