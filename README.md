@@ -119,9 +119,9 @@ Full steps: **[docs/INSTALLATION.md](docs/INSTALLATION.md)**
    **Fill Current Commodity Line**.
 5. Check every field in ACE. **You** save and submit.
 
-Full guide: **[docs/USER-GUIDE.md](docs/USER-GUIDE.md)**.
-Everything in one place, QuickBooks included:
-**[docs/ACE-HELPER-GUIDE.md](docs/ACE-HELPER-GUIDE.md)**
+Full guide, from invoice and email to ACE and INTTRA:
+**[docs/USER-GUIDE.md](docs/USER-GUIDE.md)**. Installing, QuickBooks
+configuration and selector capture: **[docs/SETUP-GUIDE.md](docs/SETUP-GUIDE.md)**
 
 ## Starting from QuickBooks instead of a spreadsheet
 
@@ -218,7 +218,7 @@ tests/            700 unit tests, security invariants for both extensions, a Pha
                   regression suite, two end-to-end fixtures, a Chromium smoke test,
                   mock ACE + INTTRA screens, qbXML and sanitized email fixtures,
                   and an independence test (no dependency outside this repository)
-docs/             ACE-HELPER-GUIDE (start here) | INSTALLATION | USER-GUIDE |
+docs/             USER-GUIDE (start here) | SETUP-GUIDE | INSTALLATION |
                   ACE-MAPPING | ARCHITECTURE | SECURITY | QUICKBOOKS-INTEGRATION |
                   DECKHAND | INTTRA-INTEGRATION | END-TO-END-FLOW
 .github/workflows CI: verify (Node 20 + 22), both bundle checks, e2e smoke
