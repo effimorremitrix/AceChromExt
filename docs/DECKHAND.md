@@ -159,6 +159,59 @@ called a seal), a container number that fails its check digit.
 Adding a shape means adding a rule in `deckhand/src/extract/` and a fixture
 beside it. Never widen a rule so that it pairs by position.
 
+## Pasting a table, and the seals that went missing
+
+The first real paste from a carrier email was a "DOC CUT" sheet:
+`GALCO | Container # | LOT#: | SEAL# | BOOKING# | VERITY`, ten rows. Ten
+containers came out of it and not one seal.
+
+The extractor was not at fault. Hand it that sheet with its rows intact and it
+returns every container beside its own seal, whether the cells are separated by
+tabs, by `|`, or by runs of spaces, and whether or not the mail header sits
+above it. The paste was at fault.
+
+A `<textarea>` takes the `text/plain` flavour of a paste. For an HTML table,
+that flavour is the mail client's own flattening of it: one cell per line in
+some clients, single spaces in others. The `text/html` flavour, which holds the
+real `<table>` with real `<tr>` and `<td>`, is discarded by the browser before
+anything here sees it. Once the rows are gone, so is the only evidence that
+pairs a seal with a container, and the rule that a seal reaches a container
+only through the row they share then correctly yields nothing. The containers
+still come out, by shape; the seals cannot.
+
+`src/ui/htmlTable.ts` takes the `text/html` flavour on paste, cuts the real
+table up by its own rows and cells, and writes it into the box as tab separated
+rows. It lives in `src/ui/` and not in `deckhand/` because it needs the DOM,
+and `deckhand/` is pure by invariant. It pairs nothing: it only stops the rows
+being destroyed, and the existing rules do the rest. The text goes into the
+visible box, so what is read and checked before Extract is what is extracted.
+
+Two shapes are therefore still not read deterministically, and both are reached
+only when the `text/html` flavour is absent (text pasted via a plain-text
+editor, or a plain-text email):
+
+| Shape | Result |
+| --- | --- |
+| one cell per line | containers, no seals |
+| columns separated by single spaces | containers, no seals |
+
+Neither is guessed at. A column break cannot be told from a space inside a cell
+(`CT SSR 23/25` is one cell), and cutting a flat stream into rows of N is
+pairing by position, which is the one thing this module may not do.
+
+## Copying into a container template
+
+`Copy container + seal (2 col)` is the two columns an INTTRA container template
+wants: the container number and the seal on it. `Copy grid rows (3 col)` adds
+the shipper seal column, for the grid that has one. `Container column` and
+`Seal column` are the same rows one column at a time, in the same order, for a
+grid that will not take a block.
+
+A shipper seal is never promoted into an empty carrier seal cell. They are
+different numbers on different bolts; a blank cell is fixed in seconds and a
+wrong seal is not fixed at all. When the two-column copy leaves a cell empty
+for that reason it says so, with a count.
+
 ## Verifying it on a real inbox
 
 1. Save three real emails per side (carrier and producer) as `.eml`.

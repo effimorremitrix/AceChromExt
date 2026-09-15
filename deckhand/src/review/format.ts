@@ -80,6 +80,52 @@ export function formatTsv(shipment: DeckhandShipment): string {
     .join(CRLF);
 }
 
+/** The two columns of the INTTRA container template: the number, and the seal on it. */
+export const CONTAINER_SEAL_COLUMNS = ['Container Number', 'Seal Number'] as const;
+
+/**
+ * Container and seal, and nothing else.
+ *
+ * The three-column rows above carry a shipper seal column because the grid has
+ * one. Most carrier emails have a single SEAL# column, the template being
+ * filled has two cells per row, and the third column is then an empty column
+ * to delete by hand every time. So this is the same rows with the carrier seal
+ * only.
+ *
+ * A shipper seal is NOT promoted into the gap when the carrier seal is
+ * missing. They are different numbers on different bolts, and a row that is
+ * blank is fixed in seconds where a row carrying the wrong seal is not fixed
+ * at all. `shipperSealsOmitted` below is how the screen says so out loud.
+ */
+export function formatContainerSealTsv(shipment: DeckhandShipment): string {
+  return containerRows(shipment)
+    .map((item) => `${item.container}\t${item.carrierSeal}`)
+    .join(CRLF);
+}
+
+/** One column, in the row order of the other: for a grid that will not take two at once. */
+export function formatContainerColumn(shipment: DeckhandShipment): string {
+  return containerRows(shipment)
+    .map((item) => item.container)
+    .join(CRLF);
+}
+
+/** The seal column, aligned row for row with formatContainerColumn. */
+export function formatSealColumn(shipment: DeckhandShipment): string {
+  return containerRows(shipment)
+    .map((item) => item.carrierSeal)
+    .join(CRLF);
+}
+
+/**
+ * How many rows would lose a seal by taking the two-column shape: rows with a
+ * shipper seal and no carrier seal. Zero for the ordinary email, which has one
+ * seal column; above zero it has to be said before anything is pasted.
+ */
+export function shipperSealsOmitted(shipment: DeckhandShipment): number {
+  return containerRows(shipment).filter((item) => item.carrierSeal === '' && item.shipperSeal !== '').length;
+}
+
 const csvCell = (value: string): string => (/["\n\r,]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
 
 /** The same columns with a header row, CRLF as RFC 4180 asks. */
