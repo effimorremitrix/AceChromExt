@@ -18,14 +18,19 @@ import {
   deckhandFileName,
   extractShipment,
   formatBlock,
+  formatContainerColumn,
+  formatContainerSealTsv,
+  formatSealColumn,
   formatTsv,
   serializeDeckhandShipment,
+  shipperSealsOmitted,
   DOCUMENT_READERS,
   type DeckhandShipment,
   type ReviewMark,
   type ReviewRow,
 } from '../../deckhand/src/index.js';
 import { el } from './dom.js';
+import { describeTables, readHtmlClipboard } from './htmlTable.js';
 
 export interface DeckhandState {
   shipment: DeckhandShipment;
@@ -138,8 +143,35 @@ function renderReview(state: DeckhandState, ctx: DeckhandTabContext): HTMLElemen
   const copyBlock = el('button', { className: 'button button-small', text: 'Copy review block', attrs: { type: 'button' } });
   copyBlock.addEventListener('click', () => ctx.copyToClipboard(formatBlock(state.shipment), 'Review block'));
 
-  const copyRows = el('button', { className: 'button button-small', text: 'Copy container rows (TSV)', attrs: { type: 'button' } });
+  // Three shapes of the same rows, because the grid on screen decides which is
+  // useful: the full grid, the two columns the INTTRA container template wants,
+  // and one column at a time for a grid that will not accept a block at all.
+  // All three come from containerRows, so a seal cannot appear in one and not
+  // another, and none of them pairs anything the extraction did not pair.
+  const copyRows = el('button', { className: 'button button-small', text: 'Copy grid rows (3 col)', attrs: { type: 'button' } });
   copyRows.addEventListener('click', () => ctx.copyToClipboard(formatTsv(state.shipment), 'Container rows'));
+
+  const omitted = shipperSealsOmitted(state.shipment);
+  const copyPairs = el('button', {
+    className: 'button button-small',
+    text: 'Copy container + seal (2 col)',
+    attrs: { type: 'button', title: 'Container number and seal number only, for a two-column container template.' },
+  });
+  copyPairs.addEventListener('click', () => {
+    ctx.copyToClipboard(formatContainerSealTsv(state.shipment), 'Container and seal rows');
+    if (omitted > 0) {
+      ctx.setStatus(
+        `Copied, but ${omitted} row(s) carry a shipper seal and no carrier seal. Those seal cells are empty: a shipper seal is not the carrier seal and was not put in its place. Fill them from the source.`,
+        'warn',
+      );
+    }
+  });
+
+  const copyContainerCol = el('button', { className: 'button button-small', text: 'Container column', attrs: { type: 'button' } });
+  copyContainerCol.addEventListener('click', () => ctx.copyToClipboard(formatContainerColumn(state.shipment), 'Container column'));
+
+  const copySealCol = el('button', { className: 'button button-small', text: 'Seal column', attrs: { type: 'button' } });
+  copySealCol.addEventListener('click', () => ctx.copyToClipboard(formatSealColumn(state.shipment), 'Seal column'));
 
   const save = el('button', { className: 'button button-small', text: 'Save as JSON', attrs: { type: 'button' } });
   save.addEventListener('click', () => ctx.downloadText(serializeDeckhandShipment(state.shipment), deckhandFileName(state.shipment, 'json')));
@@ -147,7 +179,7 @@ function renderReview(state: DeckhandState, ctx: DeckhandTabContext): HTMLElemen
   const clear = el('button', { className: 'button button-small button-danger', text: 'Discard', attrs: { type: 'button' } });
   clear.addEventListener('click', () => void ctx.onCleared());
 
-  card.append(el('div', { className: 'actions' }, [approve, copyBlock, copyRows, save, clear]));
+  card.append(el('div', { className: 'actions' }, [approve, copyBlock, copyPairs, copyRows, copyContainerCol, copySealCol, save, clear]));
   if (!review.canApprove && !approved) {
     card.append(el('p', { className: 'small error', text: 'Approval is blocked until the problems above are fixed in the source and the text is extracted again. Deckhand never corrects a container or seal number.' }));
   }
@@ -170,6 +202,40 @@ export function renderDeckhandTab(ctx: DeckhandTabContext): HTMLElement {
   }) as HTMLTextAreaElement;
   textarea.value = ctx.draft;
   textarea.addEventListener('input', () => ctx.onDraftChange(textarea.value));
+
+  /**
+   * Keep the table the clipboard is already carrying.
+   *
+   * A textarea takes the text/plain flavour of a paste, which is the mail
+   * client's own flattening of the table: one cell per line in some clients, a
+   * run of spaces in others. Either way the container and its seal stop being
+   * on the same line, and the extractor - which pairs a seal to a container
+   * only through the row they share - then has no row to pair them through.
+   * The containers still come out by shape; the seals do not. That is the
+   * whole of the "containers but no seals" failure.
+   *
+   * So when the clipboard also carries text/html with a real table in it, that
+   * is what goes into the box. It is written into the VISIBLE box rather than
+   * kept aside, because what is read and checked before Extract has to be the
+   * text that is extracted.
+   */
+  textarea.addEventListener('paste', (event) => {
+    const html = event.clipboardData?.getData('text/html') ?? '';
+    const pasted = html === '' ? null : readHtmlClipboard(html);
+    if (!pasted) return;
+
+    event.preventDefault();
+    const from = textarea.selectionStart ?? textarea.value.length;
+    const to = textarea.selectionEnd ?? from;
+    const caret = from + pasted.text.length;
+    textarea.value = `${textarea.value.slice(0, from)}${pasted.text}${textarea.value.slice(to)}`;
+    textarea.setSelectionRange(caret, caret);
+    ctx.onDraftChange(textarea.value);
+    ctx.setStatus(
+      `Pasted as a table (${describeTables(pasted.tables)}), so each container stays on the row its seal is on. Check it against the email, then press Extract.`,
+      'info',
+    );
+  });
 
   const extract = el('button', { className: 'button button-primary', text: 'Extract', attrs: { type: 'button' } });
   extract.addEventListener('click', () => {
