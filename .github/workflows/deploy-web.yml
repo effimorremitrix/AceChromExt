@@ -7,6 +7,11 @@
 #   CLOUDFLARE_API_TOKEN    an API token with the "Workers Scripts: Edit" permission
 #   CLOUDFLARE_ACCOUNT_ID   the account the dashboard is deployed into
 #
+# Add them under Settings -> Secrets and variables -> Actions (repository
+# secrets), or under Settings -> Environments -> production / preview to
+# scope them to one environment. Without them the deploy step stops with
+# "it's necessary to set a CLOUDFLARE_API_TOKEN environment variable".
+#
 # What is deployed is a folder of static files. There is no Worker script,
 # no binding and no server-side code; web/wrangler.jsonc says so and
 # tests/webInvariants.test.ts checks it. Shipment data never reaches the
@@ -74,6 +79,8 @@ jobs:
       - name: Deploy the static files
         uses: cloudflare/wrangler-action@v3
         with:
+          # Pinned to the current major; without this the action falls back to an old wrangler 3.x.
+          wranglerVersion: '4'
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config web/wrangler.jsonc ${{ (github.event.inputs.environment || 'production') == 'preview' && '--env preview' || '' }}
