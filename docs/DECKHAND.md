@@ -186,18 +186,65 @@ and `deckhand/` is pure by invariant. It pairs nothing: it only stops the rows
 being destroyed, and the existing rules do the rest. The text goes into the
 visible box, so what is read and checked before Extract is what is extracted.
 
-Two shapes are therefore still not read deterministically, and both are reached
-only when the `text/html` flavour is absent (text pasted via a plain-text
-editor, or a plain-text email):
+## The seal column
+
+Keeping the table was only half of it. The shape a carrier email arrives in more
+often than any table is a list with no heading and no labels at all:
+
+```
+MSDU7776110  7548801
+MEDU7011340  7548805
+TGBU6995401  7548809
+```
+
+Every seal in that was lost too, and in every separator - tab, pipe and space
+alike - because the rule above says an unlabelled token is never called a seal,
+and there was no heading to call it one.
+
+What names the second column is the column. One line proves nothing; a run of
+lines that are each one container and one other token is a two-column list, and
+the second column is the seal column. That is the same kind of evidence a
+heading gives, read off the shape of the block instead of a word above it, and
+the pair it yields is still the container and the seal the author wrote on one
+line together. Nothing pairs the nth container with the nth seal of a separate
+list, because there is no separate list; two unrelated lists stay unpaired, as
+they always did.
+
+`detectSealColumn` in `deckhand/src/extract/containers.ts`. A block is a seal
+column only when all of this holds:
+
+| Guard | Why |
+| --- | --- |
+| at least two lines | one stray line cannot make a column |
+| every line is exactly one container and one other token | a third value means it is some other list |
+| the container is on the same side throughout | a block may not change its mind halfway |
+| every other token carries a digit | rejects `Container MSDU7776110`, `MSDU7776110 Shanghai` |
+| no token is itself a container number | two containers on a line is still no evidence |
+| no token is a size-type code or a weight | rejects a `40HC` or `24000KG` column |
+| the tokens are not all the same | a seal belongs to one container; a repeated value is a booking number or a box type |
+
+The seals it finds are marked `low`, never `high`. The review screen shows them
+with **?** and "read, but not certain", because a column that named itself is
+weaker evidence than a column with a heading over it. They are shown, they are
+copied into the two-column output, and they are flagged. A heading, where there
+is one, still wins and still reads at full confidence.
+
+A separator lost in the paste is recovered in the same place: `TGBU69954017548809`
+is one token, but ISO 6346 fixes the container at eleven characters, so the cut
+is not a guess about where it ends - and it is taken only when those eleven
+characters pass their check digit. Change one digit and the line is left alone
+rather than split into something invented.
+
+### What is still not read
 
 | Shape | Result |
 | --- | --- |
-| one cell per line | containers, no seals |
-| columns separated by single spaces | containers, no seals |
+| one cell per line, no heading | containers, no seals |
 
-Neither is guessed at. A column break cannot be told from a space inside a cell
-(`CT SSR 23/25` is one cell), and cutting a flat stream into rows of N is
-pairing by position, which is the one thing this module may not do.
+Reached only when the `text/html` flavour is absent and the rows have been
+flattened to a single stream. Cutting a flat stream into rows of N is pairing by
+position, which is the one thing this module may not do, so it is reported
+rather than guessed.
 
 ## Copying into a container template
 

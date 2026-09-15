@@ -23,9 +23,34 @@ import type { Confidence, ContainerNumberField, PairEvidence, SealField } from '
 /** 4 letters + 6 digits + check digit, tolerating the spacing people type. */
 const CONTAINER_RE = /\b[A-Z]{4}[\s-]?\d{6}[\s-]?\d\b/gi;
 
-/** Seals have no standard shape, so they are only recognised behind a label. */
+/**
+ * Seals have no standard shape, so they are only recognised behind a label -
+ * or in a column, which is the other thing that names them. See the seal
+ * column rules further down.
+ */
 const SEAL_LABEL_RE = /\b((?:carrier|shipper|customs|line|cntr|container)?\s*seals?)\s*(?:no\.?|number|nos\.?|#|id)?\s*[:\-]\s*([^\n\r|]+)/i;
 const SEAL_TOKEN_RE = /^[A-Z0-9][A-Z0-9-]{2,19}$/i;
+
+/** A whole line that is one container number and one other token, in either order. */
+const CONTAINER_TOKEN_RE = /^[A-Z]{4}\d{7}$/i;
+
+/**
+ * A container number written hard against the number that follows it, which is
+ * what a two-column list turns into when the separator is lost in the paste:
+ * "TGBU69954017548809" is TGBU6995401 and 7548809. ISO 6346 is fixed at eleven
+ * characters, so the cut is not a guess about where the boundary is - but it is
+ * only taken when those eleven characters pass their check digit, and only
+ * inside a column that other rows have already established.
+ */
+const RUN_TOGETHER_RE = /^([A-Z]{4}\d{7})(\d{4,12})$/i;
+
+/**
+ * Tokens that sit next to a container number without being a seal: the ISO
+ * size-type code ("40HC", "22G1"), and a weight with its unit. Everything else
+ * that carries a digit is allowed, because a seal number genuinely can be
+ * almost anything.
+ */
+const NOT_A_SEAL_RE = /^(?:\d{2}[A-Z]{2}\d?|\d{2}[A-Z]\d|\d+(?:\.\d+)?(?:KG|KGS|LB|LBS|MT|CBM|M3)|\d{1,3}(?:ST|PCS|PKG|CTN|CTNS|BAG|BAGS|PLT)?)$/i;
 
 export type SealKind = 'carrier' | 'shipper';
 
@@ -90,6 +115,133 @@ function findSeals(line: string): SealMention[] {
     }
     rest = rest.slice(match.index + match[0].length);
   }
+  return found;
+}
+
+/**
+ * The seal column.
+ *
+ * A carrier email very often carries no table and no labels at all, just a list:
+ *
+ *     MSDU7776110  7548801
+ *     MEDU7011340  7548805
+ *     TGBU6995401  7548809
+ *
+ * Two columns, no heading. Read line by line that is a container and one
+ * unlabelled token, and an unlabelled token is never called a seal, because a
+ * seal has no shape to recognise it by. So every one of those seals was lost.
+ *
+ * What names the second column is the column itself. One line proves nothing;
+ * a run of lines that are all one container and all one other token is a
+ * two-column list, and the second column is the seal column. That is the same
+ * kind of evidence a heading gives, arrived at from the shape of the block
+ * rather than from a word above it, and the pairing it produces is still the
+ * container and the seal the author wrote on one line together. Nothing here
+ * pairs the nth container with the nth seal of a separate list; there is no
+ * separate list.
+ *
+ * The guards are what keep an ordinary two-column list from being read as
+ * seals. A block is a seal column only when:
+ *
+ *   - it is at least two lines, so one stray line cannot make a column;
+ *   - every line is exactly one container number and exactly one other token;
+ *   - the container is on the same side on every line;
+ *   - every other token carries a digit, is not itself a container number, and
+ *     is not a size-type code or a weight;
+ *   - the tokens are not all the same, because a seal is unique to a container
+ *     and a column repeating one value is a booking number or a box type.
+ *
+ * The seals it finds are marked `low`, never `high`: the review screen shows
+ * them with "?" and the words "read, but not certain", because a column that
+ * named itself is weaker evidence than a column with a heading over it. They
+ * are shown, they are copied, and they are flagged - which is the whole point.
+ */
+
+interface ColumnLine {
+  container: string;
+  seal: string;
+  /** Which side the container was on, so a block cannot change its mind halfway. */
+  containerFirst: boolean;
+}
+
+function looksLikeSeal(token: string): boolean {
+  if (!SEAL_TOKEN_RE.test(token)) return false;
+  if (!/\d/.test(token)) return false;
+  if (CONTAINER_TOKEN_RE.test(token.replace(/[\s-]/g, ''))) return false;
+  return !NOT_A_SEAL_RE.test(token);
+}
+
+/** One line of a two-column list, or null when the line is anything else. */
+export function twoColumnLine(line: string): ColumnLine | null {
+  const tokens = line.trim().split(/[\s|\t]+/).filter((token) => token !== '');
+
+  if (tokens.length === 1) {
+    // The separator was lost in the paste. Only split where ISO 6346 says the
+    // container ends AND the check digit agrees that it really ended there.
+    const run = (tokens[0] as string).match(RUN_TOGETHER_RE);
+    if (!run) return null;
+    const container = run[1] as string;
+    const seal = run[2] as string;
+    if (validateContainerNumber(container) !== 'valid' || !looksLikeSeal(seal)) return null;
+    return { container, seal, containerFirst: true };
+  }
+
+  if (tokens.length !== 2) return null;
+  const [first, second] = tokens as [string, string];
+  const firstIsContainer = CONTAINER_TOKEN_RE.test(first.replace(/[\s-]/g, ''));
+  const secondIsContainer = CONTAINER_TOKEN_RE.test(second.replace(/[\s-]/g, ''));
+  // Exactly one of the two must be a container; two containers on a line is the
+  // "several containers, no evidence" case and stays that way.
+  if (firstIsContainer === secondIsContainer) return null;
+  const container = firstIsContainer ? first : second;
+  const seal = firstIsContainer ? second : first;
+  return looksLikeSeal(seal) ? { container, seal, containerFirst: firstIsContainer } : null;
+}
+
+/**
+ * Every line that belongs to a seal column, by line index. Blank lines are
+ * skipped rather than ending a block, because a list pasted out of a mail
+ * client often has one between every row.
+ */
+export function detectSealColumn(lines: string[]): Map<number, ColumnLine> {
+  const found = new Map<number, ColumnLine>();
+  let index = 0;
+
+  while (index < lines.length) {
+    if ((lines[index] as string).trim() === '') {
+      index += 1;
+      continue;
+    }
+
+    const block: Array<{ at: number; parsed: ColumnLine }> = [];
+    let at = index;
+    let orientation: boolean | null = null;
+    while (at < lines.length) {
+      const line = lines[at] as string;
+      if (line.trim() === '') {
+        at += 1;
+        continue;
+      }
+      const parsed = twoColumnLine(line);
+      if (!parsed) break;
+      if (orientation === null) orientation = parsed.containerFirst;
+      else if (orientation !== parsed.containerFirst) break;
+      block.push({ at, parsed });
+      at += 1;
+    }
+
+    if (block.length >= 2) {
+      const seals = block.map((item) => item.parsed.seal.toUpperCase());
+      // A column that repeats one value is a booking number or a box type, not
+      // a set of seals: a seal belongs to exactly one container.
+      if (new Set(seals).size === seals.length) {
+        for (const item of block) found.set(item.at, item.parsed);
+      }
+    }
+
+    index = at > index ? at : index + 1;
+  }
+
   return found;
 }
 
@@ -175,6 +327,9 @@ export function scanLines(lines: string[]): LineScan {
   const containers: ContainerMention[] = [];
   const unassignedSeals: SealField[] = [];
   let header: TableHeader | null = null;
+  // Worked out over the whole text first: one line cannot tell you it is part
+  // of a column, only the block around it can.
+  const sealColumn = detectSealColumn(lines);
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] as string;
@@ -183,6 +338,20 @@ export function scanLines(lines: string[]): LineScan {
     if (line.trim() === '') {
       // A blank line ends a table.
       header = null;
+      continue;
+    }
+
+    // A heading row is still better evidence, so the table rules below win
+    // wherever there is a heading to win with.
+    const column = header ? undefined : sealColumn.get(index);
+    if (column) {
+      containers.push({
+        number: toContainerNumber(column.container),
+        carrierSeal: { raw: column.seal, confidence: 'low', label: 'Second column, no heading' },
+        shipperSeal: null,
+        evidence: 'same_line',
+        line: lineNumber,
+      });
       continue;
     }
 
