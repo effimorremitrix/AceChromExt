@@ -58,6 +58,12 @@ build. The package then holds the transport identifiers and nothing
 commercial: cargo, weights and the consignee are typed in INTTRA by hand.
 Loading a package made in A or B is the normal case.
 
+**D. In the operator dashboard.** Import the workbook from A (or the package
+from A, B or C), paste the email, approve, build, resolve, and download
+`filing-package.json`. The same builder, the same file; the dashboard adds
+the readiness and provenance screens and holds several shipments side by
+side. `docs/WEB-DASHBOARD.md`.
+
 ## The package, in one screen
 
 ```
@@ -128,16 +134,29 @@ both show it.
    INTTRA.
 4. **Submission**, always by the operator.
 
-## Design for a hosted UI later
+## The hosted UI
 
-The package is the contract. A hosted management UI that receives the
-companion's `CanonicalShipment` and Deckhand's `DeckhandShipment`, runs the
-same `buildFilingPackage`, and hands `filing-package.json` to the extensions
-changes nothing in `deckhand/`, `shared/`, or either extension. The
-extensions' `WebSource` stays declared and unavailable until that decision is
-made, because it would mean giving an extension a network permission.
+The package is the contract, and the operator dashboard (`web/`) is the
+hosted UI built on it: it takes the companion's workbook or package and the
+email, runs the same `buildFilingPackage`, and hands `filing-package.json` to
+the extensions as a downloaded file. It changed nothing in `deckhand/`,
+`shared/`, or either extension, and it is hosted as static files only: the
+page runs in the browser and sends nothing anywhere.
+
+The extensions' `WebSource` stays declared and unavailable. A channel from
+the dashboard straight into an extension would mean giving an extension a
+network permission or an `externally_connectable` entry, and that remains a
+decision about the security posture of the whole tool rather than a code
+change. When it is made, it replaces the download-and-import step and
+nothing else; see `docs/WEB-DASHBOARD.md` section 4.
 
 ## Tests
+
+`tests/web/workflow.test.ts` runs the qbXML fixture through the companion
+into its workbook, imports that in the dashboard, extracts the sanitized
+booking email, approves, builds, writes `filing-package.json`, re-imports it
+and asserts every canonical value is unchanged; then writes the ACE workbook
+and reads it back through the ACE Helper's reader with the same assertion.
 
 `tests/filingPackageEndToEnd.test.ts` runs the whole chain with nothing
 stubbed: the qbXML fixture through the real adapter, the sanitized booking

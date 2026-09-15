@@ -2,7 +2,7 @@
   "name": "ace-helper",
   "version": "0.1.0",
   "private": true,
-  "description": "ACE Helper and INTTRA Helper - Chrome extensions that reduce manual data entry for U.S. Customs ACE/AES export filings and INTTRA shipping instructions, fed by a QuickBooks companion and Deckhand email extraction.",
+  "description": "ACE Helper and INTTRA Helper - Chrome extensions that reduce manual data entry for U.S. Customs ACE/AES export filings and INTTRA shipping instructions, fed by a QuickBooks companion and Deckhand email extraction, with a browser-only operator dashboard.",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run typecheck && npm run test && npm run template && npm run build && npm run check:bundle && npm run build:inttra && npm run check:bundle:inttra && npm run build:companion",
+    "verify": "npm run typecheck && npm run test && npm run template && npm run build && npm run check:bundle && npm run build:inttra && npm run check:bundle:inttra && npm run build:companion && npm run build:web && npm run check:bundle:web",
     "icons": "node scripts/generate-icons.mjs",
     "smoke": "node tests/e2e/smoke.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
@@ -21,7 +21,11 @@
     "build:inttra": "node scripts/build-inttra.mjs",
     "build:inttra:watch": "node scripts/build-inttra.mjs --watch",
     "check:bundle:inttra": "node scripts/check-bundle.mjs --dist dist-inttra --allow inttra.com,e2open.com",
-    "icons:inttra": "node scripts/generate-icons.mjs --inttra"
+    "icons:inttra": "node scripts/generate-icons.mjs --inttra",
+    "build:web": "node scripts/build-web.mjs",
+    "build:web:watch": "node scripts/build-web.mjs --watch",
+    "dev:web": "node scripts/build-web.mjs --serve",
+    "check:bundle:web": "node scripts/check-bundle.mjs --dist dist-web --allow none"
   },
   "dependencies": {
     "xlsx": "0.18.5"

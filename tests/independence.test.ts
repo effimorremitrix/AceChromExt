@@ -5,9 +5,15 @@
  * retired. Everything worth keeping was migrated into deckhand/ and shared/,
  * and this test makes sure nothing in the software, its build, or its
  * operating instructions reaches back: no import outside this repository, no
- * dependency on that repository's runtime (a Cloudflare worker, a hosted
- * model API), and no mention of it anywhere but one historical note in
+ * dependency on that repository's runtime (a hosted worker with a model API
+ * behind it), and no mention of it anywhere but one historical note in
  * docs/DECKHAND.md.
+ *
+ * The operator dashboard (web/) is hosted, and that is the one place a
+ * hosting provider may be named: it is a static page, with no worker script
+ * and no service behind it, checked by tests/webInvariants.test.ts. The
+ * extensions, Deckhand, the filing package and the companion must still not
+ * know a hosting provider exists.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -35,7 +41,11 @@ const codeFiles = textFiles.filter(({ path }) => /\.(ts|mjs|js|json|html|css|yml
 
 /** The one place the origin may be mentioned, as history. */
 const HISTORY_NOTE = 'docs/DECKHAND.md';
-const RETIRED = /\byigal\b|effimorremitrix\/yigal|tidelane|worker\/deckhand|deckhand-brief|wrangler|cloudflare|workers\.dev|@anthropic-ai\/sdk|ANTHROPIC_API_KEY/i;
+const RETIRED = /\byigal\b|effimorremitrix\/yigal|tidelane|worker\/deckhand|deckhand-brief|@anthropic-ai\/sdk|ANTHROPIC_API_KEY/i;
+
+/** A hosting provider or a hosted model API. Allowed only where the dashboard is defined, built, tested and documented. */
+const HOSTED_RUNTIME = /wrangler|cloudflare|workers\.dev|pages\.dev|anthropic|openai/i;
+const HOSTED_RUNTIME_ALLOWED = [/^web\//, /^scripts\/build-web\.mjs$/, /^tests\/web\//, /^tests\/webInvariants\.test\.ts$/, /^tests\/independence\.test\.ts$/, /^\.github\/workflows\//, /^docs\/.*\.md$/, /^README\.md$/, /^CLAUDE\.md$/, /^package\.json$/];
 
 describe('no dependency on the retired repository', () => {
   it('names it nowhere in code, configuration, fixtures or workflows', () => {
@@ -50,6 +60,18 @@ describe('no dependency on the retired repository', () => {
       .map(({ path }) => path);
     expect(offenders).toEqual([]);
     expect(existsSync(join(ROOT, HISTORY_NOTE))).toBe(true);
+  });
+
+  it('keeps the local programs free of any hosting provider', () => {
+    // The extensions, Deckhand, the filing package, the companion, their
+    // builds and their tests: none may name the dashboard's host or a hosted
+    // model API. Only the dashboard's own files, its build, its tests, the
+    // workflows and the documentation may.
+    const offenders = textFiles
+      .filter(({ path }) => !HOSTED_RUNTIME_ALLOWED.some((pattern) => pattern.test(path)))
+      .filter(({ absolute }) => HOSTED_RUNTIME.test(readFileSync(absolute, 'utf8')))
+      .map(({ path }) => path);
+    expect(offenders).toEqual([]);
   });
 
   it('declares no runtime dependency that would need a hosted service', () => {

@@ -1,0 +1,79 @@
+# Deploys the operator dashboard (dist-web/) to Cloudflare as static assets.
+#
+# Opt-in, twice over: it runs only when started by hand, or on a push to
+# main when the repository variable DEPLOY_WEB is "true"; and it needs two
+# repository secrets that the CI workflow never sees:
+#
+#   CLOUDFLARE_API_TOKEN    an API token with the "Workers Scripts: Edit" permission
+#   CLOUDFLARE_ACCOUNT_ID   the account the dashboard is deployed into
+#
+# What is deployed is a folder of static files. There is no Worker script,
+# no binding and no server-side code; web/wrangler.jsonc says so and
+# tests/webInvariants.test.ts checks it. Shipment data never reaches the
+# host: the page has connect-src 'none' and everything happens in the
+# operator's browser. See docs/WEB-DASHBOARD.md.
+
+name: Deploy operator dashboard
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Which dashboard to deploy'
+        type: choice
+        options: [production, preview]
+        default: preview
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'scripts/build-web.mjs'
+      - 'extension/styles/ui.css'
+      - 'src/**'
+      - 'shared/**'
+      - 'deckhand/**'
+      - 'inttra-extension/src/mappings/**'
+      - 'companion/src/excel/**'
+      - '.github/workflows/deploy-web.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-web-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build, verify and deploy (${{ github.event.inputs.environment || 'production' }})
+    if: github.event_name == 'workflow_dispatch' || vars.DEPLOY_WEB == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'production' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: The dashboard's own promises hold
+        # The unit suite includes tests/webInvariants.test.ts: no network API,
+        # no browser storage, no worker script, no binding. Nothing is
+        # deployed if any of that changed.
+        run: npm test -- tests/webInvariants.test.ts tests/independence.test.ts tests/web
+
+      - run: npm run build:web
+
+      - name: No network API and no host in the built page
+        run: npm run check:bundle:web
+
+      - name: Deploy the static files
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config web/wrangler.jsonc ${{ (github.event.inputs.environment || 'production') == 'preview' && '--env preview' || '' }}

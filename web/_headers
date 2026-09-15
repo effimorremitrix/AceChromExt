@@ -1,0 +1,11 @@
+# Response headers for the hosted dashboard. Served by the static-asset host
+# for every path. The page's own <meta> CSP says the same thing, so a host
+# that ignores this file still gets the policy.
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cache-Control: no-store

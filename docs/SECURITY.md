@@ -1,12 +1,15 @@
 # Security and privacy
 
-This document covers three programs that ship from this repository:
+This document covers four programs that ship from this repository:
 
 - **the ACE Helper extension** (`src/` -> `dist/`), which runs in Chrome;
 - **the INTTRA Helper extension** (`inttra-extension/` -> `dist-inttra/`),
   which runs in Chrome, separately; see [INTTRA Helper](#the-inttra-helper);
 - **the QuickBooks companion** (`companion/` -> `dist-companion/`), which runs
-  on the Windows PC beside QuickBooks Desktop.
+  on the Windows PC beside QuickBooks Desktop;
+- **the operator dashboard** (`web/` -> `dist-web/`), a static page hosted on
+  Cloudflare that runs in the operator's browser; see
+  [The operator dashboard](#the-operator-dashboard).
 
 Two pure modules are bundled into all three and carry no capability of their
 own: `deckhand/` (email extraction) and `shared/` (the filing package). See
@@ -125,6 +128,13 @@ identifiers used by SheetJS to compare spreadsheet markup (they are never
 dereferenced, which the forbidden-API list above proves) and our own
 `cbp.dhs.gov` match patterns. Both checks were verified to fail when
 deliberately violated.
+
+The namespace allowlist also carries the ODF and VML identifiers
+(`docs.oasis-open.org`, `openoffice.org`, and SheetJS's literal
+`macVmlSchemaUri` token) that come with SheetJS's *writer*. Only the
+dashboard bundles the writer (it downloads a workbook); the two extension
+bundles never contain those strings, and the forbidden-API list proves no
+bundle can dereference any of them.
 
 CI (`.github/workflows/ci.yml`) runs the unit suite, the bundle check, and the
 end-to-end smoke test on every pull request, so none of these guarantees can
@@ -258,9 +268,51 @@ The companion's `ace-export package` and `ace-export deckhand` write files to
 the directory the operator names and nowhere else. `filing-package-*.json`
 and `deckhand-*.json` are in `.gitignore`.
 
+## The operator dashboard
+
+A static web page, hosted on Cloudflare, that runs the same import,
+extraction, package and readiness code as the panels, in the operator's
+browser. The hosting serves files; it never receives a shipment.
+
+| Not done | Enforced by |
+| --- | --- |
+| Any request from the page | no `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, worker or `postMessage` in `web/src` (`tests/webInvariants.test.ts`); none in the built bundle (`npm run check:bundle:web`, empty host allowlist); `connect-src 'none'` in the page's `<meta>` CSP and in the `_headers` the host serves |
+| Server-side code or storage | `web/wrangler.jsonc` has no `main` and no binding of any kind; the test fails if one appears |
+| Keeping a shipment in the browser | no `localStorage`, `sessionStorage`, IndexedDB, `caches`, `navigator.storage` or cookie; the shipment lives in page memory and is gone with the tab. The package file is how it is kept |
+| Filling a portal | no import of any content script, field writer, filler or grid writer; no `chrome.*`; the hand-off to the extensions is a downloaded file |
+| Loading anything remote | `index.html` loads one local script and two local stylesheets; the CSP is `default-src 'none'` with `script-src 'self'`, `style-src 'self'`, `form-action 'none'`, `base-uri 'none'`, `frame-ancestors 'none'` |
+| Credential handling | there is no login; the page holds nothing until a file is chosen. Who may open the URL is a hosting decision (Cloudflare Access, an internal name), outside the page |
+| Changing the extensions | both manifests are asserted unchanged (storage only, portal hosts only, no dashboard host), and nothing under `src/`, `inttra-extension/`, `companion/`, `deckhand/` or `shared/` may import from `web/` |
+| Depending on the host | `wrangler` is not a dependency; the repository's dependency list stays `xlsx`. The local programs may not name a hosting provider (`tests/independence.test.ts`) |
+
+| Data | Where | Lifetime |
+| --- | --- | --- |
+| Imported workbook, email text, extraction, package, decisions | page memory | until the tab closes, or Close shipment |
+| Downloaded `filing-package.json`, `ACE_Invoice_*.xlsx` | wherever the operator saves them | theirs |
+| Anything on Cloudflare | the static files of the page | no shipment data, ever |
+
+Response headers served with the page: the CSP above,
+`Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`,
+`X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy: same-origin`,
+`Cache-Control: no-store`.
+
+Threat model notes:
+
+- **The hosting account** can change the page. That is the one trust the
+  dashboard adds: whoever can deploy can serve a different `dashboard.js`.
+  The deploy workflow re-runs the invariants and the bundle check before
+  deploying, and the deployed bundle can be compared to a local
+  `npm run build:web` of the same commit. A compromised host still cannot
+  reach QuickBooks or either portal: the page has no route to any of them.
+- **A malicious file** is data, exactly as in the extensions: the workbook
+  is parsed into arrays, the package and the email are parsed by the shared
+  defensive parsers, and everything reaches the DOM as text.
+- **Another tab** cannot read the page's memory; the page opens no channel
+  to any other context.
+
 ## Reporting
 
-Security issues in these extensions should go to the repository owner privately,
+Security issues in these programs should go to the repository owner privately,
 not into a public issue.
 
 
