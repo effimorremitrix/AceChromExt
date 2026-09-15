@@ -207,8 +207,13 @@ Worker's settings; nothing in the repository changes for it.
 - Runs on **Run workflow** (choose `preview` or `production`), or on a push to
   `main` that touches the dashboard or the code it reuses, **only if** the
   repository variable `DEPLOY_WEB` is `true`.
-- Needs the two secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
-  The CI workflow does not see them; it only builds and checks.
+- Needs the two secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`,
+  added under **Settings → Secrets and variables → Actions** (repository
+  secrets), or under **Settings → Environments → production** / **preview**
+  to scope them to one environment. Without them the deploy step stops with
+  "it's necessary to set a CLOUDFLARE_API_TOKEN environment variable"; the
+  steps before it (tests, build, bundle check) still run. The CI workflow
+  does not see the secrets; it only builds and checks.
 - Before deploying it re-runs the dashboard's invariant and workflow tests
   and the bundle check, so a page that gained a network call or a binding is
   never deployed.
