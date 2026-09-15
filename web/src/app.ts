@@ -42,6 +42,8 @@ import { renderImport } from './views/import.js';
 import { renderAce } from './views/ace.js';
 import { renderInttra } from './views/inttra.js';
 import { renderProvenance } from './views/provenance.js';
+import { renderHelp, scrollToAnchor } from './views/help.js';
+import type { GuideId } from './guides.js';
 
 declare const __DASHBOARD_VERSION__: string;
 declare const __DASHBOARD_BUILT_AT__: string;
@@ -59,6 +61,8 @@ export interface DashboardState {
   /** The commodity line the ACE tab describes. */
   aceLine: number | null;
   provenanceQuery: string;
+  /** Which guide the Help tab shows. */
+  guide: GuideId;
 }
 
 const TABS: Array<{ id: DashboardTab; label: string }> = [
@@ -69,6 +73,7 @@ const TABS: Array<{ id: DashboardTab; label: string }> = [
   { id: 'ace', label: 'ACE readiness' },
   { id: 'inttra', label: 'INTTRA readiness' },
   { id: 'provenance', label: 'Provenance' },
+  { id: 'help', label: 'Help' },
 ];
 
 /** What a view may ask the app to do. */
@@ -97,6 +102,7 @@ export function mountDashboard(root: HTMLElement, initial: Partial<DashboardStat
     settings: DEFAULT_SETTINGS,
     aceLine: null,
     provenanceQuery: '',
+    guide: 'user',
     ...initial,
   };
   if (!state.workspace.shipments.length) state.workspace = addShipment(state.workspace, newShipment());
@@ -283,6 +289,16 @@ export function mountDashboard(root: HTMLElement, initial: Partial<DashboardStat
   }
 
   function renderSection(): HTMLElement {
+    if (state.tab === 'help') {
+      return renderHelp(actions, {
+        guide: state.guide,
+        onSelect: (guide, anchor) => {
+          state.guide = guide;
+          render();
+          if (anchor) scrollToAnchor(guide, anchor);
+        },
+      });
+    }
     const record = activeShipment(state.workspace);
     if (!record) return el('section', { className: 'panel-section' }, [el('p', { className: 'web-empty', text: 'Create a shipment to begin.' })]);
     switch (state.tab) {

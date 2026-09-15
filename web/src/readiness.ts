@@ -227,7 +227,7 @@ export function inttraReadiness(record: ShipmentRecord): InttraReadiness {
 
 // --------------------------------------------------------------- next steps
 
-export type DashboardTab = 'overview' | 'import' | 'deckhand' | 'package' | 'ace' | 'inttra' | 'provenance';
+export type DashboardTab = 'overview' | 'import' | 'deckhand' | 'package' | 'ace' | 'inttra' | 'provenance' | 'help';
 
 export interface NextAction {
   /** What to do, as an instruction. */

@@ -179,13 +179,14 @@ Full guide: **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md)**
 npm run dev:web       # http://127.0.0.1:8788/ - the same page the host serves
 ```
 
-One screen, seven tabs, in the order of the work: **Import** the workbook
+One screen, eight tabs, in the order of the work: **Import** the workbook
 `ace-export` wrote (or the template, or a package), **Deckhand** the email,
 **Package** it, read **ACE readiness** and **INTTRA readiness**, ask
 **Provenance** where any value came from, and on **Overview** read the
 numbered list of what is still to do, then download `filing-package.json`
 and, if wanted, the ACE workbook. Both go into the extensions through the
-same Import they always had.
+same Import they always had. **Help** shows this repository's user guide
+and setup guide inside the page.
 
 It is hosted on Cloudflare as static files and runs entirely in the browser:
 no server, no account, no upload, `connect-src 'none'`. QuickBooks stays on
