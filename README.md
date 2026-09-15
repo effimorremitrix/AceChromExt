@@ -2,15 +2,18 @@
 
 [![CI](https://github.com/effimorremitrix/AceChromExt/actions/workflows/ci.yml/badge.svg)](https://github.com/effimorremitrix/AceChromExt/actions/workflows/ci.yml)
 
-Two Chrome (Manifest V3) extensions and two local programs that cut the manual
-typing out of preparing U.S. Customs **ACE / AES export filings** and **INTTRA
-shipping instructions**, fed by QuickBooks Desktop and by the emails the
-carrier and the producer send.
+Two Chrome (Manifest V3) extensions, two local programs and one hosted,
+browser-only dashboard that cut the manual typing out of preparing U.S.
+Customs **ACE / AES export filings** and **INTTRA shipping instructions**,
+fed by QuickBooks Desktop and by the emails the carrier and the producer send.
 
 ```
   QuickBooks Desktop ──▶ ace-export ──▶ CanonicalShipment ─┐
                                                            ├──▶ FilingPackage ──▶ ACE Helper    ──▶ ACE     (you submit)
   Email / document ────▶ Deckhand ────▶ DeckhandShipment ──┘   (filing-package.json) INTTRA Helper ──▶ INTTRA  (you submit)
+                                            ▲
+                     Operator Dashboard (web/, hosted as static files, runs in the browser):
+                     import, extract, review, build, resolve, see readiness, download the package
 ```
 
 - **ACE Helper** fills ACE from a spreadsheet or from a filing package, with an
@@ -25,6 +28,12 @@ carrier and the producer send.
 - **The filing package** composes the invoice and the extraction, records
   where every value came from, flags every disagreement, and is a plain JSON
   file both extensions read. **[docs/END-TO-END-FLOW.md](docs/END-TO-END-FLOW.md)**
+- **The operator dashboard** is one web page for the whole preparation:
+  import the workbook or a package, run Deckhand, approve, build the package,
+  resolve conflicts, see ACE and INTTRA readiness and where every value came
+  from, download the files the extensions read. Hosted on Cloudflare as
+  static files; everything runs in the browser and nothing is uploaded.
+  **[docs/WEB-DASHBOARD.md](docs/WEB-DASHBOARD.md)**
 
 The ACE Helper does four things, and stops there:
 
@@ -49,7 +58,8 @@ typed either: **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md)
 - **Never** navigate a portal for you, or press Add Row in a grid.
 - **Never** touch a sign-in, MFA, CAPTCHA, or any other security control.
 - **Never** send shipment or customer data anywhere; neither extension has a
-  network permission and both CSPs forbid outbound connections.
+  network permission, both CSPs forbid outbound connections, and the hosted
+  dashboard's page has `connect-src 'none'` and no network API in its bundle.
 - **Never** store a credential, because they never see one.
 - **Never** pair a seal with a container by position, or correct a container
   number that fails its check digit.
@@ -58,13 +68,14 @@ typed either: **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md)
 
 ## Status
 
-**Phases 1 to 4 are built. Three caveats you must read.**
+**Phases 1 to 5 are built. Three caveats you must read.**
 
-The two extensions and the companion build, install, and are covered by 700
-unit tests - including an automated end-to-end fixture that runs the real
-chain from a QuickBooks invoice plus a booking email to a filled ACE form and
-a filled INTTRA container grid - plus a smoke test that drives a real Chromium
-with a mocked ACE host.
+The two extensions, the companion and the dashboard build, install, and are
+covered by the unit suite - including an automated end-to-end fixture that
+runs the real chain from a QuickBooks invoice plus a booking email to a
+filled ACE form and a filled INTTRA container grid, and a second one that
+runs the same fixture through the dashboard into a package file and back -
+plus a smoke test that drives a real Chromium with a mocked ACE host.
 
 1. **The ACE selectors match by label, not yet by id.** The label wording of
    every field on Steps 1-3 (Shipment, Parties, Commodities) was captured
@@ -95,11 +106,16 @@ with a mocked ACE host.
    the capture procedure. Deckhand likewise has been shown fixtures, not a
    real inbox.
 
+The dashboard (Phase 5) changes none of this: it prepares the same files the
+extensions already read, and it has not yet been deployed to a real account
+or used on a real shipment. **[docs/WEB-DASHBOARD.md](docs/WEB-DASHBOARD.md)
+section 9** lists what it still needs.
+
 ## Quick start
 
 ```bash
 npm install
-npm run verify        # typecheck + tests + template + both builds + bundle checks -> dist/, dist-inttra/
+npm run verify        # typecheck + tests + template + all builds + bundle checks -> dist/, dist-inttra/, dist-web/
 ```
 
 Then `chrome://extensions` -> Developer mode -> **Load unpacked** -> pick
@@ -157,6 +173,26 @@ once per item, and anything still missing is flagged rather than guessed.
 
 Full guide: **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md)**
 
+## The operator dashboard
+
+```bash
+npm run dev:web       # http://127.0.0.1:8788/ - the same page the host serves
+```
+
+One screen, seven tabs, in the order of the work: **Import** the workbook
+`ace-export` wrote (or the template, or a package), **Deckhand** the email,
+**Package** it, read **ACE readiness** and **INTTRA readiness**, ask
+**Provenance** where any value came from, and on **Overview** read the
+numbered list of what is still to do, then download `filing-package.json`
+and, if wanted, the ACE workbook. Both go into the extensions through the
+same Import they always had.
+
+It is hosted on Cloudflare as static files and runs entirely in the browser:
+no server, no account, no upload, `connect-src 'none'`. QuickBooks stays on
+the Windows PC behind `ace-export`; the file is carried over. Deploying:
+`npx wrangler deploy --config web/wrangler.jsonc`, or the opt-in
+`deploy-web.yml` workflow. **[docs/WEB-DASHBOARD.md](docs/WEB-DASHBOARD.md)**
+
 ## Starting from an email
 
 Paste the carrier's or producer's email into the **Deckhand** tab of either
@@ -204,6 +240,8 @@ src/
                   deckhandTab + packageTab (shared with the INTTRA Helper)
   core/           settings, messages, store, sessionLog, logger
   background/     service worker
+web/              the operator dashboard: index.html, _headers, wrangler.jsonc (static assets only),
+                  src/ (state, workflow, readiness, exportExcel, files, app, views)
 companion/        QuickBooks Desktop companion        (Node, not shipped in the extension)
   src/qbxml/      XML reader, request builders, response parsers
   src/transport/  COM bridge (32-bit PowerShell) | saved-response replay
@@ -214,14 +252,15 @@ companion/        QuickBooks Desktop companion        (Node, not shipped in the 
   src/package/    ace-export package / deckhand: the filing package on disk
   powershell/     QbxmlRequest.ps1
 templates/        ACE_Import_Template.xlsx
-tests/            700 unit tests, security invariants for both extensions, a Phase 1
-                  regression suite, two end-to-end fixtures, a Chromium smoke test,
-                  mock ACE + INTTRA screens, qbXML and sanitized email fixtures,
+tests/            unit tests, security invariants for both extensions and the dashboard,
+                  a Phase 1 regression suite, three end-to-end fixtures, a Chromium smoke
+                  test, mock ACE + INTTRA screens, qbXML and sanitized email fixtures,
                   and an independence test (no dependency outside this repository)
 docs/             USER-GUIDE (start here) | SETUP-GUIDE | INSTALLATION |
                   ACE-MAPPING | ARCHITECTURE | SECURITY | QUICKBOOKS-INTEGRATION |
-                  DECKHAND | INTTRA-INTEGRATION | END-TO-END-FLOW
-.github/workflows CI: verify (Node 20 + 22), both bundle checks, e2e smoke
+                  DECKHAND | INTTRA-INTEGRATION | END-TO-END-FLOW | WEB-DASHBOARD
+.github/workflows CI: verify (Node 20 + 22), three bundle checks, e2e smoke;
+                  deploy-web (opt-in, needs Cloudflare secrets)
 ```
 
 Data flows one way: `QuickBooks -> canonical model -> Excel -> canonical model
@@ -241,22 +280,24 @@ More: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**,
 
 | Command | Does |
 | --- | --- |
-| `npm run verify` | typecheck + tests + template + both extension builds + both bundle checks + companion build |
+| `npm run verify` | typecheck + tests + template + both extension builds + both bundle checks + companion build + dashboard build + its bundle check |
 | `npm run build` / `build:watch` | build `dist/` (the ACE Helper) |
 | `npm run build:inttra` / `build:inttra:watch` | build `dist-inttra/` (the INTTRA Helper) |
 | `npm run build:companion` | build `dist-companion/` (the QuickBooks companion) |
+| `npm run build:web` / `dev:web` | build `dist-web/` (the operator dashboard); `dev:web` also serves it on `127.0.0.1:8788` |
 | `npm run qb` | run the companion: `npm run qb -- --help` |
 | `npm test` / `test:watch` | vitest (700 tests) |
 | `npm run smoke` | end-to-end test in real Chromium against a mocked ACE host (needs Chrome for Testing or a Playwright Chromium; see docs/INSTALLATION.md) |
 | `npm run check:bundle` | supply-chain check on `dist/`: no eval, no network APIs, no URL host but CBP |
 | `npm run check:bundle:inttra` | the same on `dist-inttra/`, allowing only INTTRA and e2open hosts |
+| `npm run check:bundle:web` | the same on `dist-web/`, allowing no host at all |
 | `npm run typecheck` | tsc, no emit |
 | `npm run template` | regenerate the import template |
 | `npm run icons` / `icons:inttra` | regenerate the PNG icons of either extension |
 
 ## Compliance note
 
-ACE Helper and INTTRA Helper are data-entry aids. They do not validate a
-filing or a shipping instruction, do not give customs or shipping advice, and
-do not replace the filer's review. The accuracy of every AES filing and every
+ACE Helper, INTTRA Helper and the operator dashboard are data-entry aids.
+They do not validate a filing or a shipping instruction, do not give customs
+or shipping advice, and do not replace the filer's review. The accuracy of every AES filing and every
 shipping instruction remains the filer's legal responsibility.

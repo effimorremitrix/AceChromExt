@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The page can load its own script and stylesheet and nothing else. connect-src 'none' means no request of any kind can leave it. frame-ancestors is a header-only directive and lives in _headers. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" href="data:," />
+    <title>Operator Dashboard - ACE Helper, INTTRA Helper, Deckhand</title>
+    <link rel="stylesheet" href="styles/ui.css" />
+    <link rel="stylesheet" href="styles/dashboard.css" />
+  </head>
+  <body class="surface-web">
+    <noscript>The operator dashboard runs entirely in your browser and needs JavaScript. Nothing is sent to a server.</noscript>
+    <div id="root"></div>
+    <script src="dashboard.js"></script>
+  </body>
+</html>

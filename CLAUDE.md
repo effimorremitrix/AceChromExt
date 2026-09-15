@@ -75,13 +75,15 @@ empty.
 
 ---
 
-# ACE Helper, INTTRA Helper, Deckhand
+# ACE Helper, INTTRA Helper, Deckhand, the operator dashboard
 
 Two Chrome MV3 extensions (ACE Helper in `extension/` + `src/`, INTTRA Helper in
 `inttra-extension/`), a QuickBooks Desktop companion (`companion/`), an email
-extraction module (`deckhand/`) and the filing package that ties them together
-(`shared/`). See `README.md` for what they do, `docs/ARCHITECTURE.md` for how
-they fit, and `docs/END-TO-END-FLOW.md` for the whole chain.
+extraction module (`deckhand/`), the filing package that ties them together
+(`shared/`), and a browser-only operator dashboard hosted as static files
+(`web/`). See `README.md` for what they do, `docs/ARCHITECTURE.md` for how
+they fit, `docs/END-TO-END-FLOW.md` for the whole chain, and
+`docs/WEB-DASHBOARD.md` for the dashboard.
 
 **This repository stands alone.** Deckhand was migrated in from a retired
 repository; `tests/independence.test.ts` fails on any import outside this
@@ -92,11 +94,13 @@ repository outside the one history note in `docs/DECKHAND.md`. Keep it that way.
 
 | Command | Use |
 | --- | --- |
-| `npm run verify` | typecheck + 700 tests + template + both extension builds + both bundle checks + companion build. Run before every push. |
+| `npm run verify` | typecheck + tests + template + both extension builds + both bundle checks + companion build + dashboard build + its bundle check. Run before every push. |
 | `npm run build` / `build:watch` | build `dist/` (the ACE Helper) |
 | `npm run build:inttra` | build `dist-inttra/` (the INTTRA Helper) |
 | `npm run build:companion` | build `dist-companion/` (the QuickBooks companion) |
 | `npm run qb -- --help` | run the companion |
+| `npm run build:web` / `dev:web` | build `dist-web/` (the operator dashboard); `dev:web` serves it on `127.0.0.1:8788` |
+| `npm run check:bundle:web` | the supply-chain check on `dist-web/`, allowing no host at all |
 | `npm test` / `test:watch` | vitest |
 | `npm run smoke` | end-to-end in real Chrome against a mocked ACE host. Needs Chrome for Testing or a Playwright Chromium - **branded Chrome 137+ will not work** (see `docs/INSTALLATION.md`). |
 | `npm run check:bundle` / `check:bundle:inttra` | supply-chain check on `dist/` (CBP hosts only) and `dist-inttra/` (INTTRA/e2open hosts only) |
@@ -130,6 +134,19 @@ no credential handling. `deckhand/` and `shared/` are pure: no `chrome.*`, no
 DOM, no network, no import from either extension's content layer or from the
 companion, and no code path that pairs a seal with a container by position.
 
+`tests/webInvariants.test.ts` holds the dashboard's: `web/src` has no network
+API, no http(s) URL, no browser storage, no `chrome.*`, no import of any
+content script, filler, grid writer, extension storage or companion runtime;
+`index.html` and `_headers` keep `connect-src 'none'`; `web/wrangler.jsonc`
+has no `main` and no binding; `package.json` keeps `dependencies` at `xlsx`
+and no hosting-provider dev dependency; nothing under `src/`,
+`inttra-extension/`, `companion/`, `deckhand/` or `shared/` imports from
+`web/`. `tests/independence.test.ts` keeps any hosting provider's name out
+of the local programs: only `web/`, its build, its tests, the workflows and
+the docs may say it. Do not add a server, a binding, or persistence to the
+dashboard without the decision described in `docs/WEB-DASHBOARD.md`
+section 10.
+
 ## Where things live
 
 Data flows one way: `QuickBooks → canonical model → Excel → canonical model →
@@ -144,6 +161,8 @@ preview → ACE`.
 | an email shape Deckhand should read | a rule in `deckhand/src/extract/` + a fixture in `tests/fixtures/deckhand/`; never a rule that pairs by position |
 | a field in the filing package, or the merge policy | `shared/src/filingPackage.ts` + `shared/src/builder.ts` |
 | a document reader (PDF, mailbox) | implement `DocumentReader` in `deckhand/src/readers/`, register in `deckhand/src/extractor.ts` |
+| a dashboard screen | a renderer in `web/src/views/` over `ShipmentRecord`; the rules stay in `src/`, `shared/`, `deckhand/`. A workflow step is a pure function in `web/src/workflow.ts` |
+| the dashboard's hosting | `web/wrangler.jsonc` (static assets only), `web/_headers`, `.github/workflows/deploy-web.yml` |
 | a transformation rule | `src/ace/transformers/` + register in `index.ts` |
 | a validation rule | `src/excel/validator.ts` |
 | a selector that ACE changed | the mapping's `candidates`, per `docs/ACE-MAPPING.md` |
@@ -166,7 +185,7 @@ transformation engine.
 
 ## Current state
 
-Four things are built but not verified against the real system, and all must
+Five things are built but not verified against the real system, and all must
 stay honestly described:
 
 1. The ACE selectors are **verified by label wording only**. The labels of
@@ -199,3 +218,10 @@ stay honestly described:
    PDF and image reading are declared and unavailable, on purpose, because
    both would need a network service or a dependency that fails the bundle
    check. Do not describe them as supported.
+
+5. The operator dashboard has **not been deployed to a real Cloudflare
+   account from this repository, nor used on a real shipment**. It is
+   tested against the same fixtures as everything else, and it changes
+   nothing about items 1 to 4: it prepares the same files the extensions
+   already read. Do not describe it as verified in production, and do not
+   claim that hosting it resolves any of the caveats above.

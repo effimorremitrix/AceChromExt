@@ -156,7 +156,7 @@ function auditRows(shipment: CanonicalShipment, origins: OriginIndex, options: W
   return rows;
 }
 
-function checkRows(validation: ValidationResult): Cell[][] {
+export function checkRows(validation: ValidationResult): Cell[][] {
   const rows: Cell[][] = [
     ['Validation at the moment of export', ''],
     ['Errors', validation.errors],

@@ -9,9 +9,12 @@
  *
  *   npm run check:bundle             dist/        (the ACE Helper; cbp.dhs.gov only)
  *   npm run check:bundle:inttra      dist-inttra/ (the INTTRA Helper; inttra.com and e2open.com only)
+ *   npm run check:bundle:web         dist-web/    (the operator dashboard; no host at all)
  *
  * The two extensions are checked separately, each against its own host
- * allowlist, so neither can pick up the other's hosts.
+ * allowlist, so neither can pick up the other's hosts. The dashboard is
+ * checked with `--allow none`: a browser page that names no host and has no
+ * network API cannot send shipment data anywhere.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -26,11 +29,14 @@ function argument(name, fallback) {
 
 const distName = argument('--dist', 'dist');
 const dist = join(dirname(fileURLToPath(import.meta.url)), '..', distName);
-/** Our own content-script match patterns, for whichever extension is being checked. */
-const OWN_HOSTS = argument('--allow', 'cbp.dhs.gov').split(',').map((host) => host.trim()).filter(Boolean);
+/** Our own content-script match patterns, for whichever extension is being checked. `none` allows no host at all. */
+const allowArgument = argument('--allow', 'cbp.dhs.gov');
+const OWN_HOSTS = allowArgument === 'none' ? [] : allowArgument.split(',').map((host) => host.trim()).filter(Boolean);
+
+const BUILD_COMMANDS = { dist: 'build', 'dist-inttra': 'build:inttra', 'dist-web': 'build:web' };
 
 if (!existsSync(dist)) {
-  console.error(`${distName}/ is missing. Run: npm run ${distName === 'dist' ? 'build' : 'build:inttra'}`);
+  console.error(`${distName}/ is missing. Run: npm run ${BUILD_COMMANDS[distName] ?? 'build'}`);
   process.exit(1);
 }
 
@@ -53,10 +59,13 @@ const FORBIDDEN = [
  * Domains allowed to appear as a URL string, matched as a suffix so
  * subdomains and the `*.host` form of a Chrome match pattern are covered.
  *
- * The OOXML/Dublin Core ones are XML *namespace identifiers* that SheetJS
- * compares spreadsheet markup against. They are never dereferenced - the
- * forbidden list above proves there is no code in the bundle that could
- * fetch anything at all.
+ * The OOXML/Dublin Core/ODF ones are XML *namespace identifiers* that SheetJS
+ * compares spreadsheet markup against, or writes into a workbook's own XML.
+ * They are never dereferenced - the forbidden list above proves there is no
+ * code in the bundle that could fetch anything at all. The ODF and VML ones
+ * (oasis-open.org, openoffice.org, and SheetJS's literal "macVmlSchemaUri"
+ * token) come with SheetJS's *writer*, which only the dashboard bundles: the
+ * extensions read workbooks and never write one.
  *
  * cbp.dhs.gov appears as our own content-script match patterns.
  */
@@ -67,6 +76,9 @@ const ALLOWED_URL_DOMAINS = [
   'purl.oclc.org',
   'w3.org',
   'sheetjs.com',
+  'docs.oasis-open.org',
+  'openoffice.org',
+  'macvmlschemauri',
   ...OWN_HOSTS,
 ];
 
@@ -106,7 +118,7 @@ for (const name of files) {
   }
 }
 
-console.log(`Checked ${files.length} bundled script(s) in ${distName}/ (hosts allowed: ${OWN_HOSTS.join(', ')}): ${files.join(', ')}`);
+console.log(`Checked ${files.length} bundled script(s) in ${distName}/ (hosts allowed: ${OWN_HOSTS.length ? OWN_HOSTS.join(', ') : 'none'}): ${files.join(', ')}`);
 
 if (problems.length) {
   console.error('\nBundle check FAILED:');

@@ -1,0 +1,32 @@
+// Cloudflare configuration for the operator dashboard.
+//
+// A static site and nothing else: there is no "main" (no Worker script runs),
+// no binding (no KV, D1, R2, Durable Object, queue or AI), and no route into
+// anything that could receive shipment data. The host serves the files in
+// dist-web/ and the browser does all the work. tests/webInvariants.test.ts
+// fails if a script or a binding is added here.
+//
+//   npm run build:web
+//   npx wrangler deploy --config web/wrangler.jsonc               (production)
+//   npx wrangler deploy --config web/wrangler.jsonc --env preview  (preview)
+//
+// See docs/WEB-DASHBOARD.md.
+{
+  "name": "ace-operator-dashboard",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "../dist-web",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "env": {
+    "preview": {
+      "name": "ace-operator-dashboard-preview",
+      "assets": {
+        "directory": "../dist-web",
+        "html_handling": "auto-trailing-slash",
+        "not_found_handling": "404-page"
+      }
+    }
+  }
+}

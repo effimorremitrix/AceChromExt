@@ -90,6 +90,51 @@ Three rules keep this additive:
 `docs/DECKHAND.md`, `docs/INTTRA-INTEGRATION.md` and `docs/END-TO-END-FLOW.md`
 describe each piece; the table below lists where they live.
 
+## Phase 5: the operator dashboard, a fourth caller of the same code
+
+```
+  Cloudflare ── static files ──▶ browser ┌─────────────────────────────┐
+                                         │ web/  Operator Dashboard    │
+   ACE_Invoice_*.xlsx  ─────────────────▶│  src/sources  (import)      │
+   filing-package.json ─────────────────▶│  deckhand/    (extract)     │──▶ filing-package.json ──▶ ACE Helper / INTTRA Helper
+   pasted email / .eml ─────────────────▶│  shared/      (package)     │──▶ ACE_Invoice_*.xlsx  ──▶ ACE Helper
+                                         │  preflight + mappingStatus  │        (downloads, this machine)
+                                         │  INTTRA mappings (readiness)│
+                                         └─────────────────────────────┘
+```
+
+The dashboard is not a fifth program with its own rules. It is a page that
+calls the modules the panels and the companion already call - the source
+registry, the extractor and its review, the package builder, the data
+quality gate, the offline mapping status, the INTTRA mapping tables - and
+renders the two shared tabs (`deckhandTab.ts`, `packageTab.ts`) through the
+same context object the panels use. Its own code is a workspace of shipments
+held in memory (`web/src/state.ts`), the workflow as pure functions over one
+shipment (`web/src/workflow.ts`), readiness and provenance views
+(`web/src/readiness.ts`), and the page itself.
+
+Three rules keep it additive, and `tests/webInvariants.test.ts` asserts each:
+
+- **It sends nothing.** No network API in `web/src`, none in the built
+  bundle (`npm run check:bundle:web`, empty host allowlist), and
+  `connect-src 'none'` in the page and in the host's response headers. The
+  hosting configuration (`web/wrangler.jsonc`) has no Worker script and no
+  binding: Cloudflare serves files and never sees a shipment.
+- **It cannot fill.** It imports no content script, field writer, filler or
+  grid writer, and no `chrome.*`. The hand-off to the extensions is the
+  file, as before.
+- **The local programs do not know it exists.** Nothing under `src/`,
+  `inttra-extension/`, `companion/`, `deckhand/` or `shared/` imports from
+  `web/`; both manifests are unchanged; `tests/independence.test.ts` keeps
+  any hosting provider's name out of them.
+
+QuickBooks stays where it was: `ace-export` runs beside QuickBooks Desktop,
+over local COM, and the file it writes is carried to the dashboard. The
+dashboard never asks for QuickBooks to be reachable.
+
+`docs/WEB-DASHBOARD.md` covers the screens, development, deployment, and the
+optional server-side layer that is documented but not built.
+
 The QuickBooks half deliberately rejoins through the **spreadsheet**, not
 through a private channel into the extension. A workbook is inspectable,
 editable, e-mailable and archivable; a private channel would have meant a
@@ -166,6 +211,12 @@ layer data-only.
 | `inttra-extension/src/content/fieldWriter.ts` | `setInttraFieldValue`: native inputs and contenteditable, events, read-back, structured result |
 | `inttra-extension/src/content/gridWriter.ts` | columns identified by header text, one row per container, every cell verified, no Add Row |
 | `inttra-extension/src/content/automationPolicy.ts` | Add Row, Continue, Submit, login: named and frozen off |
+| `web/src/state.ts` | the dashboard's workspace: shipments in memory, one active; the same three things a panel holds |
+| `web/src/workflow.ts` | import, extract, approve, build, resolve, export: pure functions over one shipment, calling the shared code |
+| `web/src/readiness.ts` | ACE readiness (the extension's checks and mapping status), INTTRA readiness (the helper's mapping tables), next actions, provenance rows |
+| `web/src/exportExcel.ts` | the ACE workbook, from the companion's `buildShipmentRows`, with a Provenance sheet |
+| `web/src/app.ts`, `web/src/views/` | the page: header, tabs, the two shared tabs, the readiness and provenance screens |
+| `scripts/build-web.mjs`, `web/wrangler.jsonc` | esbuild into `dist-web/`; Cloudflare static assets, no script, no binding |
 
 ## Why the companion is a separate program
 
@@ -269,3 +320,5 @@ an explicit user action; it does not require changing the fill path.
 | Add an INTTRA field | `inttra-extension/src/mappings/<screen>.ts` |
 | Fix an INTTRA selector after capture | paste it in the INTTRA panel's Diagnostics, then make it permanent in the mapping |
 | Add a destination (another portal) | a third extension reading `FilingPackage`; nothing upstream changes |
+| Add a screen to the dashboard | a renderer in `web/src/views/` over the existing state; no new rule, the rules live in `src/`, `shared/`, `deckhand/` |
+| Let the dashboard keep a shipment between page loads, or share one | a decision first: `docs/WEB-DASHBOARD.md` section 10 |

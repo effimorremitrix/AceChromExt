@@ -25,6 +25,7 @@
     "shared/**/*.ts",
     "inttra-extension/**/*.ts",
     "companion/**/*.ts",
+    "web/**/*.ts",
     "tests/**/*.ts",
     "scripts/**/*.mjs"
   ]

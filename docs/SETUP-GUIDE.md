@@ -11,6 +11,7 @@ tools up. Day-to-day operation is in **[USER-GUIDE.md](USER-GUIDE.md)**.
 4. [Updating the ACE selectors](#4-updating-the-ace-selectors)
 5. [Capturing the INTTRA selectors](#5-capturing-the-inttra-selectors)
 6. [What is automated and what is not](#6-what-is-automated-and-what-is-not)
+7. [Deploying the operator dashboard](#7-deploying-the-operator-dashboard)
 
 ---
 
@@ -273,3 +274,26 @@ and that no content script calls `.click()` at all.
 instruction, do not give customs or shipping advice, and do not replace the
 filer's review. The accuracy of every filing remains the filer's legal
 responsibility.
+
+---
+
+## 7. Deploying the operator dashboard
+
+Optional. The extensions and the companion do not need it. Full detail:
+**[WEB-DASHBOARD.md](WEB-DASHBOARD.md)**.
+
+```bash
+npm run verify                                        # builds dist-web/ and checks it
+npx wrangler deploy --config web/wrangler.jsonc       # needs CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
+```
+
+or, from GitHub, the **Deploy operator dashboard** workflow with the same two
+values stored as repository secrets. What is deployed is a folder of static
+files: the page runs in the operator's browser, has `connect-src 'none'`,
+and never sends a shipment to the host. Put it behind whatever access
+control the office uses for internal pages (Cloudflare Access, an internal
+name); the page itself has no login because it holds nothing to protect
+until a file is imported, and nothing then leaves it.
+
+To try it without deploying: `npm run dev:web` serves the same page on
+`http://127.0.0.1:8788/`.

@@ -51,6 +51,21 @@ Three starting points, and none of them needs the others:
 Nothing leaves your machine at any point. Everything is a local file or a
 browser tab.
 
+### The dashboard, if you have one
+
+If your office has deployed the **operator dashboard** (SETUP-GUIDE,
+section 7), sections 1b to 3 below can be done on one web page instead of
+in the panels: **Import** the workbook from section 1a (or a package),
+**Deckhand** the email, **Package** it, then read **ACE readiness**,
+**INTTRA readiness** and **Provenance** ("where did this value come from?"),
+and on **Overview** the numbered list of what is still to do. Download
+`filing-package.json` (or the ACE workbook) and continue at section 4 or 5
+with the extensions exactly as written there.
+
+The page runs in your browser and uploads nothing; what you import is gone
+when the tab closes, so download the package before you close it. It does
+not fill ACE or INTTRA: the extensions do, and you submit.
+
 ---
 
 ## 1. Get the invoice

@@ -1,0 +1,46 @@
+/* Operator dashboard additions on top of the panels' ui.css. */
+
+body.surface-web #root { max-width: 1100px; margin: 0 auto; padding-bottom: 48px; }
+.web-header { flex-wrap: wrap; row-gap: 6px; }
+.web-shipments { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.web-shipments .select { width: auto; min-width: 180px; padding: 4px 6px; font-size: 12px; }
+.web-shipments .button { padding: 4px 9px; font-size: 12px; background: rgba(255, 255, 255, 0.92); }
+.web-local { font-size: 11px; opacity: 0.85; }
+.web-tabs { top: 0; }
+.web-tabs .tab { padding: 9px 10px; }
+.web-two { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr); gap: 12px; }
+@media (max-width: 760px) { .web-two { grid-template-columns: 1fr; } }
+.web-hero { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.web-name { font: inherit; font-size: 15px; font-weight: 700; padding: 4px 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--ink); min-width: 220px; }
+.web-name:hover, .web-name:focus { border-color: #9fb0bf; background: #fff; }
+.web-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; counter-reset: step; }
+.web-step { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 6px 8px; border-radius: 5px; background: var(--surface-alt); align-items: start; }
+.web-step-done { background: var(--green-bg); }
+.web-step-next { background: var(--yellow-bg); border-left: 3px solid var(--yellow); }
+.web-step-mark { font-weight: 700; text-align: center; }
+.web-step-done .web-step-mark { color: var(--green); }
+.web-step-body { display: flex; flex-direction: column; gap: 2px; }
+.web-step-body .link-button { align-self: flex-start; font-size: 11.5px; }
+.web-mt { margin-top: 6px; }
+.readiness { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.readiness-blocked { border-color: #e8b4b4; }
+.web-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+.web-table th { text-align: left; color: var(--ink-muted); font-weight: 600; border-bottom: 1px solid var(--line); padding: 4px 6px; white-space: nowrap; }
+.web-table td { padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; word-break: break-word; }
+.web-table td:first-child { white-space: nowrap; }
+.web-table tr.row-red { background: var(--red-bg); }
+.web-table tr.row-yellow { background: var(--yellow-bg); }
+.web-table tr.row-blue { background: #e3effb; }
+.web-table-wrap { overflow-x: auto; }
+.web-grid td, .web-grid th { white-space: nowrap; }
+.web-search { max-width: 360px; }
+.web-count { color: var(--ink-muted); font-size: 11.5px; }
+.web-empty { padding: 18px; text-align: center; color: var(--ink-muted); }
+.web-footer { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; font-size: 11.5px; color: var(--ink-muted); }
+.web-activity { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; font-size: 11.5px; }
+.web-activity li { display: flex; gap: 8px; padding: 2px 4px; }
+.web-activity time { color: var(--ink-muted); flex: 0 0 auto; }
+.web-file-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.web-file-row .file-input { width: auto; }
+.web-handoff { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.web-handoff .card { display: flex; flex-direction: column; gap: 6px; }
