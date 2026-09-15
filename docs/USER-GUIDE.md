@@ -1,85 +1,114 @@
-# ACE Helper - user guide
+# The operator's guide: from invoice and email to ACE and INTTRA
 
-ACE Helper types values you have already reviewed into the ACE filing form you
-have open. It does four things:
+One workflow, two portals. An invoice comes out of QuickBooks (or a
+spreadsheet), the booking and containers come out of an email, you review
+them once as a package, and you fill ACE and INTTRA from it. This guide
+follows that order. Setting the tools up, configuring QuickBooks, and
+capturing portal selectors are in **[SETUP-GUIDE.md](SETUP-GUIDE.md)**.
 
-1. **F2 calculator** beside any numeric ACE field.
-2. **Excel import** into a canonical shipment model, in your browser.
-3. **Preview** with traffic lights, before anything is written.
-4. **Fill Current Page** / **Fill Current Commodity Line**, on your click.
-
-## What it will never do
-
-- It never saves a commodity line, submits, or certifies a filing.
-- It never navigates ACE for you; you move between steps yourself.
-- It never touches ACE sign-in, MFA, CAPTCHA, or any other security control.
-- It never sends shipment or customer data anywhere. There is no server.
-- It never stores your ACE credentials, because it never sees them.
-
-The last click is always yours. Treat everything the extension writes as a
-draft that you are responsible for checking.
+**What these tools never do:** they never save a line, continue, submit,
+certify, or accept a declaration; never navigate a portal for you, or press
+Add Row; never touch a sign-in, MFA or CAPTCHA; never send data anywhere
+(no network permission, no server); never store a credential; never pair a
+seal with a container by position; never correct a container number. The
+last click is always yours, and the accuracy of the filing is always yours.
 
 ---
 
-## 1. The F2 calculator
+## Contents
 
-ACE numeric fields reject `*`, `/`, `(` and `)`, so you cannot type a formula
-into them. The calculator does the arithmetic beside the field and inserts only
-the result.
+0. [The workflow at a glance](#0-the-workflow-at-a-glance)
+1. [Get the invoice](#1-get-the-invoice)
+2. [Get the identifiers from the email (Deckhand)](#2-get-the-identifiers-from-the-email-deckhand)
+3. [Build and check the package](#3-build-and-check-the-package)
+4. [Fill ACE](#4-fill-ace)
+5. [Fill INTTRA](#5-fill-inttra)
+6. [Settings, clearing data, the session log](#6-settings-clearing-data-the-session-log)
+7. [Warnings, and what each one means](#7-warnings-and-what-each-one-means)
+8. [When something does not work](#8-when-something-does-not-work)
 
-1. Click into the ACE field (Value of Goods, Shipping Weight, Quantity...).
-2. Press **F2**. A small panel opens beside the field.
-3. Type an expression. The result updates as you type:
+---
 
-   | Expression | Result |
-   | --- | --- |
-   | `20 * 4` | 80 |
-   | `79833 * 7.94` | 633,874.02 |
-   | `(12000 + 3500) / 2` | 7,750 |
-   | `633600 / 79833` | 7.94 |
+## 0. The workflow at a glance
 
-4. Press **Enter** to insert the result, or **Escape** to close and leave the
-   field exactly as it was.
+```
+  QuickBooks Desktop ──▶ ace-export ──▶ ACE_Invoice_CN-1042.xlsx ─┐
+    (or: the template, filled in by hand)                        │
+                                                                 ├──▶ Package ──▶ filing-package.json
+  Carrier / producer email ──▶ Deckhand ──▶ reviewed, approved ──┘      │
+                                                                        ├──▶ ACE Helper    ──▶ ACE     (you submit)
+                                                                        └──▶ INTTRA Helper ──▶ INTTRA  (you submit)
+```
 
-Details worth knowing:
+Three starting points, and none of them needs the others:
 
-- Supported: `+ - * /`, parentheses, decimals, a leading minus, and thousands
-  separators between digits (`79,833 * 2` works).
-- The inserted value never contains thousands separators, because ACE rejects them.
-- Invalid input is refused, never guessed: bad syntax, unmatched parentheses,
-  division by zero, and anything that is not a finite number. Enter does
-  nothing while the result line is red.
-- Rounding is configurable in **Settings** (2 decimals by default; whole
-  numbers and "no rounding" are the other options).
-- If the field already holds a plain number, it is pre-loaded as the starting
-  expression, so `+ 500` style adjustments are quick.
-- There is no `eval()` anywhere: expressions are parsed by a hand-written
-  parser that can only ever produce a number.
+| You have | Start at | You can |
+| --- | --- | --- |
+| a QuickBooks invoice or a spreadsheet | section 1 | fill ACE (sections 4), with or without an email |
+| the carrier's email | section 2 | fill INTTRA's booking, vessel, ports, containers and seals (section 5) |
+| both | sections 1 and 2 | fill both portals from one package (section 3) |
 
-## 2. Importing a spreadsheet
+Nothing leaves your machine at any point. Everything is a local file or a
+browser tab.
 
-> **Working from QuickBooks Desktop?** You do not have to fill the spreadsheet
-> in by hand. The companion writes it for you from an invoice:
-> `ace-export export CN-1042` produces `ACE_Invoice_CN-1042.xlsx`, which you
-> then import exactly as below. It reads what QuickBooks holds, converts pounds
-> to kilograms, and flags the customs facts QuickBooks does not hold rather
-> than guessing them. See
-> **[QUICKBOOKS-INTEGRATION.md](QUICKBOOKS-INTEGRATION.md)**.
+---
 
-Import happens in the **panel**, not the popup: Chrome closes a popup as soon as
-a file picker opens.
+## 1. Get the invoice
 
-1. Click the toolbar icon, then **Open full panel**.
-2. On the **Import** tab, click **Download the import template** the first
-   time - it has the canonical columns, a worked example, and per-column notes.
-3. Fill the template in: **one row per ACE commodity line**. Shipment-level
-   columns (invoice number, customer, carrier, container...) only need to be on
-   the first row.
-4. Choose the file. If the workbook has several sheets, pick the sheet.
+### 1a. From QuickBooks Desktop
 
-The workbook is parsed inside the browser. Nothing is uploaded.
+On the PC that runs QuickBooks, once the companion is set up (SETUP-GUIDE,
+section 2):
 
-### Columns
+```bash
+node ace-export.mjs gui
+```
+
+It prints a `http://127.0.0.1:PORT/?t=...` link. Open it; only this machine
+can reach it, and only with that token.
+
+1. **Invoice**: search by invoice number, pick one, press Preview.
+2. **Summary**: customer, date, line count, destination.
+3. **Supply what QuickBooks does not hold**: vessel, booking, container,
+   seal. If the carrier's email holds them, leave these blank; Deckhand
+   reads them in section 2 and the package matches them up.
+4. **ACE readiness, line by line**:
+
+   ```
+   Line 1: Almond Kernels, Monterey SSR 23/25              needs attention
+     ✓ Schedule B         0802.12.0000
+     ✓ Origin             D
+     ⚠ License Code       missing
+     ✓ Quantity 1         79,832
+     ✓ UOM 1              KG
+     ✓ Value of Goods     651,217.60
+     ✓ Shipping Weight    79,832 kg
+   ```
+
+   Editable facts have a box under them. Type the licence code, press
+   **Apply and preview**, and the line goes green. What you type applies to
+   this export only and is recorded as operator-supplied; put it in the
+   configuration's `items` when it should be permanent. Quantity, value and
+   weight have no box: they are what the invoice *is*.
+
+5. **Ready to export?** The checklist, then **Export ACE Excel**.
+
+The command line does the same and is easier to repeat:
+
+```bash
+node ace-export.mjs show   CN-1042                       # preview, write nothing
+node ace-export.mjs export CN-1042 --set-line 1.licenseCode=C33
+```
+
+Either way the result is `ACE_Invoice_CN-1042.xlsx`, written to this
+machine, with a `Shipment` sheet the extension reads and `Audit` and `Checks`
+sheets for you (SETUP-GUIDE, section 3).
+
+### 1b. By hand
+
+Open the ACE Helper panel (toolbar icon, **Open full panel**), **Import**,
+**Download the import template**. One row per ACE commodity line;
+shipment-level columns only need to be on the first row.
 
 Commodity line: `Line`, `ExportInformationCode`, `ScheduleB`,
 `CommodityDescription`, `Quantity1`, `UOM1`, `Quantity2`, `UOM2`, `Origin`,
@@ -94,14 +123,13 @@ Shipment level: `CustomerName`, `InvoiceNumber`, `InvoiceDate`, `BillTo`,
 Where they land in ACE: `InvoiceNumber` is the Shipment Reference Number,
 `InvoiceDate` the Departure Date and `Destination` the Country of Destination
 (Step 1); `CustomerName` and the `BillTo*` columns fill the Ultimate Consignee
-panel's Company Name, Address Line 1 / 2, City, State, Postal Code and Country
-(Step 2); the commodity columns fill the open Line Details form (Step 3).
-`FreightTerms`, `PONumber`, `PaymentTerms` and `PaymentDueDate` have no box in
-ACE and are carried for reference only.
+panel (Step 2); the commodity columns fill the open Line Details form
+(Step 3). `FreightTerms`, `PONumber`, `PaymentTerms` and `PaymentDueDate` have
+no box in ACE and are carried for reference (and into the INTTRA package).
 
-Header matching ignores case, spaces, and punctuation, and common aliases are
-accepted (`Qty 1`, `HTS Number`, `Ultimate Consignee`, `Gross Weight`, ...).
-Unrecognised columns are ignored and listed in the import notes.
+Header matching ignores case, spaces and punctuation, and common aliases are
+accepted (`Qty 1`, `HTS Number`, `Ultimate Consignee`, `Gross Weight`).
+Unrecognised columns are listed in the import notes, not silently dropped.
 
 ### What the importer cleans up for you
 
@@ -119,84 +147,187 @@ Unrecognised columns are ignored and listed in the import notes.
 
 Weight units are taken, in order, from the cell itself (`176,000 lb`), the
 `ShippingWeightUOM` column, then the column name (`ShippingWeightLb`). With no
-unit anywhere, the value is taken as kilograms and the preview says so.
+unit anywhere the value is taken as kilograms and the preview says so.
 
-## 3. The preview: your review gate
+---
 
-Every field shows a traffic light:
+## 2. Get the identifiers from the email (Deckhand)
 
-- **green** - mapped and plausible
-- **yellow** - missing, uncertain, or transformed; the original is shown beside
-  the ACE value so you can check the conversion
-- **red** - invalid or unusable; it will not be written to ACE
+The booking reference, the container numbers and the seal numbers arrive by
+email, from the carrier or from the producer, and used to be retyped. Deckhand
+reads them out; you check them and approve.
 
-Lines roll up to the worst status they contain. Read the yellows: they are
-where an assumption was made on your behalf.
+It is the **Deckhand** tab of either panel (ACE Helper or INTTRA Helper; it
+is the same screen). Or, on the QuickBooks PC:
+`node ace-export.mjs deckhand booking.eml`, which prints the same review.
 
-## 4. Filling ACE
+1. Paste the email body into the box, including any container and seal
+   list. Or load a saved email: in Outlook, **File, Save As**, type
+   Outlook Message Format is not readable; choose `.eml` if offered, or
+   copy the text. Gmail: the three dots, **Show original**, **Download
+   original** gives an `.eml`. A `.txt` works too.
+2. Press **Extract**.
+3. Read the review against the email:
 
-ACE Helper fills the step you are looking at. It does not walk the filing.
+   ```
+   Deckhand - Shipment Extraction                       awaiting your review
 
-1. In ACE, navigate to the step you want (Shipment, Parties, Commodities,
-   Transportation).
-2. Click the ACE Helper icon. The header shows the detected step. Use
-   **refresh** in the header after navigating in ACE.
-3. Click:
-   - **Fill Current Page** - the shipment-level fields for that step, or
-   - **Fill Current Commodity Line** - one commodity line into the Line Details
-     form you have open (Commodities step only).
-4. Read the summary, then read the ACE form.
-5. **You** click Save Line / Save / Submit in ACE.
+   ✓  Booking reference    EBKG18531408     read from the document, "Carrier Booking No" on line 3
+   ⚠  Shipment reference   (missing)        missing
+   ✓  Vessel               MSC FIRENZE      read from the document
+   ✓  Voyage               541W
+   ✓  Port of loading      Los Angeles, CA
+   ✓  Port of discharge    Derince
 
-### Choosing the commodity line
+   Containers (3)
+   1. ✓ Container      MSCU1234566   valid ISO 6346, line 8, 13
+      ✓ Carrier seal   SL-4471209    read beside the container (same_row)
+      ✓ Shipper seal   SH-001
+   2. ✓ Container      MSDU7654322
+      ✓ Carrier seal   SL-4471210
+      ✓ Shipper seal   (none in the document)
+   3. ✓ Container      TGHU7654320
+      ✓ Carrier seal   SL-9          read beside the container (same_block)
 
-Pick the line on the **Fill** tab, or press **Select this line** on the line in
-the preview. Then, for each line: open that line in ACE, click **Fill Current
-Commodity Line**, check it, save it in ACE yourself, add the next line in ACE,
-select the next line here. Saving, adding, and advancing are deliberately not
-automated in this version.
+   Not paired. The document did not show these seals beside a container: SL-99001, SL-99002.
+   ```
 
-### What the colours on the ACE page mean
+   | Mark | Meaning |
+   | --- | --- |
+   | ✓ | read with confidence; a container number that passes its ISO 6346 check |
+   | ? | read, but not with confidence; confirm it against the email |
+   | ⚠ | missing, failed a check, contradicted, or could not be paired |
 
-After a fill, fields are tinted for a few seconds (configurable):
+4. Press **Approve Shipment Data**.
 
-- light green - written as imported
-- yellow - written, but transformed or calculated; check it
-- red - the write failed
+What Deckhand will not do, and why the review looks the way it does:
 
-### The summary
+- **A seal is attached to a container only when the email showed them
+  together**: the same table row, the same line, or a "Container:" line
+  followed directly by a "Seal:" line. "Containers: A, B" on one line and
+  "Seals: 1, 2" on another is two lists; nothing pairs them, both are shown
+  as not paired, and approval is blocked until you match them from the
+  source. A seal on the wrong container is worse than a missing one.
+- **A container number that fails its check digit is shown as read and
+  flagged**, never corrected. Fix it in the email text and extract again.
+- **A container the email gave two different seals** has its seal left blank
+  and is flagged.
+- **Missing is a value.** A missing vessel or port is shown as missing and
+  does not block approval; you type it in the package or in the portal.
+
+**Copy review block** and **Copy container rows (TSV)** put the same rows on
+the clipboard if you would rather paste than fill. **Save as JSON** keeps the
+extraction beside the shipment.
+
+---
+
+## 3. Build and check the package
+
+The package is one shipment with every value from every source, each value
+saying where it came from. It is the **Package** tab of either panel, or
+`node ace-export.mjs package CN-1042 --deckhand booking.eml` on the
+QuickBooks PC, which writes `filing-package-CN-1042_EBKG18531408.json`.
+
+1. With the invoice imported (section 1) and the extraction approved
+   (section 2), press **Build filing package**. In the INTTRA Helper, with
+   only an extraction, the package holds the transport identifiers and no
+   commercial data; that is allowed, and the cargo is typed in INTTRA.
+2. Read the header:
+
+   ```
+   Ready. Ready to fill INTTRA. Review every field there before you save or submit.
+
+   Booking reference    EBKG18531408      Deckhand, confirmed by QuickBooks
+   Vessel               MSC FIRENZE       Deckhand, confirmed by QuickBooks
+   Voyage               541W              Deckhand
+   Port of loading      Los Angeles, CA   Deckhand
+   Carrier              MSC Line          QuickBooks
+   Consignee            Aydin Kuruyemis   QuickBooks
+   Total weight (kg)    79832             Derived, sum of 1 line weight(s)
+   ```
+
+   | Colour | Source |
+   | --- | --- |
+   | green | QuickBooks, Excel or Deckhand, read with confidence |
+   | yellow | derived (a total, an HS code from the Schedule B), or read with low confidence |
+   | blue | typed by you |
+   | red | missing: no source holds it |
+
+3. **Resolve conflicts.** When the invoice and the email disagree about the
+   booking, the vessel, a container or a seal, both values are shown and you
+   pick one. Nothing is overwritten; until you pick, the package follows the
+   owner of the field (Deckhand for transport identifiers) and **filling is
+   blocked**. An invoice container field that reads "See Ocean B/L" is not a
+   conflict; it is noted and set aside.
+4. **Type what nobody holds.** A red cell is an input: package type, number
+   of packages, marks and numbers, a port the email did not name. It is
+   recorded as typed by you and survives a rebuild.
+5. Read the **Notes**. Two you will see often: with several containers the
+   invoice weight is a total and is not split across them; with several
+   invoice lines and several containers, which cargo is in which container
+   is not in any source, so the cargo columns are left for you.
+6. **Save filing-package.json** for the INTTRA Helper (and keep it with the
+   shipment), or **Apply to the ACE fields** (section 4).
+
+The package can be loaded by either extension: ACE Helper **Import** accepts
+it beside a workbook; INTTRA Helper **Import** takes only it.
+
+---
+
+## 4. Fill ACE
+
+Install per SETUP-GUIDE section 1. ACE Helper fills the step you are looking
+at; it does not walk the filing.
+
+### Import
+
+Panel, **Import**, choose the `.xlsx` (or drag it onto the panel from the
+folder the export window named), or choose a `filing-package.json`. It is
+parsed in the browser; nothing is uploaded. The panel says which kind of file
+it opened:
 
 ```
-Filled: 8    Skipped: 2    Warnings: 1
+QuickBooks export - QuickBooks Desktop (qbXML 16.0) - exported 2026-09-21
+Excel workbook - My ACE Shipment.xlsx - read in this browser
+Filing package - CN-1042_EBKG18531408 - QuickBooks export, Deckhand approved
 ```
 
-- **Filled** - written successfully.
-- **Skipped** - nothing to write (the spreadsheet cell was empty).
-- **Warnings** - written but worth a look, or deliberately not written: an
-  ACE field that could not be identified, a value ACE already held, an
-  ambiguous match, a required value that was missing.
-- **Errors** - the value could not be produced or ACE rejected it.
+A package fills ACE's booking, vessel, container and seal from the approved
+email instead of from the workbook. With more than one container the two
+container fields are left for you, and a "See Ocean B/L" placeholder from
+QuickBooks is cleared rather than typed into ACE. The same happens when you
+press **Apply to the ACE fields** on the Package tab.
 
-Click **show field** next to any warning to scroll to and focus that field in
-the ACE tab.
+### Overview
 
-### Safety behaviours
+```
+Invoice
+CN-1042
+Aydin Kuruyemis San Ve Tic A.S
 
-- A field ACE already holds a *different* value in is left alone, and reported.
-  Tick **Overwrite ACE fields that already have a different value** to replace.
-- **Dry run** resolves and transforms everything and writes nothing, so you can
-  see what would happen.
-- Commodity-line writes are scoped to the open Line Details container, so a
-  write cannot land on another line.
-- If a field cannot be identified with confidence, it is skipped with a
-  warning - never guessed at.
-- If the ACE step cannot be identified, both Fill buttons are disabled.
+Status
+✓ QuickBooks export loaded
+✓ 27 of 27 ACE fields mapped
+⚠ 2 fields require review
+✓ Deckhand extraction approved
+✓ Filing package CN-1042_EBKG18531408 built
 
-## 4b. The mapping status screen
+Actions
+[ Preview ] [ Mapping status ] [ Fill Current Page ] [ Fill Current Line ]
+[ Calculator ] [ Clear Data ]
+```
 
-Panel -> **Mapping**. The preview asks "is this value right?"; this screen asks
-"where did it come from, and which ACE box is it going into?" - one row per ACE
-field:
+### Preview: your review gate
+
+Every field shows a traffic light: **green** mapped and plausible; **yellow**
+missing, uncertain or transformed, with the original beside the ACE value;
+**red** invalid and **will not be written**. Lines roll up to the worst status
+they contain. Read the yellows: they are where an assumption was made for you.
+
+### Mapping status
+
+Panel, **Mapping**: one row per ACE field, answering "where did it come from
+and which box is it going into?"
 
 ```
 Shipping Weight (kg)                                              READY
@@ -207,9 +338,8 @@ Shipping Weight (kg)                                              READY
   ACE selector    #shippingWeight
 ```
 
-It works with no ACE tab open. **Check against the open ACE page** resolves
-every selector against the page you have open and **writes nothing** - which is
-how you find out that a field says `NOT FOUND` before you rely on it.
+**Check against the open ACE page** resolves every selector and writes
+nothing.
 
 | Status | Means |
 | --- | --- |
@@ -222,10 +352,9 @@ how you find out that a field says `NOT FOUND` before you rely on it.
 | `NOT FOUND` | not on this page, or the selector is stale |
 | `AMBIGUOUS` | several ACE fields matched. Deliberately not written |
 
-## 4c. Data quality checks
+### Data quality checks
 
-Ten named checks sit directly above the Fill buttons, because that is the last
-thing read before the first thing clicked:
+Ten named checks sit directly above the Fill buttons:
 
 ```
 Data quality checks                                       2 to review
@@ -236,71 +365,179 @@ Data quality checks                                       2 to review
   ✓ Units of measure recognised ✓ All columns mapped
 ```
 
-They report; they do not block. A field with a blocking issue is skipped by the
-filler anyway - never guessed, never half-written - so the good fields can be
-typed while you go and find the missing one.
+They report; they do not block. A field with a blocking issue is skipped by
+the filler, never guessed, never half-written.
 
-## 4d. The session log
+### Fill
 
-Panel -> **Diagnostics**. Everything that happened, in order:
+1. In ACE, navigate to the step you want (Shipment, Parties, Commodities,
+   Transportation). Press **refresh** in the panel header after moving.
+2. **Fill Current Page** for the shipment-level fields of that step, or
+   **Fill Current Commodity Line** on the Commodities step with a Line Details
+   form open. **Dry run** does everything except write.
+3. Fields are tinted for a few seconds: green written as imported, yellow
+   written but transformed, red failed. **show field** scrolls ACE to one.
+4. Read the summary, then read the ACE form.
+5. **You** click Save Line, Save, Submit, Certify.
 
-```
-20:01:12  import      Loaded ACE_Invoice_CN-1042.xlsx - 1 line(s) via QuickBooks export
-20:01:12  transform   Line 1 shippingWeight: 176000 lb -> 79,832 kg   (lb x 0.45359237)
-20:03:44  fill        Filled Shipment page: filled 4, skipped 1, warnings 0, errors 0
-20:05:09  fill        Filled Commodity line 1: filled 10, warnings 1, errors 0
-```
+For each commodity line: select the line on the Fill tab (or **Select this
+line** in the preview), open that line in ACE, fill it, check it, save it in
+ACE yourself, add the next line in ACE, select the next line here.
 
-**Copy diagnostics** puts the whole picture on the clipboard; **Export
-diagnostics** writes it to a file. Those two are the complete list of places it
-can go - the extension has no network permission and nothing is uploaded.
+Safety behaviours: a field ACE already holds a different value in is left
+alone and reported unless **Overwrite** is ticked; commodity-line writes are
+scoped to the open Line Details container; an unidentified field is skipped
+with a warning; both Fill buttons are disabled until the step is identified.
 
-It lives in memory for the browsing session only, contains no credential, and is
-cleared along with the imported data when you press **Clear Data**. Export it
-first if you want the trail.
+### The F2 calculator
 
-## 5. Settings
+ACE numeric fields reject `*`, `/`, `(` and `)`. Click into the field, press
+**F2**, type `176000 * 0.45359237`, press **Enter**: `79832.26` goes in, and
+only the result, never a thousands separator. **Escape** leaves the field as
+it was. Supported: `+ - * /`, parentheses, decimals, a leading minus,
+separators between digits. Invalid input is refused, never guessed. Rounding
+is a setting. It works with nothing imported, and there is a second copy on
+the panel's **Calculator** tab that writes nothing to ACE.
+
+---
+
+## 5. Fill INTTRA
+
+Install per SETUP-GUIDE section 1. Read this first: **the INTTRA Helper has
+not yet seen the live portal.** Until its selectors are captured (SETUP-GUIDE,
+section 5), it will report most fields as "not found" on a real screen. That
+is by design: a field that does not resolve is never written. Everything
+below works today against the package; the selectors are what the first
+live session captures.
+
+### Load the package
+
+Panel (toolbar icon, **Open full panel**), **Import**, choose
+`filing-package.json`. Or paste the email into **Deckhand**, approve, and
+**Build filing package** for a transport-only package. The Overview says
+whether it is ready to fill; the Package tab says why not, if not.
+
+### Fill a screen
+
+1. In INTTRA, log in as you always do and open the Shipping Instruction.
+   The helper never logs in.
+2. Open **General Details**. In the helper, press **refresh** in the header;
+   it names the screen it detected.
+3. **Fill INTTRA**, **Fill Current Page**. Booking number, shipper's
+   reference, carrier, vessel, voyage, port of loading and port of discharge.
+   **Dry run** writes nothing.
+4. Read every field, then press Save or Continue in INTTRA yourself.
+5. **Container & Cargo**: pick the container in the helper's list, fill,
+   check, save in INTTRA, pick the next container.
+6. **Print Instructions** fills the freight terms; **B/L Documents** fills
+   the consignee from the invoice's bill-to address; **Notification Emails**
+   has nothing to fill, and the helper says so.
+
+Each outcome in the report names its source ("Deckhand, confirmed by
+QuickBooks"), what was written, and what INTTRA holds after the write.
+
+### Copy Container Details, the grid
+
+1. In INTTRA, open **Copy Container Details** and add as many rows as the
+   package has containers. The helper never presses Add Row.
+2. In the helper, **Containers**. The table shows the rows it will write.
+3. **Fill Container Grid**. One row per container, the container and its
+   seals together on the row, cargo description and HS code from the invoice
+   where they can be attributed, every cell read back.
+
+   ```
+   Containers filled: 3 / 3   Verified cells: 13   Warnings: 0   Failed: 0   Unresolved: 0
+   ```
+
+   | Cell status | Means |
+   | --- | --- |
+   | verified | written and read back exactly |
+   | filled | written; INTTRA reformatted it |
+   | failed | INTTRA did not keep the value; the cell is tinted red |
+   | skipped | the package has no value for this column |
+   | unresolved | the cell has no control the helper can write; see below |
+   | warning | the cell already held a different value and was left alone |
+
+4. If the grid has fewer rows than containers, the report says how many to
+   add; fill again afterwards.
+5. If cells come back **unresolved**, the grid opens an editor on click,
+   which the helper never simulates. Use **Copy rows (TSV)**: it puts the
+   containers on the clipboard in the grid's own column order (run
+   Diagnostics on the grid screen first so it knows the order); click the
+   first cell of the first empty row in INTTRA and paste.
+6. Read the grid, then continue in INTTRA yourself.
+
+---
+
+## 6. Settings, clearing data, the session log
+
+**ACE Helper settings**
 
 | Setting | Default | Effect |
 | --- | --- | --- |
 | Calculator rounding / decimals | 2 decimals | rounding applied to calculator results |
 | Shipping weight decimals | 0 | ACE files whole kilograms |
 | Value of goods decimals | 2 | |
-| Highlight duration | 6000 ms | how long ACE fields stay tinted |
-| Dispatch blur after writing | on | helps ACE fields that validate on blur |
+| Highlight duration | 6000 ms | how long fields stay tinted |
+| Dispatch blur after writing | on | helps fields that validate on blur |
 | Treat unit-less weights as kilograms | on | off makes a unit-less weight a warning |
-| Developer mode | off | verbose field-detection detail and console logging. The Diagnostics tab itself is always available |
+| Developer mode | off | verbose detection detail and console logging |
 
-## 6. Clearing data
+**INTTRA Helper settings**: highlight duration, dispatch blur, developer
+mode. Neither extension has a setting that enables saving, continuing,
+submitting or adding a row.
 
-**Clear Imported Data** on the Import tab drops the shipment from memory and
-clears the highlighting. Imported data also disappears when the browser closes:
-it is held in session memory and never written to disk.
+**Clearing data.** **Clear Data** drops the imported shipment, the Deckhand
+extraction, the package and the session log from memory, and clears the
+tinting. All of it also disappears when the browser closes: it is held in
+session memory and never written to disk. Save the package file first if you
+want to keep it.
 
-## 6b. Deckhand and the filing package
+**The session log.** Panel, **Diagnostics**. Everything that happened, in
+order: imports, transformations, extractions, package builds, fills. **Copy
+diagnostics** puts the whole picture on the clipboard; **Export diagnostics**
+writes it to a file; those two are the complete list of places it can go. It
+contains no credential, and an entry that looks like one is refused.
 
-Two more tabs in the panel, neither needed for the workflows above:
+---
 
-- **Deckhand** reads the booking, containers and seals out of a pasted email
-  (or a saved `.eml`) and shows them with a mark each. Nothing goes further
-  until you press **Approve Shipment Data**, and approval is refused while a
-  container number fails its check digit or a seal could not be paired.
-- **Package** combines the imported invoice with the approved extraction into
-  one filing package, every value labelled with its source, every disagreement
-  shown as a conflict you resolve. **Save filing-package.json** for the INTTRA
-  Helper; **Apply to the ACE fields** to fill ACE with the booking, vessel,
-  container and seal from the email.
+## 7. Warnings, and what each one means
 
-`docs/DECKHAND.md` and `docs/END-TO-END-FLOW.md` have the details.
+| Message | What happened | What to do |
+| --- | --- | --- |
+| `No field on this page matched the mapping` | the selector did not resolve | you are probably on the wrong step; if not, the selectors need capturing (SETUP-GUIDE, sections 4 and 5) |
+| `N fields matched "..."` | the selector is too loose | capture a precise selector |
+| `The matching field is disabled or read-only` | the portal has not enabled it yet | fill whatever the portal requires first |
+| `ACE already holds "..."` / `INTTRA already holds "..."` | the field is not empty and the values differ | check which is right, then tick **Overwrite** if yours is |
+| `Truncated to N characters` | the value is longer than the portal allows | shorten it in the source and re-import |
+| `Matched by a structural fallback` | resolved by position within a container, not by name | confirm it is the right box |
+| `"..." is not in the local code table` | a country, UOM or ECCN this build does not know | confirm the value; it was passed through, not guessed |
+| `Schedule B "..." has N digits` | wrong classification number | fix it at the source |
+| `Column "..." is not a recognised ACE field` | an extra spreadsheet column | ignore, or rename it to a template column |
+| `fails its ISO 6346 check digit` | a container number was misread or mistyped in the email | retype it from the source; it was not corrected |
+| `were not shown next to each other, so they are listed separately and NOT paired` | two lists, nothing tying a seal to a container | match them from the source; approval is blocked until you do |
+| `was given two different seals` | the email contradicts itself | fill the seal from the source |
+| `The Deckhand extraction has not been approved` | the package carries an unreviewed extraction | review it on the Deckhand tab and approve |
+| `Choose one before filling` | the invoice and the email disagree | pick a side on the Package tab |
+| `is a total; it was not split across the N containers` | one invoice weight, several containers | enter each container's gross weight from the packing list |
+| `No writable control in this cell` | the grid opens an editor on click | use Copy rows (TSV) and paste |
+| `The grid has N row(s) and the package has M container(s)` | not enough rows | add rows in INTTRA and fill again |
 
-## 7. When something does not work
+---
+
+## 8. When something does not work
 
 | Symptom | Cause and fix |
 | --- | --- |
-| "No ACE tab detected" | ACE is not open, or the tab was loaded before the extension. Reload the ACE tab. |
-| "The ACE page could not be identified" | You are on a page the detector does not recognise (a landing page, a modal, an iframe). Navigate to a filing step and press refresh. |
-| Both Fill buttons disabled | Same as above; the page must be identified first. |
-| Many warnings saying a field was not found | Expected until the ACE selectors are verified. Open **Diagnostics**, capture the real selectors (`docs/ACE-MAPPING.md`), and paste them into **ACE selectors** - no rebuild needed. |
-| A field is filled with the wrong value | Check the yellow note in the preview: the value was probably transformed. Fix the spreadsheet, re-import. |
-| F2 does nothing | The focus must be in a text/number input. It is ignored on dropdowns, dates, and read-only fields. |
-| ACE clears the value straight after filling | ACE's own validation rejected it. The summary reports "ACE did not keep the value". |
+| "No ACE tab detected" / "No INTTRA tab detected" | the portal is not open in this window, or the tab was loaded before the extension. Reload the portal tab, then press **refresh** in the header. |
+| "The page could not be identified", both Fill buttons disabled | you are on a page the detector does not recognise (a landing page, a modal). Navigate to a filing step and press refresh. On INTTRA, expected until the screen signatures are captured. |
+| Many warnings saying a field was not found | on ACE, Step 4 is uncaptured; on INTTRA, everything is. Open **Diagnostics**, capture the selectors (SETUP-GUIDE, sections 4 and 5), paste them into the selector editor; no rebuild needed. |
+| A field is filled with the wrong value | check the yellow note in the preview or the source column in the package: the value was probably transformed or came from the other source. Fix it at the source and re-import, or pick the other side of the conflict. |
+| F2 does nothing | the focus must be in a text or number input. Ignored on dropdowns, dates and read-only fields. If it does nothing anywhere, reload the ACE tab. |
+| The portal clears the value straight after filling | its own validation rejected it. The report reads "did not keep the value". |
+| The import was refused | `.xlsx` / `.xlsm` / `.xltx` under 15 MB and 5000 rows, a real Excel file; or a `filing-package.json` written by these tools. A renamed `.csv` is rejected on purpose. |
+| Deckhand found no containers | the email carries none in the ISO 6346 shape (4 letters, 7 digits), or they are in an attachment. Open the attachment, copy the text, paste it. PDFs and images are not read in this version. |
+| Deckhand paired nothing | the email lists containers and seals separately. Match them from the source; do not expect the tool to guess. |
+| "Cannot approve" | a check digit fails, a seal is contradicted, or a list is unpaired. Fix the text and extract again, or match by hand in INTTRA. |
+| The Package tab says not ready | approve the extraction, or resolve the conflict it names. |
+| Something is wrong and I need to show someone | **Diagnostics**, **Export diagnostics**: one text file with the shipment, the package, the mapping status, the session log and the detection snapshot. Uploaded nowhere. |
