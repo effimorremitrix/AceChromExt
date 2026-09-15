@@ -163,6 +163,7 @@ preview → ACE`.
 | a document reader (PDF, mailbox) | implement `DocumentReader` in `deckhand/src/readers/`, register in `deckhand/src/extractor.ts` |
 | a dashboard screen | a renderer in `web/src/views/` over `ShipmentRecord`; the rules stay in `src/`, `shared/`, `deckhand/`. A workflow step is a pure function in `web/src/workflow.ts` |
 | the dashboard's hosting | `web/wrangler.jsonc` (static assets only), `web/_headers`, `.github/workflows/deploy-web.yml` |
+| the guides in the dashboard's Help tab | `docs/USER-GUIDE.md` and `docs/SETUP-GUIDE.md` themselves; the page bundles them at build time (`?raw` import), never a second copy |
 | a transformation rule | `src/ace/transformers/` + register in `index.ts` |
 | a validation rule | `src/excel/validator.ts` |
 | a selector that ACE changed | the mapping's `candidates`, per `docs/ACE-MAPPING.md` |

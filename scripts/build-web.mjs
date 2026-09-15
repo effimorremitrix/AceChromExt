@@ -16,7 +16,8 @@
 
 import { build, context } from 'esbuild';
 import { cpSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -27,6 +28,27 @@ const watch = process.argv.includes('--watch') || process.argv.includes('--serve
 const serve = process.argv.includes('--serve');
 
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+
+/**
+ * `import text from './file.md?raw'` -> the file's contents as a string.
+ * The Help tab bundles docs/USER-GUIDE.md and docs/SETUP-GUIDE.md this way,
+ * so the guides exist once and the page fetches nothing at runtime. The
+ * test runner understands the same suffix natively.
+ */
+const rawTextPlugin = {
+  name: 'raw-text',
+  setup(pluginBuild) {
+    pluginBuild.onResolve({ filter: /\?raw$/ }, (args) => ({
+      path: resolve(args.resolveDir, args.path.replace(/\?raw$/, '')),
+      namespace: 'raw-text',
+    }));
+    pluginBuild.onLoad({ filter: /.*/, namespace: 'raw-text' }, async (args) => ({
+      contents: await readFile(args.path, 'utf8'),
+      loader: 'text',
+      watchFiles: [args.path],
+    }));
+  },
+};
 
 function copyStatic() {
   mkdirSync(join(dist, 'styles'), { recursive: true });
@@ -48,6 +70,7 @@ const options = {
   minify: !watch,
   legalComments: 'linked',
   logLevel: 'info',
+  plugins: [rawTextPlugin],
   define: {
     'process.env.NODE_ENV': JSON.stringify(watch ? 'development' : 'production'),
     __DASHBOARD_VERSION__: JSON.stringify(pkg.version),

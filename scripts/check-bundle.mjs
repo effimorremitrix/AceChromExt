@@ -105,6 +105,10 @@ for (const name of files) {
 
   const urls = code.match(/https?:\/\/[^\s'"`)\\]+/g) ?? [];
   for (const url of urls) {
+    // The loopback address is this machine, not a network host. The
+    // dashboard bundles the operator guides, which quote the companion's
+    // local window (http://127.0.0.1:PORT/...) and the dev server.
+    if (/^https?:\/\/(127\.0\.0\.1|localhost)([:/]|$)/.test(url)) continue;
     let host;
     try {
       host = new URL(url).hostname;

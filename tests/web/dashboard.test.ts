@@ -56,7 +56,26 @@ describe('the dashboard page', () => {
     expect(text()).toContain('Nothing is uploaded');
     expect(root.querySelector('.web-step-next')?.textContent).toContain('Import the invoice');
     expect((root.querySelector('.web-shipments select') as HTMLSelectElement).options).toHaveLength(1);
-    expect(root.querySelectorAll('.tab')).toHaveLength(7);
+    expect(root.querySelectorAll('.tab')).toHaveLength(8);
+  });
+
+  it('shows the user guide and the setup guide on the Help tab, and switches between them through their own links', () => {
+    tab('help');
+    expect(text()).toContain("The operator's guide");
+    expect(root.querySelector('[data-guide="user"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(root.querySelector('.doc h2')?.textContent).toBe('Contents');
+    // A link to the other guide switches guides; a link to another doc is named, not linked.
+    const toSetup = Array.from(root.querySelectorAll('.doc a')).find((a) => a.textContent === 'SETUP-GUIDE.md') as HTMLAnchorElement;
+    // A real click event: anchor.click() is mocked in this suite to catch downloads.
+    toSetup.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(text()).toContain('Installing the two extensions');
+    expect(root.querySelector('[data-guide="setup"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(Array.from(root.querySelectorAll('.doc a')).some((a) => /INSTALLATION\.md/.test(a.textContent ?? ''))).toBe(false);
+    expect(text()).toContain('INSTALLATION.md (docs/INSTALLATION.md)');
+    expect(root.querySelector('.doc a[href$="-quickbooks-setup"]')).not.toBeNull();
+    (root.querySelector('[data-guide="user"]') as HTMLButtonElement).click();
+    expect(text()).toContain("The operator's guide");
+    expect(network).not.toHaveBeenCalled();
   });
 
   it('walks the whole workflow through the shared tabs and shows provenance and readiness', () => {

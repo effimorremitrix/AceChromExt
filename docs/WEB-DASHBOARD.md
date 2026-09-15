@@ -95,7 +95,7 @@ wanted later, it is a decision (section 10), not a quiet change.
 
 ## 3. The workflow on the screen
 
-Seven tabs, in the order of the work:
+Eight tabs, in the order of the work:
 
 | Tab | Shows | Reuses |
 | --- | --- | --- |
@@ -106,6 +106,7 @@ Seven tabs, in the order of the work:
 | **ACE readiness** | the data quality checks and the mapping status table (source, original, transformation, ACE value, status) for the shipment and the chosen commodity line; the hand-off steps | `buildPreflight`, `buildMappingStatus`, `aceShipmentFromPackage` |
 | **INTTRA readiness** | the fill gate, each INTTRA screen with the value it will get and where it came from, the container grid row by row, the placeholder-selector warning; the hand-off steps | `ALL_INTTRA_MAPPINGS`, `GRID_COLUMNS`, `fillGate` |
 | **Provenance** | every header, cargo and container value in one filterable table: value, source, detail, original, transformation | `describeProvenance` |
+| **Help** | the operator's guide and the setup guide, readable in the page: `docs/USER-GUIDE.md` and `docs/SETUP-GUIDE.md`, bundled at build time and rendered with the page's own Markdown reader (`web/src/markdown.ts`, createElement only). Links between the two guides switch guides; links to other docs are named, not opened | the docs themselves |
 
 The header holds the shipment picker, **New shipment** and **Open file...**.
 The status bar under the tabs says what the last action did. The footer
@@ -259,8 +260,10 @@ web/
     readiness.ts        ACE readiness, INTTRA readiness, next actions, provenance rows
     exportExcel.ts      the ACE workbook, from the companion's row builder
     files.ts            File in, Blob download out, clipboard
+    markdown.ts         the Markdown reader for the guides (blocks -> createElement)
+    guides.ts           docs/USER-GUIDE.md and docs/SETUP-GUIDE.md, imported as text at build time
     app.ts              the page: header, tabs, status, the shared tabs, the footer
-    views/              overview, import, ace, inttra, provenance, shared helpers
+    views/              overview, import, ace, inttra, provenance, help, shared helpers
     main.ts             mounts the app
 scripts/build-web.mjs   esbuild -> dist-web/
 tests/web/              workflow, readiness, dashboard (jsdom), fixtures
