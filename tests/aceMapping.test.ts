@@ -93,8 +93,11 @@ describe('mapping registry', () => {
 
   it('points every mapping at a canonical path', () => {
     for (const mapping of ALL_MAPPINGS) {
-      expect(mapping.source, mapping.key).toMatch(/^(invoice|commodity)\.[a-zA-Z0-9]+$/);
-      const probe = resolveSource(mapping.source, shipment(), shipment().commodities[0] ?? null);
+      // `operator.` is the one root outside the canonical model: values that
+      // belong to the filer rather than to the goods. Only the Shipment
+      // Reference Number so far (src/core/referenceCounter.ts).
+      expect(mapping.source, mapping.key).toMatch(/^(invoice|commodity|operator)\.[a-zA-Z0-9]+$/);
+      const probe = resolveSource(mapping.source, shipment(), shipment().commodities[0] ?? null, { shipmentReference: '4088' });
       expect(probe.found, `${mapping.key} -> ${mapping.source}`).toBe(true);
     }
   });

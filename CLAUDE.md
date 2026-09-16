@@ -167,6 +167,7 @@ preview → ACE`.
 | the guides in the dashboard's Help tab | `docs/USER-GUIDE.md` and `docs/SETUP-GUIDE.md` themselves; the page bundles them at build time (`?raw` import), never a second copy |
 | a transformation rule | `src/ace/transformers/` + register in `index.ts` |
 | a validation rule | `src/excel/validator.ts` |
+| the Shipment Reference Number sequence | `src/core/referenceCounter.ts`. The filer's own running integer, in `chrome.storage.local` beside the settings. It RESERVES rather than increments, because the sequence may have no gaps: a number is handed out and handed out again until "Mark as filed" retires it. Do not make it advance on fill |
 | a selector that ACE changed | the mapping's `candidates`, per `docs/ACE-MAPPING.md` |
 | a qbXML element to read | `builtInCandidates` in `companion/src/mapping/qbToCanonical.ts` |
 | a QuickBooks custom field | `customFields` in the user's `ace-export.config.json`, no code |

@@ -24,7 +24,11 @@ export const SHIPMENT_FIELDS: AceFieldMapping[] = [
     label: 'Shipment Reference Number',
     page: 'shipment',
     scope: 'shipment',
-    source: 'invoice.invoiceNumber',
+    // The filer's own running sequence, not the invoice number: see
+    // src/core/referenceCounter.ts. The caller falls back to the invoice
+    // number when no counter has been set up, so nothing changes for a
+    // profile that never configures one.
+    source: 'operator.shipmentReference',
     type: 'text',
     transforms: ['text', 'upper'],
     maxLength: 17,

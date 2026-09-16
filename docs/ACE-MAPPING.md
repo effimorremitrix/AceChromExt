@@ -310,7 +310,7 @@ overlay that belongs to no field. See
 
 | Field | Label (verified) | Still to capture |
 | --- | --- | --- |
-| `ShipmentReferenceNumber` | Shipment Reference Number | the `<input>` id/name |
+| `ShipmentReferenceNumber` | Shipment Reference Number | the `<input>` id/name. Its VALUE no longer comes from the canonical model: it is the filer's running sequence, from `src/core/referenceCounter.ts`, via the `operator.` source root. With no counter configured it falls back to the invoice number, as before |
 | `InvoiceDate` | Departure Date | **done**: `id="estExportDate"`, `maxlength="10"`, `placeholder="MM/DD/YYYY"`. Still confirm a typed date survives blur |
 | `OriginState` | Origin State | the backing `<select class="select2-offscreen">` **plus two `<option>` tags**. The 2026-09-16 attempt caught Select2's own label (`s2id_autogen4_search`), which suggests the source `<select>` has no id of its own |
 | `Destination` | Country of Destination | the backing `<select>` **plus two `<option>` tags** (`TR – TURKIYE`: are values ISO codes?) |

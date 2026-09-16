@@ -19,6 +19,17 @@
 import type { FillReport } from '../models/AceField.js';
 import type { DiagnosticsSnapshot, StoredImport } from '../core/messages.js';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, type AceHelperSettings } from '../core/settings.js';
+import {
+  DEFAULT_COUNTER,
+  formatReference,
+  loadCounter,
+  markFiled,
+  nextReference,
+  reserve,
+  saveCounter,
+  setNextReference,
+  type ReferenceCounter,
+} from '../core/referenceCounter.js';
 import { formatLog, type SessionLogEntry, type SessionLogKind } from '../core/sessionLog.js';
 import type { MapperNote } from '../excel/canonicalMapper.js';
 import type { ExcelImporter, OpenedWorkbook } from './importer.js';
@@ -56,6 +67,8 @@ type StatusTone = 'info' | 'ok' | 'warn' | 'error';
 interface AppState {
   surface: Surface;
   settings: AceHelperSettings;
+  /** The filer's running Shipment Reference Number. See src/core/referenceCounter.ts. */
+  counter: ReferenceCounter;
   data: StoredImport | null;
   workbook: OpenedWorkbook | null;
   aceTab: AceTab | null;
@@ -86,6 +99,7 @@ let importer: ExcelImporter | null = null;
 const state: AppState = {
   surface: 'popup',
   settings: { ...DEFAULT_SETTINGS },
+  counter: { ...DEFAULT_COUNTER },
   data: null,
   workbook: null,
   aceTab: null,
@@ -329,6 +343,12 @@ async function fill(scope: 'shipment' | 'commodityLine', dryRun: boolean): Promi
   const check = preflight();
   if (!dryRun && check) await appendLog('note', summarizePreflight(check));
 
+  // Filling Step 1 takes the next reference and holds it. The sequence does
+  // not advance until "Mark as filed", so an abandoned draft leaves no gap.
+  if (!dryRun && scope === 'shipment' && state.counter.configured) {
+    state.counter = await saveCounter(reserve(state.counter));
+  }
+
   const response = await sendToTab(state.aceTab.id, {
     type: 'content/fill',
     scope,
@@ -337,6 +357,7 @@ async function fill(scope: 'shipment' | 'commodityLine', dryRun: boolean): Promi
     settings: state.settings,
     ...(dryRun ? { dryRun: true } : {}),
     ...(overwrite ? { overwrite: true } : {}),
+    ...(state.counter.configured ? { operator: { shipmentReference: formatReference(nextReference(state.counter)) } } : {}),
   });
 
   if (!response.ok) {
@@ -378,6 +399,7 @@ async function checkMappingAgainstPage(): Promise<void> {
       shipment: state.data.shipment,
       settings: state.settings,
       dryRun: true,
+      ...(state.counter.configured ? { operator: { shipmentReference: formatReference(nextReference(state.counter)) } } : {}),
     });
     if (response.ok && response.type === 'content/fillReport') {
       state.mapping = applyFillReport(state.mapping, response.payload);
@@ -582,6 +604,8 @@ function renderOverview(): HTMLElement {
     ),
     el('p', { className: 'small muted', text: summarize(validation, shipment.commodities.length) }),
   );
+
+  section.append(referenceCounterBlock());
 
   // ---- Actions -----------------------------------------------------------
   const actions = el('div', { className: 'actions actions-grid' });
@@ -1613,6 +1637,7 @@ export async function startApp(surface: Surface, excelImporter: ExcelImporter | 
   render();
 
   state.settings = await loadSettings();
+  state.counter = await loadCounter();
   state.overrides = await loadOverrides();
   await refreshData();
   await refreshLog();
@@ -1622,4 +1647,84 @@ export async function startApp(surface: Surface, excelImporter: ExcelImporter | 
   if (state.data) state.activeTab = 'overview';
 
   render();
+}
+
+/**
+ * The Shipment Reference Number counter, on the overview.
+ *
+ * Deliberately not tucked into a settings screen. The filer's sequence may
+ * have no gaps, which means a reserved number must be retired by hand once its
+ * filing exists, and a number in flight that nobody can see is a number that
+ * gets handed out twice. So it sits next to the fill buttons, saying what will
+ * be written and what is waiting to be retired.
+ */
+function referenceCounterBlock(): HTMLElement {
+  const box = el('div', { className: 'panel-subsection' });
+  const counter = state.counter;
+
+  if (!counter.configured) {
+    box.append(
+      el('p', {
+        className: 'small muted',
+        text: 'Shipment Reference Number: using the invoice number. Set a starting number to file your own running sequence instead.',
+      }),
+    );
+    box.append(startingNumberForm('Set starting number'));
+    return box;
+  }
+
+  const next = nextReference(counter);
+  const held = counter.reserved !== null;
+  box.append(
+    el('p', {
+      className: 'small',
+      text: held
+        ? `Shipment Reference Number ${formatReference(next)} is in use. It stays on every fill until you mark it filed, so an abandoned draft leaves no gap.`
+        : `Next Shipment Reference Number: ${formatReference(next)}. Last filed: ${counter.lastFiled || 'none yet'}.`,
+    }),
+  );
+
+  const row = el('div', { className: 'actions' });
+  if (held) {
+    const filed = el('button', {
+      className: 'button button-small',
+      text: `Mark ${formatReference(next)} as filed`,
+      attrs: { type: 'button', title: 'Advances the sequence. Do this once the filing exists in ACE.' },
+    });
+    filed.addEventListener('click', () => {
+      void (async () => {
+        state.counter = await saveCounter(markFiled(state.counter));
+        setStatus(`Reference ${formatReference(next)} recorded as filed. Next is ${formatReference(nextReference(state.counter))}.`, 'ok');
+        render();
+      })();
+    });
+    row.append(filed);
+  }
+  row.append(startingNumberForm('Set next number'));
+  box.append(row);
+  return box;
+}
+
+/** Type where the sequence stands. Used to seed it, and to correct it. */
+function startingNumberForm(label: string): HTMLElement {
+  const wrap = el('div', { className: 'actions' });
+  const input = el('input', {
+    className: 'input input-small',
+    attrs: { type: 'number', min: '1', step: '1', placeholder: '4088', 'aria-label': 'Next Shipment Reference Number' },
+  }) as HTMLInputElement;
+  const save = el('button', { className: 'button button-small', text: label, attrs: { type: 'button' } });
+  save.addEventListener('click', () => {
+    const wanted = Number(input.value);
+    if (!Number.isFinite(wanted) || wanted < 1) {
+      setStatus('Enter the next reference number you want ACE Helper to file, as a whole number.', 'warn');
+      return;
+    }
+    void (async () => {
+      state.counter = await saveCounter(setNextReference(state.counter, Math.floor(wanted)));
+      setStatus(`Next Shipment Reference Number is ${formatReference(nextReference(state.counter))}.`, 'ok');
+      render();
+    })();
+  });
+  wrap.append(input, save);
+  return wrap;
 }
