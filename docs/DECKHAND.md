@@ -89,9 +89,36 @@ interface DeckhandShipment {
 }
 ```
 
-A seal labelled "Shipper seal" lands in `shipperSeal`; "Seal", "Seal No",
-"Carrier seal" land in `carrierSeal`, because that is what the trade means by
-an unqualified seal. The label is kept on the field so the review can show it.
+### Whose seal is it?
+
+Only an explicit word decides it:
+
+| The document says | Lands in |
+| --- | --- |
+| "Shipper seal" | `shipperSeal` |
+| "Carrier seal", "Line seal", "Customs seal" | `carrierSeal` |
+| "Seal", "Seal No", "SEAL#", an unheaded second column | `shipperSeal` |
+
+**An unattributed seal is the shipper's.** The operator running Deckhand *is*
+the shipper: a bare "SEAL#" column on their own loading list holds the seals
+their own office applied when it stuffed the boxes. This was corrected on
+2026-09-16 after a real loading list came back with its seals filed as the
+carrier's; before that, an unqualified seal was read as the carrier's.
+
+It matters because the two do not share a destination. INTTRA's container grid
+has a **Carrier Seal #** column and a **Shipper Seal #** column, so the choice
+decides which box on a real filing the number is typed into. Nothing is ever
+promoted across: a row with one seal leaves the other cell empty, because a
+blank cell is fixed in seconds and a wrong seal is not fixed at all.
+
+**The known cost.** A carrier's own email listing seals under a bare "Seal"
+heading now reads as shipper seals. Nothing in the text distinguishes that
+document from the operator's own list, and inferring it from the sender would
+be exactly the kind of guess this module refuses to make about pairings. So
+the assumption is recorded instead: the field's label carries
+"unattributed, read as a shipper seal", the review screen shows it, and the
+operator can move it. If carrier-authored seal lists become common, this is
+the decision to revisit first.
 
 ## Inputs
 

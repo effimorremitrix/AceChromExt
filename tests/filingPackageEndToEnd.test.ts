@@ -73,7 +73,11 @@ describe('the package', () => {
     expect(pkg.header.vessel).toMatchObject({ value: 'MSC FIRENZE', confirmedBy: 'quickbooks' });
     expect(pkg.header.customerName).toMatchObject({ value: 'Aydin Kuruyemis San Ve Tic A.S', source: 'quickbooks' });
     expect(pkg.containers.map((container) => container.containerNumber.value)).toEqual(['MSCU1234566', 'MSDU7654322', 'TGHU7654320']);
-    expect(pkg.containers.map((container) => container.carrierSeal.value)).toEqual(['SL-4471209', 'SL-4471210', 'SL-9']);
+    // The first two rows come from the document's explicit "Carrier Seal"
+    // column; TGHU7654320's seal is headed just "Seal:", so it is read as the
+    // shipper's.
+    expect(pkg.containers.map((container) => container.carrierSeal.value)).toEqual(['SL-4471209', 'SL-4471210', '']);
+    expect(pkg.containers.map((container) => container.shipperSeal.value)).toEqual(['SH-001', '', 'SL-9']);
     expect(pkg.cargo[0]?.weightKg).toMatchObject({ value: '79832', source: 'quickbooks' });
     expect(pkg.cargo[0]?.weightKg.transform).toContain('0.45359237');
     expect(buildReview(pkg.shipment!).blocking).toEqual([]);
@@ -163,15 +167,17 @@ describe('into INTTRA', () => {
     expect(report.unresolved).toBe(0);
     const rows = Array.from(document.querySelectorAll('[role="row"]')).slice(1);
     expect(rows.map((row) => row.children[0]?.textContent)).toEqual(['MSCU1234566', 'MSDU7654322', 'TGHU7654320']);
-    expect(rows.map((row) => row.children[1]?.textContent)).toEqual(['SL-4471209', 'SL-4471210', 'SL-9']);
-    expect(rows[0]?.children[2]?.textContent).toBe('SH-001');
-    expect(rows[1]?.children[2]?.textContent).toBe('');
+    // Column 1 is Carrier Seal #, column 2 Shipper Seal #. The first two rows
+    // come from the document's explicit "Carrier Seal" column; TGHU7654320's
+    // seal is headed just "Seal:", so it is the shipper's.
+    expect(rows.map((row) => row.children[1]?.textContent)).toEqual(['SL-4471209', 'SL-4471210', '']);
+    expect(rows.map((row) => row.children[2]?.textContent)).toEqual(['SH-001', '', 'SL-9']);
     expect(rows[2]?.children[3]?.textContent).toContain('Almond');
     expect(rows[2]?.children[4]?.textContent).toBe('0802.12');
     expect(report.verifiedCells).toBe(3 + 3 + 1 + 3 + 3);
     const description = report.cells.find((cell) => cell.row === 1 && cell.column === 'CargoDescription');
     expect(description?.provenance).toContain('QuickBooks');
-    const seal = report.cells.find((cell) => cell.row === 1 && cell.column === 'CarrierSeal');
+    const seal = report.cells.find((cell) => cell.column === 'ShipperSeal' && cell.expected !== '');
     expect(seal?.provenance).toContain('Deckhand');
   });
 

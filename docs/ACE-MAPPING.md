@@ -315,11 +315,14 @@ overlay that belongs to no field. See
 | `OriginState` | Origin State | the backing `<select class="select2-offscreen">` **plus two `<option>` tags**. The 2026-09-16 attempt caught Select2's own label (`s2id_autogen4_search`), which suggests the source `<select>` has no id of its own |
 | `Destination` | Country of Destination | the backing `<select>` **plus two `<option>` tags** (`TR – TURKIYE`: are values ISO codes?) |
 
-Not yet mapped, and not template-stable because they change with the routing:
-**Port of Export** (required; `2811 – METROPOLITAN OAKLAND INT` on the
-captured filing) and **Port of Unlading** (conditional; `48942 –
-DERINCE,DERINDJE,DERINCE BURNA`). Both are Select2 dropdowns over long coded
-lists, so capture two `<option>` tags with them.
+**Deliberately not mapped** (decided 2026-09-16): **Port of Export**
+(required; `2811 – METROPOLITAN OAKLAND INT` on the captured filing) and
+**Port of Unlading** (conditional; `48942 – DERINCE,DERINDJE,DERINCE BURNA`).
+Both change with the routing, so a saved template cannot carry them, but they
+are two dropdowns the filer picks in seconds and neither is worth a canonical
+field and a spreadsheet column yet. Revisit if the filing volume rises. They
+are Select2 dropdowns over long coded lists, so if they are ever mapped,
+capture two `<option>` tags with them.
 
 ### Step 2: Parties (`src/ace/selectors/parties.ts`)
 
@@ -363,7 +366,7 @@ The step holds three controls and nothing else.
 
 | Field | Label (verified) | Still to capture |
 | --- | --- | --- |
-| `Carrier` | Carrier SCAC/IATA | the `<input>` id/name **and its `maxlength`**; the live value is the 4-letter SCAC `MSCU`, so confirm whether a 2-3 character IATA code is also accepted, and whether a carrier *name* is rejected |
+| `Carrier` | Carrier SCAC/IATA | the `<input>` id/name **and its `maxlength`**; the live value is the 4-letter SCAC `MSCU`. **Open question (2026-09-16):** nobody has confirmed whether the spreadsheet carries a SCAC or only a carrier name, so the mapping upper-cases whatever it gets and the validator warns on anything longer than four characters rather than guessing a lookup |
 | `Vessel` | Conveyance Name/Carrier Name | **done**: `shipmentInfo.conveyanceName.stringField`, `maxlength="23"` |
 | `TransportationReferenceNumber` | Transportation Reference Number | **done**: `id="refNbrValue"`, `maxlength="30"`. The odd one out: a bare name with no binding path and no `.stringField` wrapper |
 

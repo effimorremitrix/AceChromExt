@@ -43,7 +43,7 @@ const EMAIL = readFileSync(join(__dirname, 'fixtures', 'deckhand', '04-booking-c
 const ROW: Array<string | number> = [
   1, 'OS', '0802.12.0000', 'SHELLED ALMONDS', 79832, 'KG', '', '', 'D', 651217.6, 176000, 'lb', 'EAR99', 'C33',
   'Aydin Kuruyemis San Ve Tic A.S', 'CN-1042', '2026-09-21', 'Organize Sanayi Bolgesi 3. Cadde No 14', '', 'Aydin', '', '09100', 'TR', 'CA', 'CIF', 'NET 120', '2027-01-19',
-  '3993', 'MSC Line', 'MSC FIRENZE V.541W', 'EBKG18531408', C1, 'SL-4471209', 'TR',
+  '3993', 'MSCU', 'MSC FIRENZE V.541W', 'EBKG18531408', C1, 'SH-001', 'TR',
 ];
 
 function invoiceFromRows(rows: Array<Array<string | number>>): { shipment: CanonicalShipment; source: CommercialSource } {
@@ -84,7 +84,7 @@ describe('commercial data only', () => {
     expect(pkg.header.invoiceNumber.value).toBe('CN-1042');
     expect(pkg.header.totalWeightKg).toMatchObject({ value: '79832', source: 'derived' });
     expect(pkg.containers).toHaveLength(1);
-    expect(pkg.containers[0]).toMatchObject({ containerNumber: { value: C1, source: 'excel' }, carrierSeal: { value: 'SL-4471209' }, status: 'valid' });
+    expect(pkg.containers[0]).toMatchObject({ containerNumber: { value: C1, source: 'excel' }, shipperSeal: { value: 'SH-001' }, status: 'valid' });
     expect(pkg.containers[0]?.cargoDescription.value).toBe('SHELLED ALMONDS');
     expect(pkg.containers[0]?.hsCode).toMatchObject({ value: '0802.12', source: 'derived' });
     expect(pkg.containers[0]?.grossWeightKg).toMatchObject({ value: '79832', source: 'derived' });
@@ -152,7 +152,7 @@ describe('QuickBooks + Deckhand', () => {
     expect(pkg.header.vessel).toMatchObject({ value: 'MSC FIRENZE', source: 'deckhand', confirmedBy: 'excel' });
     const first = pkg.containers.find((container) => container.containerNumber.value === C1);
     expect(first?.containerNumber.confirmedBy).toBe('excel');
-    expect(first?.carrierSeal).toMatchObject({ value: 'SL-4471209', source: 'deckhand', confirmedBy: 'excel' });
+    expect(first?.shipperSeal).toMatchObject({ value: 'SH-001', source: 'deckhand', confirmedBy: 'excel' });
     expect(pkg.conflicts).toEqual([]);
   });
 
@@ -201,10 +201,14 @@ describe('QuickBooks + Deckhand', () => {
   });
 
   it('flags a seal conflict on the matching container', () => {
+    // The SealNumber column is the operator's own seal, so it meets the
+    // document's SHIPPER seal (SH-001 on this container), not its carrier seal.
     const { shipment, source } = invoice({ SealNumber: 'SL-DIFFERENT' });
     const pkg = buildFilingPackage({ invoice: shipment, commercialSource: source, shipment: deckhand(), deckhandApproved: true, now: NOW });
-    const conflict = pkg.conflicts.find((item) => item.field === 'carrierSeal');
-    expect(conflict).toMatchObject({ container: C1, commercialValue: 'SL-DIFFERENT', deckhandValue: 'SL-4471209', material: true });
+    const conflict = pkg.conflicts.find((item) => item.field === 'shipperSeal');
+    expect(conflict).toMatchObject({ container: C1, commercialValue: 'SL-DIFFERENT', deckhandValue: 'SH-001', material: true });
+    expect(pkg.containers.find((container) => container.containerNumber.value === C1)?.shipperSeal.value).toBe('SH-001');
+    // The carrier seal from the document's explicit column is untouched.
     expect(pkg.containers.find((container) => container.containerNumber.value === C1)?.carrierSeal.value).toBe('SL-4471209');
   });
 

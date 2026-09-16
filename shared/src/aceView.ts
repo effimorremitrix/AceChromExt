@@ -71,7 +71,10 @@ export function aceShipmentFromPackage(pkg: FilingPackage): AceView {
   if (pkg.containers.length === 1) {
     const container = pkg.containers[0]!;
     overlay('containerNumber', { ...container.containerNumber, value: normalizedContainerNumber(container) }, 'ContainerNumber');
-    overlay('sealNumber', container.carrierSeal, 'SealNumber');
+    // The SealNumber column is the operator's own seal, so it is fed by the
+    // shipper seal (2026-09-16). A carrier seal is a different bolt and never
+    // stands in for it.
+    overlay('sealNumber', container.shipperSeal, 'SealNumber');
   } else if (pkg.containers.length > 1) {
     // A placeholder such as "See Ocean B/L" in the commercial container field
     // must not be typed into ACE now that the real containers are known.

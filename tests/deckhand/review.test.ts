@@ -142,7 +142,7 @@ describe('the review', () => {
     const review = buildReview(x);
     expect(review.headerRows.map((row) => row.mark)).toEqual(['warn', 'warn', 'warn', 'warn', 'warn', 'warn']);
     expect(review.containers[0]?.number.mark).toBe('ok');
-    expect(review.containers[0]?.carrierSeal.mark).toBe('ok');
+    expect(review.containers[0]?.shipperSeal.mark).toBe('ok');
     expect(review.canApprove).toBe(true);
     const block = formatBlock(x);
     for (const label of ['Booking reference', 'Vessel', 'Voyage', 'Port of loading', 'Port of discharge', 'Anything I am unsure of']) expect(block).toContain(label);
@@ -165,7 +165,7 @@ describe('the review', () => {
   it('does not block approval on a missing value; missing is filled by hand', () => {
     const x = extractWithRules(`Container ${C1}\nContainer ${C2} Seal: SL-2`);
     const review = buildReview(x);
-    expect(review.containers[0]?.carrierSeal.mark).toBe('warn');
+    expect(review.containers[0]?.shipperSeal.mark).toBe('warn');
     expect(review.canApprove).toBe(true);
     const approved = approveShipment(x, new Date('2026-09-14T10:00:00Z'));
     expect(approved.approvedAt).toBe('2026-09-14T10:00:00.000Z');
@@ -178,8 +178,8 @@ describe('the review', () => {
   it('prints the review block with marks per line and container/seal on one line each', () => {
     const block = formatBlock(extractWithRules(`Booking Ref: SHPX-99120\n${C1} | Seal No: SL-44821\n${C2} | Seal No: SL-44822`), { ascii: true });
     expect(block).toMatch(/Booking reference\s+: SHPX-99120\s+v/);
-    expect(block).toMatch(new RegExp(`${C1}\\s+v\\s+carrier seal SL-44821\\s+v`));
-    expect(block).toMatch(new RegExp(`${C2}\\s+v\\s+carrier seal SL-44822`));
+    expect(block).toMatch(new RegExp(`${C1}\\s+v\\s+shipper seal SL-44821\\s+v`));
+    expect(block).toMatch(new RegExp(`${C2}\\s+v\\s+shipper seal SL-44822`));
   });
 });
 

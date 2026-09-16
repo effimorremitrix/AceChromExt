@@ -175,7 +175,7 @@ export const PACKAGE_CONTAINER_LABELS: Record<PackageContainerField, string> = {
   marksAndNumbers: 'Marks and numbers',
 };
 
-export type ConflictField = 'bookingReference' | 'vessel' | 'containers' | 'carrierSeal';
+export type ConflictField = 'bookingReference' | 'vessel' | 'containers' | 'shipperSeal';
 
 /**
  * The two sources disagree about one value. Nothing is overwritten: both

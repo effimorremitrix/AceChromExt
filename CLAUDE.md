@@ -159,6 +159,7 @@ preview → ACE`.
 | an INTTRA field | `inttra-extension/src/mappings/<screen>.ts` (placeholders until captured live) |
 | a grid column on Copy Container Details | `GRID_COLUMNS` in `inttra-extension/src/mappings/containerGrid.ts` |
 | an email shape Deckhand should read | a rule in `deckhand/src/extract/` + a fixture in `tests/fixtures/deckhand/`; never a rule that pairs by position |
+| whose seal an unlabelled seal column is | `sealKindOf` in `deckhand/src/extract/containers.ts`. An unattributed seal is the SHIPPER's, because the operator is the shipper; only "carrier", "line" or "customs" send it the other way. It decides which INTTRA grid column the number lands in, so read `docs/DECKHAND.md` before changing it |
 | a field in the filing package, or the merge policy | `shared/src/filingPackage.ts` + `shared/src/builder.ts` |
 | a document reader (PDF, mailbox) | implement `DocumentReader` in `deckhand/src/readers/`, register in `deckhand/src/extractor.ts` |
 | a dashboard screen | a renderer in `web/src/views/` over `ShipmentRecord`; the rules stay in `src/`, `shared/`, `deckhand/`. A workflow step is a pure function in `web/src/workflow.ts` |

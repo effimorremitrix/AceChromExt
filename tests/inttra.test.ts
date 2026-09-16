@@ -271,7 +271,10 @@ describe('the container grid', () => {
     expect(report.failed).toBe(0);
     const rows = Array.from(document.querySelectorAll('[role="row"]')).slice(1);
     expect(rows[2]?.children[0]?.textContent).toBe('TGHU7654320');
-    expect(rows[2]?.children[1]?.textContent).toBe('SL-9');
+    // The document heads this container's seal just "Seal:", so it lands in
+    // Shipper Seal # (column 2), not Carrier Seal # (column 1).
+    expect(rows[2]?.children[1]?.textContent).toBe('');
+    expect(rows[2]?.children[2]?.textContent).toBe('SL-9');
   });
 
   it('marks a cell failed when the read-back disagrees, and reports it', () => {

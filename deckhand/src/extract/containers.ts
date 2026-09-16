@@ -86,9 +86,35 @@ function findContainers(line: string): string[] {
   return [...line.matchAll(new RegExp(CONTAINER_RE.source, CONTAINER_RE.flags))].map((match) => match[0]);
 }
 
+/**
+ * Whose seal is this?
+ *
+ * Only an explicit word decides it. A seal the document attributes to nobody
+ * is the SHIPPER's, because the operator running Deckhand is the shipper: a
+ * bare "SEAL#" column on their own container list holds the seals they applied
+ * when they stuffed the boxes. Reported on 2026-09-16 against a real loading
+ * list from the operator's own office, whose "SEAL#" column Deckhand had been
+ * filing as the carrier's.
+ *
+ * "Carrier", "line" and "customs" all name someone who is not the shipper, so
+ * they go to the carrier side. There are only two buckets, and a customs seal
+ * is certainly not one the shipper applied.
+ *
+ * The cost of this default is the mirror case: a carrier's own email listing
+ * seals under a bare "Seal" heading now reads as shipper seals. Nothing in the
+ * text distinguishes the two documents, and inferring it from the sender would
+ * be exactly the kind of guess this module refuses to make elsewhere, so the
+ * assumption is recorded in the field's label instead (see ASSUMED_SHIPPER)
+ * and shown to the operator on the review screen.
+ */
 function sealKindOf(label: string): SealKind {
-  return /shipper/i.test(label) ? 'shipper' : 'carrier';
+  if (/shipper/i.test(label)) return 'shipper';
+  if (/carrier|line|customs/i.test(label)) return 'carrier';
+  return 'shipper';
 }
+
+/** Said on every seal whose owner the document never states. */
+const ASSUMED_SHIPPER = 'unattributed, read as a shipper seal';
 
 /**
  * Seals behind a label, split on the separators a list uses. "Seals: SL-1,
@@ -259,6 +285,8 @@ interface TableHeader {
   container: number;
   carrierSeal: number | null;
   shipperSeal: number | null;
+  /** True when the shipper column was taken from an unattributed "Seal" heading. */
+  shipperAssumed: boolean;
   cellCount: number;
 }
 
@@ -273,13 +301,22 @@ function parseTableHeader(line: string): TableHeader | null {
   const cells = splitCells(line).map((cell) => cell.toLowerCase());
   const container = cells.findIndex((cell) => /\b(?:container|cntr|equipment|unit)\b/.test(cell) && !/seal/.test(cell));
   if (container === -1) return null;
-  const shipperSeal = cells.findIndex((cell) => /shipper/.test(cell) && /seal/.test(cell));
-  const carrierSeal = cells.findIndex((cell, index) => /seal/.test(cell) && index !== shipperSeal);
+  // Explicit wording first, then whatever seal column is left over. A lone
+  // unattributed column is the shipper's (see sealKindOf); an unattributed one
+  // *beside* an explicit "Shipper Seal" is the carrier's, because the shipper
+  // side of the table is already spoken for.
+  const shipperExplicit = cells.findIndex((cell) => /shipper/.test(cell) && /seal/.test(cell));
+  const carrierExplicit = cells.findIndex((cell) => /carrier|line|customs/.test(cell) && /seal/.test(cell));
+  const bare = cells.findIndex((cell, index) => /seal/.test(cell) && index !== shipperExplicit && index !== carrierExplicit);
+
+  const shipperSeal = shipperExplicit !== -1 ? shipperExplicit : bare;
+  const carrierSeal = carrierExplicit !== -1 ? carrierExplicit : shipperExplicit !== -1 ? bare : -1;
   if (shipperSeal === -1 && carrierSeal === -1) return null;
   return {
     container,
     carrierSeal: carrierSeal === -1 ? null : carrierSeal,
     shipperSeal: shipperSeal === -1 ? null : shipperSeal,
+    shipperAssumed: shipperExplicit === -1 && shipperSeal !== -1,
     cellCount: cells.length,
   };
 }
@@ -302,8 +339,8 @@ function tableRow(line: string, header: TableHeader, lineNumber: number): Contai
   if (containers.length !== 1) return null;
   return {
     number: toContainerNumber(containers[0] as string),
-    carrierSeal: sealCell(cells, header.carrierSeal, 'Seal column'),
-    shipperSeal: sealCell(cells, header.shipperSeal, 'Shipper seal column'),
+    carrierSeal: sealCell(cells, header.carrierSeal, 'Carrier seal column'),
+    shipperSeal: sealCell(cells, header.shipperSeal, header.shipperAssumed ? `Seal column (${ASSUMED_SHIPPER})` : 'Shipper seal column'),
     evidence: 'same_row',
     line: lineNumber,
   };
@@ -347,8 +384,8 @@ export function scanLines(lines: string[]): LineScan {
     if (column) {
       containers.push({
         number: toContainerNumber(column.container),
-        carrierSeal: { raw: column.seal, confidence: 'low', label: 'Second column, no heading' },
-        shipperSeal: null,
+        carrierSeal: null,
+        shipperSeal: { raw: column.seal, confidence: 'low', label: `Second column, no heading (${ASSUMED_SHIPPER})` },
         evidence: 'same_line',
         line: lineNumber,
       });
