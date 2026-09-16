@@ -99,11 +99,23 @@ stored *inside* the company file.
 1. Sign in to QuickBooks as **Admin**, in **single-user mode**, with the
    company file open.
 2. Run `node ace-export.mjs probe`.
-3. QuickBooks shows the **Application Certificate** dialog, naming
-   `ACE Export Helper` (the `appName` from your configuration).
-4. Choose **Yes, whenever this QuickBooks company file is open**, then
-   **Continue** and **Done**.
-5. `probe` prints the product name and the qbXML versions on offer.
+3. QuickBooks shows an authorization dialog naming `ACE Export Helper` (the
+   `appName` from your configuration) and your company file. A signed
+   application gets the **Application Certificate** dialog; an unsigned one
+   gets **Application permission**, headed *"... without a certificate is
+   requesting your permission ..."*. **The companion is unsigned, so the
+   second one is what you will see.** It is a local Node program driving the
+   COM request processor through an unsigned PowerShell script, so there is
+   no publisher for QuickBooks to validate. The warning is about the absent
+   signature, not about anything being wrong with the installation.
+4. Choose **Yes, whenever my QuickBooks company file is open**.
+5. Leave the **personal data** checkbox (Social Security Number, customer
+   credit card information) **unchecked**. The companion queries invoice
+   headers, lines and custom fields; it asks for neither.
+6. On the unsigned dialog, type `yes` in the confirmation box. **Continue
+   stays greyed out until you do** - this is the step that strands people.
+7. **Continue**, then **Done**.
+8. `probe` prints the product name and the qbXML versions on offer.
 
 Afterwards, review or revoke it in QuickBooks under
 **Edit > Preferences > Integrated Applications > Company Preferences**.
@@ -115,6 +127,11 @@ Notes that save an afternoon:
 - **No password is ever asked for, stored or read.** The certificate is the
   whole mechanism; this tool never sees a QuickBooks credential.
 - Authorizing needs single-user mode. Everyday use does not.
+- The fourth option, **always allow access even when my QuickBooks isn't
+  running**, is for an unattended run and also wants a login user set under
+  Integrated Applications; the everyday flow does not need it. `--launch` uses
+  `localQBDLaunchUI`, which starts QuickBooks with its interface, so it works
+  under the "whenever the company file is open" grant.
 - Multi-user/hosted files: run the companion on the machine hosting the file.
 
 ## 6. How invoices are queried
@@ -479,6 +496,7 @@ by Phase 1's placeholder selectors - [docs/ACE-MAPPING.md](ACE-MAPPING.md).)
 | --- | --- |
 | `QuickBooks SDK not reachable: QBXMLRP2.RequestProcessor could not be created` | Either the SDK is not installed, or you are on 64-bit PowerShell. The request processor is 32-bit; the companion picks `C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe` when it exists. |
 | `The application certificate has not been granted` | Sign in as Admin in single-user mode and answer the prompt - section 5. |
+| **Continue** is greyed out on the permission dialog | The unsigned dialog wants the word `yes` typed into its confirmation box first - section 5. |
 | `QuickBooks denied access to this application` | Edit > Preferences > Integrated Applications > Company Preferences, allow it, re-run. |
 | `No company file is open` | Open the file in QuickBooks, or set `companyFile`, or pass `--launch` to let QuickBooks start itself. |
 | `2 invoices are numbered "CN-1042"` | QuickBooks does not enforce unique invoice numbers. The message lists the TxnIDs; re-run with `txn:<id>`. |
