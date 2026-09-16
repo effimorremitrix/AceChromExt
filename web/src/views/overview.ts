@@ -10,7 +10,7 @@ import { el } from '../../../src/ui/dom.js';
 import { fillGate } from '../../../shared/src/index.js';
 import type { ShipmentRecord } from '../state.js';
 import type { DashboardActions } from '../app.js';
-import { shipmentLabel } from '../workflow.js';
+import { loadSampleShipment, shipmentLabel } from '../workflow.js';
 import { aceCounts, type AceReadiness, type InttraReadiness, type NextAction } from '../readiness.js';
 import { handoffCard, statusPill } from './shared.js';
 
@@ -59,9 +59,15 @@ export function renderOverview(record: ShipmentRecord, actions: DashboardActions
     lines.push(statusLine('warn', 'No filing package built yet'));
   }
 
+  const statusChildren: Array<HTMLElement | null> = [el('strong', { text: 'Status' }), el('ul', { className: 'status-list web-mt' }, lines)];
+  if (!commercial) {
+    const sample = el('button', { className: 'button button-small', text: 'Load sample shipment', attrs: { type: 'button', title: 'Loads a bundled synthetic invoice and carrier email. Sample data, not a filing.' } });
+    sample.addEventListener('click', () => actions.update(loadSampleShipment, 'Sample shipment loaded. This is sample data, not a filing.'));
+    statusChildren.push(el('div', { className: 'actions web-mt' }, [sample, el('span', { className: 'small muted', text: 'Nothing to import yet? Try the bundled sample: synthetic data, marked as sample, never a filing.' })]));
+  }
   section.append(
     el('div', { className: 'web-two' }, [
-      el('div', { className: 'card' }, [el('strong', { text: 'Status' }), el('ul', { className: 'status-list web-mt' }, lines)]),
+      el('div', { className: 'card' }, statusChildren),
       el('div', { className: 'card' }, [
         el('strong', { text: 'Readiness' }),
         el('div', { className: 'readiness web-mt' }, [el('span', { text: 'ACE (the ACE Helper fills from this)' }), statusPill(model.ace.status)]),

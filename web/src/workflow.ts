@@ -40,6 +40,7 @@ import {
   type FilingPackage,
 } from '../../shared/src/index.js';
 import type { CommercialImport, ShipmentRecord } from './state.js';
+import { SAMPLE_SHIPMENT } from './sample.js';
 
 export class WorkflowError extends Error {
   constructor(message: string) {
@@ -199,6 +200,19 @@ export function importFile(
 ): ShipmentRecord {
   if (/\.json$/i.test(fileName)) return importPackage(record, new TextDecoder('utf-8').decode(bytes), fileName, now);
   return importWorkbook(record, bytes, fileName, settings, now);
+}
+
+/**
+ * The bundled sample shipment: the synthetic invoice package is imported and
+ * the synthetic booking email is placed in Deckhand's box, ready for
+ * Extract -> Approve -> Build. The record is renamed so the screen always
+ * says it is sample data. Composed from the steps above; nothing is read or
+ * parsed here.
+ */
+export function loadSampleShipment(record: ShipmentRecord, now: Date = new Date()): ShipmentRecord {
+  const imported = importPackage(record, SAMPLE_SHIPMENT.packageText, SAMPLE_SHIPMENT.packageFileName, now);
+  const drafted = setEmailDraft(imported, SAMPLE_SHIPMENT.emailText);
+  return renameShipment(drafted, SAMPLE_SHIPMENT.name);
 }
 
 // --------------------------------------------------------------- deckhand

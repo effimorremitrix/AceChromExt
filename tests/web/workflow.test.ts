@@ -28,6 +28,7 @@ import {
   importFile,
   importPackage,
   importWorkbook,
+  loadSampleShipment,
   newShipment,
   packageFileName,
   packageText,
@@ -38,6 +39,7 @@ import {
 } from '../../web/src/workflow.js';
 import { buildDashboardWorkbook, DASHBOARD_WORKBOOK_BANNER } from '../../web/src/exportExcel.js';
 import { provenanceRows } from '../../web/src/readiness.js';
+import { SAMPLE_SHIPMENT } from '../../web/src/sample.js';
 import { extractShipment } from '../../deckhand/src/index.js';
 import { deckhandText, handFilledWorkbook, handRow, NOW, quickBooksWorkbook, type QuickBooksWorkbook } from './fixtures.js';
 
@@ -238,5 +240,59 @@ describe('approval', () => {
     const reopened = importPackage(newShipment('', NOW), packageText(record)!, 'filing-package.json', NOW);
     expect(reopened.commercial).toBeNull();
     expect(reopened.pkg).toEqual(record.pkg);
+  });
+});
+
+describe('the sample shipment', () => {
+  it('loads the bundled invoice and booking email and says, everywhere, that it is sample data', () => {
+    const record = loadSampleShipment(newShipment('', NOW), NOW);
+    expect(record.commercial).not.toBeNull();
+    expect(record.commercial?.fileName).toBe('sample-invoice.filing-package.json');
+    expect(record.commercial?.shipment.commodities.length).toBeGreaterThan(0);
+    expect(record.commercial?.shipment.invoice.invoiceNumber).toMatch(/SAMPLE/);
+    expect(record.commercial?.shipment.invoice.customerName).toMatch(/SAMPLE/i);
+    expect(record.emailDraft).toBe(SAMPLE_SHIPMENT.emailText);
+    expect(record.emailDraft).toMatch(/SAMPLE DATA/);
+    expect(record.extraction).toBeNull();
+    expect(record.name).toMatch(/sample/i);
+    expect(record.name).toMatch(/not a filing/i);
+    expect(shipmentLabel(record)).toBe(SAMPLE_SHIPMENT.name);
+    expect(record.pkg?.invoice).not.toBeNull();
+    expect(record.pkg?.shipment).toBeNull();
+    // Loading it twice on the same record is the same as loading it once: a repeatable demo.
+    const again = loadSampleShipment(record, NOW);
+    expect({ commercial: again.commercial, pkg: again.pkg, emailDraft: again.emailDraft, name: again.name }).toEqual({ commercial: record.commercial, pkg: record.pkg, emailDraft: record.emailDraft, name: record.name });
+  });
+
+  it('runs extract -> approve -> build with no conflict and three valid containers', () => {
+    let record = loadSampleShipment(newShipment('', NOW), NOW);
+    record = extractDocument(record, { kind: 'text', text: record.emailDraft, name: 'sample email' }, NOW);
+    expect(record.extraction?.shipment.containers).toHaveLength(3);
+    expect(record.extraction?.shipment.bookingReference.value).toBe(record.commercial?.shipment.invoice.bookingNumber);
+    record = approveExtraction(record, NOW);
+    record = buildPackage(record, NOW);
+    expect(record.pkg?.containers).toHaveLength(3);
+    expect(record.pkg?.containers.map((container) => container.status)).toEqual(['valid', 'valid', 'valid']);
+    expect(record.pkg?.conflicts).toHaveLength(0);
+    expect(record.pkg?.review.deckhand).toBe('approved');
+    expect(fillGate(record.pkg!).ok).toBe(true);
+    expect(record.pkg?.header.bookingReference.confirmedBy).toBeDefined();
+    expect(aceData(record)?.fromPackage).toBe(true);
+    expect(record.name).toMatch(/sample/i);
+  });
+
+  it('bundles no URL and no real customer, invoice, booking or container identity', () => {
+    const texts = [SAMPLE_SHIPMENT.packageText, SAMPLE_SHIPMENT.emailText, SAMPLE_SHIPMENT.name];
+    for (const text of texts) {
+      expect(text).not.toMatch(/https?:\/\//i);
+      expect(text).not.toMatch(/\bwww\./i);
+    }
+    // The fixtures' identities and the README's worked example must not leak into the demo.
+    const forbidden = [/Aydin/i, /Kuruyemis/i, /CN-1042/, /EBKG18531408/, /MSC FIRENZE/i, /MSCU1234566/, /MSDU7654322/, /TGHU7654320/, /CSQU3054383/, /SHPX-99120/, /Meridian/i, /SID-2026-0042/];
+    for (const text of texts) for (const pattern of forbidden) expect(text, String(pattern)).not.toMatch(pattern);
+    // Every email address is on a reserved example domain.
+    for (const address of SAMPLE_SHIPMENT.emailText.match(/[\w.+-]+@[\w.-]+/g) ?? []) expect(address).toMatch(/\.example$/);
+    expect(SAMPLE_SHIPMENT.packageText).toMatch(/"shipment": null/);
+    expect(SAMPLE_SHIPMENT.emailText).toMatch(/SAMPLE DATA/);
   });
 });

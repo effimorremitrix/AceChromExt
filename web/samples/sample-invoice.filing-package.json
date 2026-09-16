@@ -1,0 +1,502 @@
+{
+  "schemaVersion": "1.0",
+  "packageId": "SAMPLE-0001_SMPL-00042",
+  "createdAt": "2026-09-01T09:00:00.000Z",
+  "invoice": {
+    "invoice": {
+      "invoiceNumber": "SAMPLE-0001",
+      "invoiceDate": "2026-09-01",
+      "customerName": "Sample Consignee Handels GmbH (SAMPLE)",
+      "billTo": "Musterstrasse 1",
+      "billToAddress2": "",
+      "billToCity": "Musterstadt",
+      "billToState": "",
+      "billToPostalCode": "00000",
+      "billToCountry": "DE",
+      "poNumber": "PO-SAMPLE-0001",
+      "freightTerms": "CIF",
+      "paymentTerms": "NET 60",
+      "paymentDueDate": "2026-10-31",
+      "carrier": "Sample Line",
+      "vessel": "SAMPLE VOYAGER V.001E",
+      "bookingNumber": "SMPL-00042",
+      "containerNumber": "SMPU1000012",
+      "sealNumber": "SL-SAMPLE-01",
+      "destination": "DE"
+    },
+    "commodities": [
+      {
+        "line": 1,
+        "exportInformationCode": "OS",
+        "scheduleB": "0802.31.0000",
+        "description": "SAMPLE GOODS - SHELLED WALNUTS (SAMPLE DATA)",
+        "quantity1": 18000,
+        "uom1": "KG",
+        "quantity2": null,
+        "uom2": "",
+        "origin": "D",
+        "valueOfGoods": 90000,
+        "shippingWeight": 18000,
+        "eccn": "EAR99",
+        "licenseCode": "C33"
+      }
+    ],
+    "provenance": {
+      "invoice": {
+        "customerName": {
+          "column": "CustomerName",
+          "original": "Sample Consignee Handels GmbH (SAMPLE)",
+          "transform": null,
+          "normalized": "Sample Consignee Handels GmbH (SAMPLE)"
+        },
+        "invoiceNumber": {
+          "column": "InvoiceNumber",
+          "original": "SAMPLE-0001",
+          "transform": null,
+          "normalized": "SAMPLE-0001"
+        },
+        "invoiceDate": {
+          "column": "InvoiceDate",
+          "original": "2026-09-01",
+          "transform": "ISO -> MM/DD/YYYY",
+          "normalized": "09/01/2026"
+        },
+        "billTo": {
+          "column": "BillTo",
+          "original": "Musterstrasse 1",
+          "transform": null,
+          "normalized": "Musterstrasse 1"
+        },
+        "billToCity": {
+          "column": "BillToCity",
+          "original": "Musterstadt",
+          "transform": null,
+          "normalized": "Musterstadt"
+        },
+        "billToPostalCode": {
+          "column": "BillToPostalCode",
+          "original": "00000",
+          "transform": null,
+          "normalized": "00000"
+        },
+        "billToCountry": {
+          "column": "BillToCountry",
+          "original": "DE",
+          "transform": null,
+          "normalized": "DE"
+        },
+        "freightTerms": {
+          "column": "FreightTerms",
+          "original": "CIF",
+          "transform": null,
+          "normalized": "CIF"
+        },
+        "paymentTerms": {
+          "column": "PaymentTerms",
+          "original": "NET 60",
+          "transform": null,
+          "normalized": "NET 60"
+        },
+        "paymentDueDate": {
+          "column": "PaymentDueDate",
+          "original": "2026-10-31",
+          "transform": "ISO -> MM/DD/YYYY",
+          "normalized": "10/31/2026"
+        },
+        "poNumber": {
+          "column": "PONumber",
+          "original": "PO-SAMPLE-0001",
+          "transform": null,
+          "normalized": "PO-SAMPLE-0001"
+        },
+        "carrier": {
+          "column": "Carrier",
+          "original": "Sample Line",
+          "transform": null,
+          "normalized": "Sample Line"
+        },
+        "vessel": {
+          "column": "Vessel",
+          "original": "SAMPLE VOYAGER V.001E",
+          "transform": null,
+          "normalized": "SAMPLE VOYAGER V.001E"
+        },
+        "bookingNumber": {
+          "column": "BookingNumber",
+          "original": "SMPL-00042",
+          "transform": null,
+          "normalized": "SMPL-00042"
+        },
+        "containerNumber": {
+          "column": "ContainerNumber",
+          "original": "SMPU1000012",
+          "transform": null,
+          "normalized": "SMPU1000012"
+        },
+        "sealNumber": {
+          "column": "SealNumber",
+          "original": "SL-SAMPLE-01",
+          "transform": null,
+          "normalized": "SL-SAMPLE-01"
+        },
+        "destination": {
+          "column": "Destination",
+          "original": "DE",
+          "transform": null,
+          "normalized": "DE"
+        }
+      },
+      "commodities": {
+        "1": {
+          "exportInformationCode": {
+            "column": "ExportInformationCode",
+            "original": "OS",
+            "transform": null,
+            "normalized": "OS"
+          },
+          "scheduleB": {
+            "column": "ScheduleB",
+            "original": "0802.31.0000",
+            "transform": null,
+            "normalized": "0802.31.0000"
+          },
+          "description": {
+            "column": "CommodityDescription",
+            "original": "SAMPLE GOODS - SHELLED WALNUTS (SAMPLE DATA)",
+            "transform": null,
+            "normalized": "SAMPLE GOODS - SHELLED WALNUTS (SAMPLE DATA)"
+          },
+          "quantity1": {
+            "column": "Quantity1",
+            "original": "18000",
+            "transform": null,
+            "normalized": "18,000"
+          },
+          "uom1": {
+            "column": "UOM1",
+            "original": "KG",
+            "transform": null,
+            "normalized": "KG"
+          },
+          "origin": {
+            "column": "Origin",
+            "original": "D",
+            "transform": null,
+            "normalized": "D"
+          },
+          "valueOfGoods": {
+            "column": "ValueOfGoods",
+            "original": "90000",
+            "transform": null,
+            "normalized": "90,000.00"
+          },
+          "shippingWeight": {
+            "column": "ShippingWeight",
+            "original": "39683",
+            "transform": "lb x 0.45359237",
+            "normalized": "18,000 kg"
+          },
+          "eccn": {
+            "column": "ECCN",
+            "original": "EAR99",
+            "transform": null,
+            "normalized": "EAR99"
+          },
+          "licenseCode": {
+            "column": "LicenseCode",
+            "original": "C33",
+            "transform": null,
+            "normalized": "C33"
+          }
+        }
+      }
+    },
+    "source": {
+      "fileName": "sample-invoice.xlsx",
+      "sheetName": "Shipment",
+      "importedAt": "2026-09-01T09:00:00.000Z",
+      "rowCount": 1,
+      "headers": [
+        "Line",
+        "ExportInformationCode",
+        "ScheduleB",
+        "CommodityDescription",
+        "Quantity1",
+        "UOM1",
+        "Quantity2",
+        "UOM2",
+        "Origin",
+        "ValueOfGoods",
+        "ShippingWeight",
+        "ShippingWeightUOM",
+        "ECCN",
+        "LicenseCode",
+        "CustomerName",
+        "InvoiceNumber",
+        "InvoiceDate",
+        "BillTo",
+        "BillToAddress2",
+        "BillToCity",
+        "BillToState",
+        "BillToPostalCode",
+        "BillToCountry",
+        "FreightTerms",
+        "PaymentTerms",
+        "PaymentDueDate",
+        "PONumber",
+        "Carrier",
+        "Vessel",
+        "BookingNumber",
+        "ContainerNumber",
+        "SealNumber",
+        "Destination"
+      ],
+      "unknownHeaders": []
+    }
+  },
+  "commercialSource": {
+    "id": "excel",
+    "label": "Excel workbook",
+    "detail": "sample-invoice.xlsx - read in this browser"
+  },
+  "shipment": null,
+  "review": {
+    "deckhand": "not-applicable",
+    "approvedAt": null
+  },
+  "decisions": {
+    "resolutions": {},
+    "manualHeader": {},
+    "manualContainers": {}
+  },
+  "header": {
+    "bookingReference": {
+      "value": "SMPL-00042",
+      "source": "excel",
+      "detail": "BookingNumber"
+    },
+    "shipmentReference": {
+      "value": "SAMPLE-0001",
+      "source": "excel",
+      "detail": "InvoiceNumber"
+    },
+    "vessel": {
+      "value": "SAMPLE VOYAGER V.001E",
+      "source": "excel",
+      "detail": "Vessel"
+    },
+    "voyage": {
+      "value": "",
+      "source": "missing"
+    },
+    "portOfLoading": {
+      "value": "",
+      "source": "missing"
+    },
+    "portOfDischarge": {
+      "value": "",
+      "source": "missing"
+    },
+    "carrier": {
+      "value": "Sample Line",
+      "source": "excel",
+      "detail": "Carrier"
+    },
+    "invoiceNumber": {
+      "value": "SAMPLE-0001",
+      "source": "excel",
+      "detail": "InvoiceNumber"
+    },
+    "invoiceDate": {
+      "value": "2026-09-01",
+      "source": "excel",
+      "detail": "InvoiceDate",
+      "original": "2026-09-01",
+      "transform": "ISO -> MM/DD/YYYY"
+    },
+    "customerName": {
+      "value": "Sample Consignee Handels GmbH (SAMPLE)",
+      "source": "excel",
+      "detail": "CustomerName"
+    },
+    "consigneeAddress1": {
+      "value": "Musterstrasse 1",
+      "source": "excel",
+      "detail": "BillTo"
+    },
+    "consigneeAddress2": {
+      "value": "",
+      "source": "missing"
+    },
+    "consigneeCity": {
+      "value": "Musterstadt",
+      "source": "excel",
+      "detail": "BillToCity"
+    },
+    "consigneeState": {
+      "value": "",
+      "source": "missing"
+    },
+    "consigneePostalCode": {
+      "value": "00000",
+      "source": "excel",
+      "detail": "BillToPostalCode"
+    },
+    "consigneeCountry": {
+      "value": "DE",
+      "source": "excel",
+      "detail": "BillToCountry"
+    },
+    "poNumber": {
+      "value": "PO-SAMPLE-0001",
+      "source": "excel",
+      "detail": "PONumber"
+    },
+    "freightTerms": {
+      "value": "CIF",
+      "source": "excel",
+      "detail": "FreightTerms"
+    },
+    "paymentTerms": {
+      "value": "NET 60",
+      "source": "excel",
+      "detail": "PaymentTerms"
+    },
+    "destinationCountry": {
+      "value": "DE",
+      "source": "excel",
+      "detail": "Destination"
+    },
+    "totalValue": {
+      "value": "90000",
+      "source": "derived",
+      "detail": "sum of 1 line value(s)"
+    },
+    "totalWeightKg": {
+      "value": "18000",
+      "source": "derived",
+      "detail": "sum of 1 line weight(s), kg"
+    }
+  },
+  "cargo": [
+    {
+      "line": 1,
+      "description": {
+        "value": "SAMPLE GOODS - SHELLED WALNUTS (SAMPLE DATA)",
+        "source": "excel",
+        "detail": "CommodityDescription"
+      },
+      "scheduleB": {
+        "value": "0802.31.0000",
+        "source": "excel",
+        "detail": "ScheduleB"
+      },
+      "hsCode": {
+        "value": "0802.31",
+        "source": "derived",
+        "detail": "first six digits of the Schedule B number",
+        "original": "0802.31.0000"
+      },
+      "quantity": {
+        "value": "18000",
+        "source": "excel",
+        "detail": "Quantity1"
+      },
+      "uom": {
+        "value": "KG",
+        "source": "excel",
+        "detail": "UOM1"
+      },
+      "valueOfGoods": {
+        "value": "90000",
+        "source": "excel",
+        "detail": "ValueOfGoods"
+      },
+      "weightKg": {
+        "value": "18000",
+        "source": "excel",
+        "detail": "ShippingWeight",
+        "original": "39683",
+        "transform": "lb x 0.45359237"
+      },
+      "origin": {
+        "value": "D",
+        "source": "excel",
+        "detail": "Origin"
+      },
+      "eccn": {
+        "value": "EAR99",
+        "source": "excel",
+        "detail": "ECCN"
+      },
+      "licenseCode": {
+        "value": "C33",
+        "source": "excel",
+        "detail": "LicenseCode"
+      },
+      "exportInformationCode": {
+        "value": "OS",
+        "source": "excel",
+        "detail": "ExportInformationCode"
+      }
+    }
+  ],
+  "containers": [
+    {
+      "index": 0,
+      "containerNumber": {
+        "value": "SMPU1000012",
+        "source": "excel",
+        "detail": "ContainerNumber"
+      },
+      "status": "valid",
+      "carrierSeal": {
+        "value": "SL-SAMPLE-01",
+        "source": "excel",
+        "detail": "SealNumber"
+      },
+      "shipperSeal": {
+        "value": "",
+        "source": "missing"
+      },
+      "cargoDescription": {
+        "value": "SAMPLE GOODS - SHELLED WALNUTS (SAMPLE DATA)",
+        "source": "excel",
+        "detail": "CommodityDescription"
+      },
+      "hsCode": {
+        "value": "0802.31",
+        "source": "derived",
+        "detail": "first six digits of the Schedule B number",
+        "original": "0802.31.0000"
+      },
+      "packageType": {
+        "value": "",
+        "source": "missing",
+        "detail": "not held by any source; enter it"
+      },
+      "packageCount": {
+        "value": "",
+        "source": "missing",
+        "detail": "not held by any source; enter it"
+      },
+      "grossWeightKg": {
+        "value": "18000",
+        "source": "derived",
+        "detail": "total shipping weight of the invoice, kg"
+      },
+      "marksAndNumbers": {
+        "value": "",
+        "source": "missing",
+        "detail": "not held by any source; enter it"
+      }
+    }
+  ],
+  "conflicts": [],
+  "notes": [
+    {
+      "severity": "info",
+      "message": "No Deckhand extraction in this package: booking, container and seal come from the commercial data alone."
+    }
+  ]
+}

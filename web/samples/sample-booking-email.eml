@@ -1,0 +1,27 @@
+From: Bookings Desk <bookings@sample-line.example>
+To: Export Desk <exports@sample-exporter.example>
+Subject: Booking Confirmation SMPL-00042 - SAMPLE VOYAGER 001E (SAMPLE DATA)
+Date: Mon, 1 Sep 2026 09:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+*** SAMPLE DATA. This is a synthetic booking email bundled with the operator
+*** dashboard for demonstration. It is not a real booking and not a filing.
+
+Carrier Booking No: SMPL-00042
+Shipment ID: SID-SAMPLE-0042
+Vessel/Voyage: SAMPLE VOYAGER / 001E
+POL: Los Angeles, CA
+POD: Hamburg
+
+Container No.     Carrier Seal     Shipper Seal
+SMPU1000012       SL-SAMPLE-01     SH-SAMPLE-01
+SMPU1000028       SL-SAMPLE-02
+
+Container 3: SMPU1000033
+Seal: SL-SAMPLE-03
+
+Please note that SMPU1000012 is the reefer unit on this booking.
+
+Regards,
+Bookings Desk, Sample Line (sample data)

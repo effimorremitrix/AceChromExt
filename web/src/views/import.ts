@@ -7,6 +7,7 @@ import { buildPreview, summarize } from '../../../src/ui/preview.js';
 import { buildPreflight } from '../../../src/ui/preflight.js';
 import type { ShipmentRecord } from '../state.js';
 import type { DashboardActions } from '../app.js';
+import { loadSampleShipment } from '../workflow.js';
 
 export function renderImport(record: ShipmentRecord, actions: DashboardActions): HTMLElement {
   const section = el('section', { className: 'panel-section' });
@@ -27,7 +28,15 @@ export function renderImport(record: ShipmentRecord, actions: DashboardActions):
     drop.classList.remove('dropzone-over');
     if (event.dataTransfer?.files.length) void actions.importFiles(event.dataTransfer.files);
   });
-  section.append(el('div', { className: 'card' }, [el('label', { className: 'field' }, [el('span', { text: 'Workbook (.xlsx) or filing package (.json)' }), input]), drop]));
+  const sample = el('button', { className: 'button button-small', text: 'Load sample shipment', attrs: { type: 'button', title: 'Loads a bundled synthetic invoice and carrier email. Sample data, not a filing.' } });
+  sample.addEventListener('click', () => actions.update(loadSampleShipment, 'Sample shipment loaded. This is sample data, not a filing.'));
+  section.append(
+    el('div', { className: 'card' }, [
+      el('label', { className: 'field' }, [el('span', { text: 'Workbook (.xlsx) or filing package (.json)' }), input]),
+      drop,
+      el('div', { className: 'actions' }, [sample, el('span', { className: 'small muted', text: 'No file at hand? The sample is a synthetic invoice and booking email bundled with the page, marked as sample data. Never file it.' })]),
+    ]),
+  );
 
   section.append(
     el('div', { className: 'notice notice-muted small' }, [
