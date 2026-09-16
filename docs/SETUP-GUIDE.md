@@ -57,7 +57,11 @@ node ace-export.mjs probe   # authorize once, as QuickBooks Admin
 ```
 
 `probe` needs QuickBooks open and an Admin login: QuickBooks asks once whether
-this application may read the company file, and remembers the answer.
+this application may read the company file, and remembers the answer. The
+prompt says *without a certificate*, because the companion is an unsigned local
+program; that is expected. Answer **Yes, whenever my QuickBooks company file is
+open**, leave the personal-data checkbox unchecked, and type `yes` in the
+confirmation box to enable **Continue**.
 Nothing is written back to QuickBooks; the companion only ever issues Query
 requests, and a test asserts that.
 
