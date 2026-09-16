@@ -40,7 +40,9 @@ describe('ACE readiness', () => {
     expect(ace.data?.fromPackage).toBe(true);
     expect(ace.preflight?.blocking).toEqual([]);
     expect(ace.mapping).toHaveLength(ALL_MAPPINGS.length);
-    const booking = ace.mapping.find((row) => row.key === 'BookingNumber');
+    // Renamed on 2026-09-16: ACE Step 4 files the booking number in its
+    // Transportation Reference Number box.
+    const booking = ace.mapping.find((row) => row.key === 'TransportationReferenceNumber');
     expect(booking?.aceValue).toBe('EBKG18531408');
     expect(booking?.source).toContain('Deckhand');
     const weight = ace.mapping.find((row) => row.key === 'ShippingWeight');

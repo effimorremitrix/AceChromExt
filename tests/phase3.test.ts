@@ -49,8 +49,8 @@ import { isKnownUom } from '../src/ace/transformers/codes.js';
 
 const ROW: Array<string | number> = [
   1, 'OS', '0802.12.0000', 'SHELLED ALMONDS', 79832, 'KG', '', '', 'D', 651217.6, 176000, 'lb', 'EAR99', 'C33',
-  'Aydin Kuruyemis San Ve Tic A.S', 'CN-1042', '2026-09-21', 'Organize Sanayi Bolgesi 3. Cadde No 14', '', 'Aydin', '', '09100', 'TR', 'CIF', 'NET 120', '2027-01-19',
-  '3993', 'MSC Line', 'MSC FIRENZE V.541W', 'EBKG18531408', 'MSCU1234567', 'SL-4471209', 'TR',
+  'Aydin Kuruyemis San Ve Tic A.S', 'CN-1042', '2026-09-21', 'Organize Sanayi Bolgesi 3. Cadde No 14', '', 'Aydin', '', '09100', 'TR', 'CA', 'CIF', 'NET 120', '2027-01-19',
+  '3993', 'MSCU', 'MSC FIRENZE V.541W', 'EBKG18531408', 'MSCU1234567', 'SL-4471209', 'TR',
 ];
 
 function workbookBytes(extraSheets: Array<{ name: string; rows: Array<Array<string | number>> }> = []): Uint8Array {
@@ -255,7 +255,9 @@ describe('the mapping status screen', () => {
     expect(weight?.transform).toContain('0.45359237');
     expect(weight?.aceValue).toBe('79832');
     expect(weight?.aceField).toBe('Shipping Weight (whole Kilograms)');
-    expect(weight?.selector).toContain('shippingWeight');
+    // The real ACE path is `shipmentWeight`, captured 2026-09-16; the old
+    // guess `shippingWeight` only ever matched the visible label.
+    expect(weight?.selector).toContain('shipmentWeight');
   });
 
   it('works with no ACE page open, and says the page was not checked', () => {
@@ -394,7 +396,7 @@ describe('the pre-fill data quality gate', () => {
     // guessed and never partially written.
     expect(report.filled).toBeGreaterThan(0);
     expect((document.getElementById('scheduleBNumber') as HTMLInputElement).value).toBe('');
-    expect((document.getElementById('valueOfGoods') as HTMLInputElement).value).toBe('651218');
+    expect((document.getElementById('commodityLines[0].goodsValue.stringField') as HTMLInputElement).value).toBe('651218');
   });
 });
 

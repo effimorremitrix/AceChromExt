@@ -222,11 +222,11 @@ describe('end to end: QuickBooks invoice CN-1042 to a filled ACE form', () => {
 
       expect(value('scheduleBNumber')).toBe('0802.12.0000');
       expect(value('commodityDescription')).toContain('Almond');
-      expect(value('quantity1')).toBe('79832');
+      expect(value('commodityLines[0].quantity1.stringField')).toBe('79832');
       expect(value('unitOfMeasure1')).toBe('KG');
       expect(value('originOfGoods')).toBe('D');
-      expect(value('valueOfGoods')).toBe('651218');
-      expect(value('shippingWeight')).toBe('79832');
+      expect(value('commodityLines[0].goodsValue.stringField')).toBe('651218');
+      expect(value('commodityLines[0].shipmentWeight.stringField')).toBe('79832');
       expect(value('licenseCode')).toBe('C33');
       expect(value('exportInformationCode')).toBe('OS');
     });
@@ -273,7 +273,9 @@ describe('end to end: QuickBooks invoice CN-1042 to a filled ACE form', () => {
       expect(weight?.source).toContain('QuickBooks export');
       expect(weight?.aceValue).toBe('79832');
       expect(weight?.aceField).toBe('Shipping Weight (whole Kilograms)');
-      expect(weight?.selector).toContain('shippingWeight');
+      // The real ACE path is `shipmentWeight`, captured 2026-09-16; the old
+    // guess `shippingWeight` only ever matched the visible label.
+    expect(weight?.selector).toContain('shipmentWeight');
       expect(weight?.status).toBe('READY');
 
       // With output.weightUom = 'kg' the companion writes the *converted*

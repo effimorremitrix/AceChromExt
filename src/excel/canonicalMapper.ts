@@ -31,6 +31,7 @@ import {
   normalizeScheduleB,
   normalizeShortCode,
   normalizeUom,
+  normalizeUsState,
 } from '../ace/transformers/codes.js';
 import { normalizeWeightToKg } from '../ace/transformers/weight.js';
 import type { AceHelperSettings } from '../core/settings.js';
@@ -181,6 +182,11 @@ export function mapCell(spec: ColumnSpec, cell: RawCell, weightUnitHint: string,
 
     case 'country': {
       const result = normalizeCountryCode(original);
+      return { value: result.value, transform: result.transform, notes: result.note ? [result.note] : [], normalized: result.value };
+    }
+
+    case 'usState': {
+      const result = normalizeUsState(original);
       return { value: result.value, transform: result.transform, notes: result.note ? [result.note] : [], normalized: result.value };
     }
 

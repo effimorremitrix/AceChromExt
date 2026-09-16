@@ -189,16 +189,37 @@ transformation engine.
 Five things are built but not verified against the real system, and all must
 stay honestly described:
 
-1. The ACE selectors are **verified by label wording only**. The labels of
-   Steps 1-3 were captured from live AESDirect screenshots on 2026-09-14 and
-   live in `capturedLabel(...)` candidates; the element ids/names are still
-   `placeholder(...)` guesses, the dropdowns may be combobox widgets over a
-   hidden `<select>`, and Step 4 (Transportation) was never captured.
-   `docs/ACE-MAPPING.md` lists what is still missing, field by field. Never
-   replace a `placeholder(...)` with `verified(...)` unless the selector really
-   was copied from the live DOM, and never write `capturedLabel(...)` for a
-   wording that was not read off the real screen. `PONumber` and
-   `FreightTerms` are template columns with no ACE field: do not map them.
+1. The ACE selectors are **mostly verified by label wording, with six real
+   ids**. Labels for all four steps were read off live AESDirect screens
+   (Steps 1-3 on 2026-09-14, Step 4 on 2026-09-16) and live in
+   `capturedLabel(...)` candidates. Six ids were copied from the live DOM on
+   2026-09-16: Departure Date (`estExportDate`), 1st Quantity, Value of Goods,
+   Shipping Weight, Conveyance Name and Transportation Reference Number
+   (`refNbrValue`). Twenty fields still match by label only;
+   `fieldsWithoutCapturedSelector()` is the list and `tests/aceMapping.test.ts`
+   pins it, so it can only shrink. `docs/ACE-MAPPING.md` says what to capture,
+   field by field. Never replace a `placeholder(...)` with `verified(...)`
+   unless the selector really was copied from the live DOM, and never write
+   `capturedLabel(...)` for a wording that was not read off the real screen.
+   `PONumber` and `FreightTerms` are template columns with no ACE field: do not
+   map them.
+
+   Two structural facts, both from 2026-09-16, that guesses keep getting
+   wrong: ACE ids are Spring binding paths ending in `.stringField`
+   (`commodityLines[0].quantity1.stringField`), so use `bindingPath(...)` /
+   `bindingSuffix(...)`, not `byIdSuffix(...)`, and note that such an id is not
+   a valid CSS id selector. And **every dropdown is a Select2 3.x combobox**
+   over a hidden `<select>`; `resolveSelect2` in
+   `src/content/fieldDetector.ts` maps the widget back to the real control,
+   but no dropdown write has ever run against the live portal. Never put a
+   Select2-generated id (`select2-chosen-3`, `s2id_autogen4`) in a selector
+   table: they are numbered from a global counter.
+
+   ACE Step 4 has **no Container Number and no Seal Number** (confirmed in
+   edit mode with MOT = vessel, containerized). Those stay in the canonical
+   model and the spreadsheet for the INTTRA Helper; they are not ACE fields.
+   Port of Export and Port of Unlading are on Step 1, vary per shipment, and
+   are **not mapped yet**.
 
 2. The QuickBooks **COM hop has never run against a real QuickBooks** - there is
    no Windows machine with QuickBooks Desktop in this toolchain. Everything

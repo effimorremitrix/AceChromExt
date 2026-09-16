@@ -17,6 +17,7 @@ export type ColumnKind =
   | 'uom'
   | 'origin'
   | 'country'
+  | 'usState'
   | 'number'
   | 'money'
   | 'weight'
@@ -69,6 +70,7 @@ export const COLUMN_SPECS: ColumnSpec[] = [
   { column: 'BillToCity', aliases: ['billtocity', 'city', 'consigneecity', 'town'], kind: 'text', target: 'invoice', field: 'billToCity' },
   { column: 'BillToState', aliases: ['billtostate', 'state', 'province', 'stateprovince', 'consigneestate', 'region'], kind: 'text', target: 'invoice', field: 'billToState' },
   { column: 'BillToPostalCode', aliases: ['billtopostalcode', 'postalcode', 'postcode', 'zip', 'zipcode', 'consigneepostalcode', 'billtozip'], kind: 'text', target: 'invoice', field: 'billToPostalCode' },
+  { column: 'OriginState', aliases: ['originstate', 'stateoforigin', 'originofgoodsstate', 'sourcestate', 'growerstate', 'usstateoforigin'], kind: 'usState', target: 'invoice', field: 'originState' },
   { column: 'BillToCountry', aliases: ['billtocountry', 'consigneecountry', 'addresscountry', 'billtocountrycode'], kind: 'country', target: 'invoice', field: 'billToCountry' },
   { column: 'FreightTerms', aliases: ['freightterms', 'incoterms', 'inco', 'termsofsale', 'shippingterms'], kind: 'text', target: 'invoice', field: 'freightTerms' },
   { column: 'PaymentTerms', aliases: ['paymentterms', 'terms'], kind: 'text', target: 'invoice', field: 'paymentTerms' },
@@ -142,6 +144,7 @@ export const TEMPLATE_COLUMNS: string[] = [
   'BillToState',
   'BillToPostalCode',
   'BillToCountry',
+  'OriginState',
   'FreightTerms',
   'PaymentTerms',
   'PaymentDueDate',

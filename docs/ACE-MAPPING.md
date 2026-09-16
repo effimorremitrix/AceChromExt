@@ -1,17 +1,33 @@
 # ACE field mapping
 
-> **Status (2026-09-14): Steps 1-3 match the live portal by label wording;
-> nothing matches by id yet; Step 4 is uncaptured.**
-> The labels of every field on the Shipment, Parties (Ultimate Consignee) and
-> Commodities (Line Details) screens were read off live AESDirect screenshots
-> and are checked in as `capturedLabel(...)` candidates, so those 22 fields
-> resolve at *medium* confidence. What is still missing is listed in
-> [Exactly what still needs capturing](#exactly-what-still-needs-capturing):
-> the element ids/names (high confidence), the dropdown option values and
-> whether the dropdowns are native `<select>`s or combobox widgets, the Parties
-> panel and Line Details containers, and the whole Transportation step (5
-> fields, still placeholders). Nothing is ever written to a field that was not
-> confidently found.
+> **Status (2026-09-16): six ids captured from the live DOM; every field
+> matches by label; Step 4 turned out to have three fields, not five.**
+>
+> On 2026-09-14 the labels of Steps 1-3 were read off live AESDirect
+> screenshots. On 2026-09-16 a second pass added Step 4's labels, the first
+> real element ids, and two structural facts that change how everything here
+> should be read:
+>
+> 1. **ACE ids are Spring binding paths**, not the plain names this project
+>    guessed: `commodityLines[0].quantity1.stringField`,
+>    `shipmentInfo.conveyanceName.stringField`. Every guess of the form
+>    `#quantity1` was wrong, and so was the `byIdSuffix` fallback, because the
+>    real ids end in `.stringField` rather than in the field name. Use
+>    `bindingPath(...)` / `bindingSuffix(...)` from
+>    `src/ace/selectors/types.ts`. Note also that
+>    `#commodityLines[0].quantity1.stringField` is **not valid CSS** - the
+>    brackets and dots parse as attribute and class selectors - so it has to be
+>    written as an attribute match.
+> 2. **Every dropdown is a Select2 3.x combobox** over a hidden `<select>`.
+>    This was the open question in the 2026-09-14 status and the answer is the
+>    awkward one. See [Select2 dropdowns](#select2-dropdowns).
+>
+> Six ids are now `verified(...)` or `bindingPath(...)`: Departure Date,
+> 1st Quantity, Value of Goods, Shipping Weight, Conveyance Name and
+> Transportation Reference Number. Twenty fields still match by label only;
+> `fieldsWithoutCapturedSelector()` in `src/ace/mappings/index.ts` is the live
+> list and `tests/aceMapping.test.ts` pins it, so it can only get shorter.
+> Nothing is ever written to a field that was not confidently found.
 >
 > **You do not need this document to fix a selector.** A captured selector can
 > be pasted into the panel as JSON and is in force on the next fill, with no
@@ -27,15 +43,39 @@ decision or has no template column yet (the hand-off workbook
 
 | Step | Screen | Fields in the order they appear |
 | --- | --- | --- |
-| 1 | Shipment | Email Response Address(es) · **Shipment Reference Number** · Filing Option · Mode of Transport (MOT) · Port of Export · Port of Unlading · **Departure Date** · Origin State · **Country of Destination** · Inbond Type · Foreign Trade Zone · Import Entry # · Original ITN |
+| 1 | Shipment | Email Response Address(es) · **Shipment Reference Number** · Filing Option · Mode of Transport (MOT) · Port of Export · Port of Unlading · **Departure Date** · **Origin State** · **Country of Destination** · Inbond Type · Foreign Trade Zone · Import Entry # · Original ITN · Routed Transaction? · USPPI and Consignee related? · Hazardous material? |
 | 2 | Parties → *Ultimate Consignee* panel (the USPPI panel above it repeats the same labels) | Sold En Route? · Consignee Type · ID Number Type · ID Number · **Company Name** · First Name · Last Name · Phone Number · **Address Line 1** · **Address Line 2** · **Country** · **Postal Code** · **City** · **State** |
 | 3 | Commodities → *Line Summary* (table; **Add New Line**, Edit \| Delete) → *Line Details*, headed "Line N Details" | **Export Information Code** · **Schedule B or HTS Number** · **Commodity Description** · **1st Quantity** · **1st UOM** (read-only, derived from Schedule B) · **2nd Quantity** · **2nd UOM** · **Origin of Goods** · **Value of Goods (whole US Dollars)** · **Shipping Weight (whole Kilograms)** · **ECCN** · **License Type Code/License Exemption Code** · PGA data required? |
-| 4 | Transportation | *not captured* |
+| 4 | Transportation | **Carrier SCAC/IATA** · **Conveyance Name/Carrier Name** · **Transportation Reference Number** |
 
-Three facts from the screens changed the mappings:
+Facts from the screens that changed the mappings:
 
 - the Shipment step has **no PO Number and no INCO Terms** box, so the
   `PONumber` and `FreightTerms` template columns are reference data only;
+- **Step 4 has no Container Number and no Seal Number box.** Confirmed in edit
+  mode on 2026-09-16 with Mode of Transport set to `11 - VESSEL,
+  CONTAINERIZED`, the case where a container panel would appear if ACE had
+  one. They were never ACE fields: container and seal are carrier booking
+  data, which is what the INTTRA Helper fills. Both stay in the canonical
+  model and the spreadsheet; neither is mapped to an ACE field;
+- **the booking number is filed as Transportation Reference Number**
+  (`refNbrValue`, maxlength 30). For a vessel shipment they are the same AES
+  data element, so the mapping is keyed `TransportationReferenceNumber` and
+  still sourced from `invoice.bookingNumber`;
+- **Carrier SCAC/IATA takes a code, not a name.** The live value is `MSCU`,
+  MSC's SCAC. The mapping upper-cases it and the validator warns when the
+  spreadsheet supplies anything longer than four characters. The element's own
+  maxlength has not been captured, so no length is claimed on the mapping;
+- **Conveyance Name/Carrier Name is `maxlength="23"`**, and the live value
+  `MSC JULIE V. MC732R` packs the vessel name AND the voyage number into that
+  budget;
+- **Origin State is the US state the goods come from**, not the state of the
+  export port and not the consignee's state. Pecans grown in Texas and shipped
+  through Savannah file `TX`, not `GA`; almonds railed from northern
+  California to Norfolk file `CA`, not `VA`. It is a new canonical field
+  (`invoice.originState`), a new template column (`OriginState`) and a
+  `usState` transform that converts a state name to its code. ACE takes one
+  per filing, not one per commodity line;
 - **Value of Goods is whole dollars** (`wholeDollars` transform) and Shipping
   Weight is whole kilograms, which the importer already produced;
 - **1st UOM / 2nd UOM are derived by ACE** from the Schedule B number and shown
@@ -255,17 +295,31 @@ real shape of ACE.
 
 ## Exactly what still needs capturing
 
-The label wording of Steps 1-3 is done. Each field below still needs one DOM
+All four steps' label wording is done. Each field below still needs one DOM
 capture to go from medium to high confidence; `devtoolsHint` in the selector
 table repeats this inside the Diagnostics panel, next to the field.
+`fieldsWithoutCapturedSelector()` is the same list in code, pinned by
+`tests/aceMapping.test.ts`.
+
+**Capture dropdowns with the list closed.** Inspecting an open Select2
+dropdown lands on `<div id="select2-drop-mask">`, a page-wide transparent
+overlay that belongs to no field. See
+[Select2 dropdowns](#select2-dropdowns).
 
 ### Step 1: Shipment (`src/ace/selectors/shipment.ts`)
 
 | Field | Label (verified) | Still to capture |
 | --- | --- | --- |
 | `ShipmentReferenceNumber` | Shipment Reference Number | the `<input>` id/name |
-| `InvoiceDate` | Departure Date | the `<input>` (it shows `MM/DD/YYYY` and a calendar button); confirm a typed date is kept on blur |
-| `Destination` | Country of Destination | the `<select>` **plus two `<option>` tags**, and whether a combobox widget sits over it |
+| `InvoiceDate` | Departure Date | **done**: `id="estExportDate"`, `maxlength="10"`, `placeholder="MM/DD/YYYY"`. Still confirm a typed date survives blur |
+| `OriginState` | Origin State | the backing `<select class="select2-offscreen">` **plus two `<option>` tags**. The 2026-09-16 attempt caught Select2's own label (`s2id_autogen4_search`), which suggests the source `<select>` has no id of its own |
+| `Destination` | Country of Destination | the backing `<select>` **plus two `<option>` tags** (`TR – TURKIYE`: are values ISO codes?) |
+
+Not yet mapped, and not template-stable because they change with the routing:
+**Port of Export** (required; `2811 – METROPOLITAN OAKLAND INT` on the
+captured filing) and **Port of Unlading** (conditional; `48942 –
+DERINCE,DERINDJE,DERINCE BURNA`). Both are Select2 dropdowns over long coded
+lists, so capture two `<option>` tags with them.
 
 ### Step 2: Parties (`src/ace/selectors/parties.ts`)
 
@@ -293,25 +347,27 @@ is headed "Line N Details".
 | `ExportInformationCode` | Export Information Code | `<select>` + sample `<option>` (`OS – ALL OTHER EXPORTS`) |
 | `ScheduleB` | Schedule B or HTS Number | the `<input>`; the screen shows the dotted form `0802.12.0000`, so the dotted transform stays |
 | `CommodityDescription` | Commodity Description | `<input>` or `<textarea>`, and its `maxlength` |
-| `Quantity1`, `Quantity2` | 1st Quantity, 2nd Quantity | the `<input>`s (2nd Quantity is disabled until the Schedule B needs a second unit) |
+| `Quantity1` | 1st Quantity | **done**: `commodityLines[0].quantity1.stringField`, `nonNegativeIntegersOnly`, `maxlength="10"` |
+| `Quantity2` | 2nd Quantity | the `<input>` (disabled until the Schedule B needs a second unit) |
 | `UOM1`, `UOM2` | 1st UOM, 2nd UOM | the read-only element ACE fills from the Schedule B number, so the read-back comparison has a verified target |
 | `Origin` | Origin of Goods | the control and its options (`D – DOMESTIC`) |
-| `ValueOfGoods` | Value of Goods (whole US Dollars) | the `<input>` |
-| `ShippingWeight` | Shipping Weight (whole Kilograms) | the `<input>` |
+| `ValueOfGoods` | Value of Goods (whole US Dollars) | **done**: `commodityLines[0].goodsValue.stringField` (note `goodsValue`, not `valueOfGoods`), `nonNegativeIntegersOnly`, `maxlength="10"` |
+| `ShippingWeight` | Shipping Weight (whole Kilograms) | **done**: `commodityLines[0].shipmentWeight.stringField` (note `shipmentWeight`, not `shippingWeight`) |
 | `ECCN` | ECCN | the `<input>` |
 | `LicenseCode` | License Type Code/License Exemption Code | `<select>` + sample `<option>` (`C33 – NLR ...`) |
 | *line container* | "Line N Details" heading (verified) | the element that wraps the open form -> `lineContainerSelectors` in `src/ace/pages.ts` |
 
-### Step 4: Transportation (`src/ace/selectors/transportation.ts`) - **not captured**
+### Step 4: Transportation (`src/ace/selectors/transportation.ts`)
 
-Everything: a screenshot of the step first (labels), then the elements.
+The step holds three controls and nothing else.
 
-| Field | Capture |
-| --- | --- |
-| `Carrier` | the carrier control; note whether it is an SCAC autocomplete |
-| `Vessel` | the Conveyance Name `<input>` |
-| `BookingNumber` | the `<input>` |
-| `ContainerNumber`, `SealNumber` | the `<input>`s **and the repeating row container** |
+| Field | Label (verified) | Still to capture |
+| --- | --- | --- |
+| `Carrier` | Carrier SCAC/IATA | the `<input>` id/name **and its `maxlength`**; the live value is the 4-letter SCAC `MSCU`, so confirm whether a 2-3 character IATA code is also accepted, and whether a carrier *name* is rejected |
+| `Vessel` | Conveyance Name/Carrier Name | **done**: `shipmentInfo.conveyanceName.stringField`, `maxlength="23"` |
+| `TransportationReferenceNumber` | Transportation Reference Number | **done**: `id="refNbrValue"`, `maxlength="30"`. The odd one out: a bare name with no binding path and no `.stringField` wrapper |
+
+There is no Container Number and no Seal Number on this step.
 
 ### Page detection (`src/ace/pages.ts`)
 
@@ -321,6 +377,60 @@ Details" heading are verified. Still to capture, per step: the active tab
 element's markup (the detector reads `[aria-selected="true"]`,
 `[aria-current="step"]`, `.active`, ...), the URL path or hash, and one marker
 element that only exists on that step.
+
+## Select2 dropdowns
+
+Every ACE dropdown is a [Select2](https://select2.org) 3.x combobox. Select2
+leaves the real `<select>` in the form, tagged `select2-offscreen`, and builds
+a parallel widget beside it:
+
+```html
+<select name="originState" class="select2-offscreen" tabindex="-1">…</select>
+<div class="select2-container" id="s2id_autogen4">
+  <a class="select2-choice"><span class="select2-chosen" id="select2-chosen-3">Please Select</span>…</a>
+</div>
+<!-- appended to <body>, away from the field: -->
+<div class="select2-drop">
+  <label for="s2id_autogen4_search" class="select2-offscreen">Origin State * </label>
+  <input class="select2-input" id="s2id_autogen4_search" role="combobox">
+  <ul class="select2-results" id="select2-results-4"></ul>
+</div>
+<div id="select2-drop-mask"></div>
+```
+
+Four consequences, all handled by `resolveSelect2` in
+`src/content/fieldDetector.ts`:
+
+1. **The widget's ids are positional.** `select2-chosen-3`,
+   `select2-results-4` and `s2id_autogen4` are numbered from one global
+   counter, so they move whenever CBP adds or reorders a dropdown anywhere on
+   the page. Never write one into a selector table.
+2. **`s2id_autogen<n>` means the source `<select>` has no id.** Select2 builds
+   the container id as `s2id_` + the original element's id, falling back to
+   `autogen<n>`. So `s2id_autogen4` on Origin State says there is no
+   `#originState` to find. The detector strips the `s2id_` prefix when it can
+   and otherwise walks up to the form group and takes the
+   `select.select2-offscreen` inside it; if a group holds more than one, all
+   are returned and the field is reported AMBIGUOUS rather than guessed.
+3. **Select2 copies the field's label** onto its own offscreen label for the
+   search box, so a label search finds two controls and the field would be
+   refused as AMBIGUOUS. Resolution collapses both onto the one `<select>`.
+4. **`select2-drop-mask` is a page-wide overlay**, which is what an Inspect
+   click lands on while a dropdown is open. It belongs to no field and
+   resolves to nothing.
+
+**Still untested against the live portal.** `setAceFieldValue` writes the
+`<select>` and dispatches `input` and `change`. jQuery listens to native
+events, so Select2 3.x should repaint `.select2-chosen` from its own
+`change.select2` handler, but this has never been run against ACE. Two ways it
+can still fail, both worth checking on the first live fill:
+
+- the visible box keeps saying "Please Select" while the `<select>` holds the
+  right value;
+- the `<option>` does not exist yet, because Select2 is loading the list over
+  AJAX. This is likeliest on Port of Export and Port of Unlading, whose lists
+  are long. The writer already reports `No dropdown option matches "..."`
+  rather than typing anything, so this fails loudly.
 
 ## If ACE changes its DOM
 

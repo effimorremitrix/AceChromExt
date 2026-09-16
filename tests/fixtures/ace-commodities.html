@@ -6,9 +6,14 @@
   from the Schedule B number, the disabled 2nd Quantity, and
   "CODE - DESCRIPTION" dropdown options.
 
-  The ids are stand-ins from src/ace/selectors/commodities.ts: nothing here
-  was copied from the live DOM. Replace with a trimmed real snippet when the
-  DOM is captured (see docs/ACE-MAPPING.md).
+  1st Quantity, Value of Goods and Shipping Weight carry their real ids,
+  copied from the live DOM on 2026-09-16 together with the `title` attributes
+  and the nonNegativeIntegersOnly class ACE puts on them. Note the binding
+  path: `commodityLines[0].<field>.stringField`, and that the ACE names are
+  `goodsValue` and `shipmentWeight` rather than the labels' word order.
+
+  The other ids are still stand-ins from src/ace/selectors/commodities.ts.
+  Replace them as the DOM is captured (see docs/ACE-MAPPING.md).
 -->
 <div id="filing">
   <h1>Create Export Filing (Filer ID 943488789, ITN TBD)</h1>
@@ -60,8 +65,8 @@
     <label for="commodityDescription">Commodity Description <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
     <input type="text" id="commodityDescription" name="commodityDescription" maxlength="45" />
 
-    <label for="quantity1">1st Quantity <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
-    <input type="text" id="quantity1" name="quantity1" />
+    <label for="commodityLines[0].quantity1.stringField">1st Quantity <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+    <input type="text" id="commodityLines[0].quantity1.stringField" name="commodityLines[0].quantity1.stringField" title="1st Quantity" class="form-control nonNegativeIntegersOnly" maxlength="10" />
 
     <label for="unitOfMeasure1">1st UOM <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
     <input type="text" id="unitOfMeasure1" name="unitOfMeasure1" value="KG" readonly />
@@ -79,11 +84,11 @@
       <option value="F">F – FOREIGN</option>
     </select>
 
-    <label for="valueOfGoods">Value of Goods (whole US Dollars) <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
-    <input type="text" id="valueOfGoods" name="valueOfGoods" />
+    <label for="commodityLines[0].goodsValue.stringField">Value of Goods (whole US Dollars) <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+    <input type="text" id="commodityLines[0].goodsValue.stringField" name="commodityLines[0].goodsValue.stringField" title="Value of Goods (whole US Dollars)" class="form-control nonNegativeIntegersOnly" maxlength="10" />
 
-    <label for="shippingWeight">Shipping Weight (whole Kilograms) <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
-    <input type="text" id="shippingWeight" name="shippingWeight" />
+    <label for="commodityLines[0].shipmentWeight.stringField">Shipping Weight (whole Kilograms) <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+    <input type="text" id="commodityLines[0].shipmentWeight.stringField" name="commodityLines[0].shipmentWeight.stringField" title="Shipping Weight (whole Kilograms)" class="form-control nonNegativeIntegersOnly" maxlength="10" />
 
     <label for="eccn">ECCN <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
     <input type="text" id="eccn" name="eccn" />

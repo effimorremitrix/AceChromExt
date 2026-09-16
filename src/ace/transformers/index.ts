@@ -25,6 +25,7 @@ import {
   normalizeScheduleB,
   normalizeShortCode,
   normalizeUom,
+  normalizeUsState,
   scheduleBDigits,
 } from './codes.js';
 
@@ -141,6 +142,12 @@ export const TRANSFORMERS: Record<string, Transformer> = {
 
   country: (input) => {
     const result = normalizeCountryCode(input);
+    return out(result.value, result.transform, result.note ? [result.note] : []);
+  },
+
+  /** US state name or code -> the two-letter code ACE Step 1 Origin State expects. */
+  usState: (input) => {
+    const result = normalizeUsState(input);
     return out(result.value, result.transform, result.note ? [result.note] : []);
   },
 

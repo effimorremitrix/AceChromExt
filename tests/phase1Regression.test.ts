@@ -81,6 +81,7 @@ function handBuiltWorkbook(): { bytes: Uint8Array; fileName: string } {
     header(''),
     header('09100'),
     header('Turkey'),
+    header('California'),
     header('CIF'),
     header('NET 120'),
     header('2027-01-19'),
@@ -198,8 +199,11 @@ describe('3. Fill Current ACE Page', () => {
     );
     expect(report.errors).toBe(0);
     expect((document.getElementById('shipmentReferenceNumber') as HTMLInputElement).value).toBe('CN-1042');
-    expect((document.getElementById('departureDate') as HTMLInputElement).value).toBe('09/21/2026');
+    expect((document.getElementById('estExportDate') as HTMLInputElement).value).toBe('09/21/2026');
     expect((document.getElementById('countryOfDestination') as HTMLSelectElement).value).toBe('TR');
+    // Origin State is the US state the goods come from, written as a code
+    // even though the sheet said "California".
+    expect((document.getElementById('originState') as HTMLSelectElement).value).toBe('CA');
   });
 
   it('works with no selector overrides configured', () => {
@@ -224,8 +228,8 @@ describe('4. Fill Current Commodity Line', () => {
     );
     expect(report.errors).toBe(0);
     expect((document.getElementById('scheduleBNumber') as HTMLInputElement).value).toBe('0802.12.0000');
-    expect((document.getElementById('quantity1') as HTMLInputElement).value).toBe('79832');
-    expect((document.getElementById('valueOfGoods') as HTMLInputElement).value).toBe('651218');
+    expect((document.getElementById('commodityLines[0].quantity1.stringField') as HTMLInputElement).value).toBe('79832');
+    expect((document.getElementById('commodityLines[0].goodsValue.stringField') as HTMLInputElement).value).toBe('651218');
     expect((document.getElementById('licenseCode') as HTMLSelectElement).value).toBe('C33');
   });
 
@@ -247,7 +251,8 @@ describe('4. Fill Current Commodity Line', () => {
 
 describe('5. the F2 calculator, independent of everything else', () => {
   beforeEach(() => {
-    document.body.innerHTML = '<label for="valueOfGoods">Value of Goods</label><input id="valueOfGoods" type="text" />';
+    document.body.innerHTML =
+      '<label for="commodityLines[0].goodsValue.stringField">Value of Goods</label><input id="commodityLines[0].goodsValue.stringField" type="text" />';
     configureCalculator({ rounding: () => DEFAULT_SETTINGS.rounding, dispatchBlur: true });
   });
 
@@ -262,7 +267,7 @@ describe('5. the F2 calculator, independent of everything else', () => {
   });
 
   it('opens on a numeric field with nothing imported', () => {
-    const target = document.getElementById('valueOfGoods') as HTMLInputElement;
+    const target = document.getElementById('commodityLines[0].goodsValue.stringField') as HTMLInputElement;
     expect(isCalculatorTarget(target)).toBe(true);
     openCalculator(target);
     expect(isCalculatorOpen()).toBe(true);
@@ -271,7 +276,7 @@ describe('5. the F2 calculator, independent of everything else', () => {
   });
 
   it('does not interfere with a fill: the overlay is not a mapped ACE field', () => {
-    const target = document.getElementById('valueOfGoods') as HTMLInputElement;
+    const target = document.getElementById('commodityLines[0].goodsValue.stringField') as HTMLInputElement;
     openCalculator(target);
     const host = document.querySelector('#ace-helper-calculator-host');
     expect(host).not.toBeNull();
@@ -293,6 +298,7 @@ describe('6. mappings, transformations, validation and diagnostics are unchanged
     expect(fieldsForPage('shipment').map((field) => field.key)).toEqual([
       'ShipmentReferenceNumber',
       'InvoiceDate',
+      'OriginState',
       'Destination',
     ]);
     expect(fieldsForPage('commodities').map((field) => field.key)).toEqual([
@@ -321,9 +327,12 @@ describe('6. mappings, transformations, validation and diagnostics are unchanged
     expect(fieldsForPage('transportation').map((field) => field.key)).toEqual([
       'Carrier',
       'Vessel',
-      'BookingNumber',
-      'ContainerNumber',
-      'SealNumber',
+      // Renamed and re-pointed on 2026-09-16, when the live Step 4 turned out
+      // to hold exactly three controls: the booking number goes into
+      // Transportation Reference Number, and there is no container or seal box
+      // on the step at all. Container and seal stay in the canonical model for
+      // the INTTRA Helper.
+      'TransportationReferenceNumber',
     ]);
   });
 

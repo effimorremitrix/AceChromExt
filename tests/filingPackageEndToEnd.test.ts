@@ -107,8 +107,8 @@ describe('into ACE', () => {
     expect(report.errors).toBe(0);
     const value = (id: string): string => (document.getElementById(id) as HTMLInputElement).value;
     expect(value('scheduleBNumber')).toBe('0802.12.0000');
-    expect(value('shippingWeight')).toBe('79832');
-    expect(value('valueOfGoods')).toBe('651218');
+    expect(value('commodityLines[0].shipmentWeight.stringField')).toBe('79832');
+    expect(value('commodityLines[0].goodsValue.stringField')).toBe('651218');
   });
 
   it('fills the Transportation step with the booking and vessel from Deckhand', () => {
@@ -118,13 +118,20 @@ describe('into ACE', () => {
     const report = fillFields({ shipment: loaded.shipment, page: 'transportation', scope: 'shipment', settings: DEFAULT_SETTINGS }, document);
     expect(report.errors).toBe(0);
     const value = (id: string): string => (document.getElementById(id) as HTMLInputElement).value;
-    expect(value('bookingNumber')).toBe('EBKG18531408');
-    expect(value('conveyanceName')).toBe('MSC FIRENZE');
-    expect(value('carrierName')).toBe('MSC Line');
-    // Three containers in the package and a "See Ocean B/L" placeholder in QuickBooks: cleared, never typed into ACE.
-    expect(value('containerNumber')).toBe('');
-    expect(value('sealNumber')).toBe('');
-    const booking = report.outcomes.find((outcome) => outcome.key === 'BookingNumber');
+    // The booking number is filed in ACE's Transportation Reference Number box
+    // (id refNbrValue): for a vessel shipment they are the same data element.
+    expect(value('refNbrValue')).toBe('EBKG18531408');
+    expect(value('shipmentInfo.conveyanceName.stringField')).toBe('MSC FIRENZE');
+    // Carrier SCAC/IATA takes a code, so the mapping upper-cases it. The live
+    // value on this box is "MSCU"; whether ACE accepts a carrier name at all
+    // is still open, which is why the validator warns on anything that is not
+    // a short code.
+    expect(value('carrierScacIata')).toBe('MSC LINE');
+    // Container and seal are not on the ACE step at all, so there is nothing
+    // to clear: the three containers in the package go to INTTRA instead.
+    expect(document.getElementById('containerNumber')).toBeNull();
+    expect(document.getElementById('sealNumber')).toBeNull();
+    const booking = report.outcomes.find((outcome) => outcome.key === 'TransportationReferenceNumber');
     expect(booking?.original).toBe('EBKG18531408');
   });
 });

@@ -49,3 +49,26 @@ export function resolveFields(
 export function unverifiedFieldKeys(): string[] {
   return ALL_MAPPINGS.filter((field) => field.verificationStatus === 'placeholder').map((field) => field.key);
 }
+
+/**
+ * Fields that still have no id, name or attribute copied from the live DOM.
+ *
+ * `verificationStatus` goes to 'verified' as soon as a field carries a
+ * `capturedLabel(...)`, because label wording read off the real screen is
+ * genuinely better than a guess. It is not the same thing as knowing the
+ * control's id, though, and once every field carried a captured label the
+ * unverified list went empty and stopped telling anyone anything.
+ *
+ * This is the sharper question: which fields would still break if CBP changed
+ * a label? Those are the ones left to capture in DevTools.
+ */
+export function fieldsWithoutCapturedSelector(): string[] {
+  return ALL_MAPPINGS.filter(
+    (field) =>
+      !field.candidates.some(
+        (candidate) =>
+          candidate.verified === true &&
+          (candidate.strategy === 'id' || candidate.strategy === 'name' || candidate.strategy === 'attribute'),
+      ),
+  ).map((field) => field.key);
+}

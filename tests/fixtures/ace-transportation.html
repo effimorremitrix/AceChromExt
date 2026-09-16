@@ -1,8 +1,16 @@
 <!--
-  Mock ACE "Step 4: Transportation" screen. The Transportation step was NEVER
-  captured from the live portal (docs/ACE-MAPPING.md); the ids here are the
-  placeholder guesses in src/ace/selectors/transportation.ts, so this fixture
-  proves the fill path from a filing package, not the live selectors.
+  Mock ACE "Step 4: Transportation" screen, shaped after the live AESDirect
+  step as captured on 2026-09-16.
+
+  The live step holds exactly these three controls and nothing else. There is
+  no container panel and no seal box: that was confirmed in edit mode with
+  Mode of Transport set to "11 - VESSEL, CONTAINERIZED", the case where a
+  container panel would appear if ACE had one. Container and seal are carrier
+  booking data and belong to the INTTRA Helper.
+
+  Conveyance Name and Transportation Reference Number carry their real ids and
+  maxlengths, copied from the live DOM. The Carrier SCAC/IATA id is still a
+  stand-in: only its label was read off the screen.
 -->
 <div id="filing">
   <ul class="nav-tabs">
@@ -12,17 +20,17 @@
     <li class="active"><a href="#step4">Step 4: Transportation</a></li>
   </ul>
   <h2>Transportation</h2>
-  <label for="carrierName">Carrier Name</label>
-  <input type="text" id="carrierName" name="carrierName" />
-  <label for="conveyanceName">Conveyance Name</label>
-  <input type="text" id="conveyanceName" name="conveyanceName" />
-  <label for="bookingNumber">Booking Number</label>
-  <input type="text" id="bookingNumber" name="bookingNumber" />
-  <div data-section="container">
-    <label for="containerNumber">Container Number</label>
-    <input type="text" id="containerNumber" name="containerNumber" />
-    <label for="sealNumber">Seal Number</label>
-    <input type="text" id="sealNumber" name="sealNumber" />
+  <div class="form-group">
+    <label for="carrierScacIata">Carrier SCAC/IATA <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+    <input type="text" id="carrierScacIata" name="carrierScacIata" class="form-control" />
+  </div>
+  <div class="form-group">
+    <label for="shipmentInfo.conveyanceName.stringField">Conveyance Name/Carrier Name <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+    <input type="text" id="shipmentInfo.conveyanceName.stringField" name="shipmentInfo.conveyanceName.stringField" maxlength="23" class="form-control" />
+  </div>
+  <div class="form-group">
+    <label for="refNbrValue">Transportation Reference Number <span class="conditional">◆</span> <i class="fa fa-info-circle"></i></label>
+    <input type="text" id="refNbrValue" name="refNbrValue" class="form-control" maxlength="30" value="" />
   </div>
   <button type="button" id="saveTransportation">Save</button>
 </div>

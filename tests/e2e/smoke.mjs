@@ -260,11 +260,11 @@ try {
     await ace.evaluate(() => ({
       scheduleB: document.getElementById('scheduleBNumber').value,
       description: document.getElementById('commodityDescription').value,
-      quantity1: document.getElementById('quantity1').value,
+      quantity1: document.getElementById('commodityLines[0].quantity1.stringField').value,
       uom1: document.getElementById('unitOfMeasure1').value,
       origin: document.getElementById('originOfGoods').value,
-      value: document.getElementById('valueOfGoods').value,
-      weight: document.getElementById('shippingWeight').value,
+      value: document.getElementById('commodityLines[0].goodsValue.stringField').value,
+      weight: document.getElementById('commodityLines[0].shipmentWeight.stringField').value,
       eccn: document.getElementById('eccn').value,
       license: document.getElementById('licenseCode').value,
     })),
@@ -282,7 +282,7 @@ try {
   );
 
   const tints = await ace.evaluate(() => ({
-    transformed: document.getElementById('shippingWeight').style.backgroundColor,
+    transformed: document.getElementById('commodityLines[0].shipmentWeight.stringField').style.backgroundColor,
     plain: document.getElementById('commodityDescription').style.backgroundColor,
   }));
   checkTrue('a transformed field is tinted yellow', tints.transformed === 'rgb(255, 247, 224)');

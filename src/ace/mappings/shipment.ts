@@ -8,6 +8,10 @@
  * The live Shipment step (captured 2026-09-14) has no PO Number and no INCO
  * Terms control, so `PONumber` and `FreightTerms` are not ACE fields: the
  * columns stay in the template as reference data only.
+ *
+ * Origin State is the US state the goods come from, which is not the state of
+ * the export port and not the consignee's state: almonds railed from northern
+ * California to Norfolk file CA, not VA.
  */
 
 import type { AceFieldMapping } from '../../models/AceField.js';
@@ -40,6 +44,18 @@ export const SHIPMENT_FIELDS: AceFieldMapping[] = [
     selectors: SHIPMENT_SELECTORS,
   }),
 
+
+  defineField({
+    key: 'OriginState',
+    label: 'Origin State',
+    page: 'shipment',
+    scope: 'shipment',
+    source: 'invoice.originState',
+    type: 'select',
+    transforms: ['usState'],
+    expected: true,
+    selectors: SHIPMENT_SELECTORS,
+  }),
 
   defineField({
     key: 'Destination',
