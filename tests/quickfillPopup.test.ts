@@ -157,11 +157,41 @@ describe('the popup', () => {
     expect(buttonLabels()).toEqual(['Fill this screen', 'Fill container 1']);
   });
 
-  it('shows one button on the container grid', async () => {
+  it('offers both the fill and the paste route on the container grid', async () => {
     place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true };
     const box = await mount();
     await paste(box, email);
-    expect(buttonLabels()).toEqual(['Fill container grid']);
+    expect(buttonLabels()).toEqual(['Fill container grid', 'Copy rows']);
+  });
+
+  it('names the paste route when the grid holds no writable control', async () => {
+    // The live portal, 2026-09-17: Filled 0 of 9, every cell unresolved,
+    // because the grid opens an editor only when a cell is clicked.
+    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true };
+    reply = { ok: true, type: 'content/count', payload: { filled: 0, total: 9, missed: ['9 grid cells'], useCopyRows: true } };
+    const box = await mount();
+    await paste(box, email);
+    (document.querySelector('.button-primary') as HTMLButtonElement).click();
+    await settle();
+    expect(text('.result')).toContain('Filled 0 of 9.');
+    expect(text('.result')).toContain('Use Copy rows, click the first cell, and paste.');
+  });
+
+  it('copies the rows to the clipboard in the grid\u2019s own column order', async () => {
+    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true };
+    const written: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async (value: string) => void written.push(value) },
+    });
+    reply = { ok: true, type: 'content/rows', payload: { tsv: 'MSCU1234566\tSL-4471209', rows: 3 } };
+    const box = await mount();
+    await paste(box, email);
+    (document.querySelectorAll('.button-primary')[1] as HTMLButtonElement).click();
+    await settle();
+    expect(sent.some((message) => message.type === 'content/gridRows')).toBe(true);
+    expect(written).toEqual(['MSCU1234566\tSL-4471209']);
+    expect(text('.result')).toContain('3 row(s) copied');
   });
 
   it('offers nothing on a page that is neither portal', async () => {

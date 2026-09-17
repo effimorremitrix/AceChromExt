@@ -27,7 +27,7 @@ import { DEFAULT_SETTINGS } from '../../../src/core/settings.js';
 import type { FillReport } from '../../../src/models/AceField.js';
 import { detectInttraPage } from '../../../inttra-extension/src/content/pageDetector.js';
 import { fillInttraFields } from '../../../inttra-extension/src/content/filler.js';
-import { detectGrid, fillContainerGrid } from '../../../inttra-extension/src/content/gridWriter.js';
+import { detectGrid, fillContainerGrid, gridRowsAsTsv } from '../../../inttra-extension/src/content/gridWriter.js';
 import type { InttraFillReport } from '../../../inttra-extension/src/models/InttraField.js';
 import type { FillCount, QuickfillContentRequest, QuickfillContentResponse, Where } from '../core/messages.js';
 
@@ -151,8 +151,21 @@ function handleMessage(message: QuickfillContentRequest): QuickfillContentRespon
           filled: report.verifiedCells,
           total: report.verifiedCells + missed,
           missed: missed ? [`${missed} grid cell${missed === 1 ? '' : 's'}`] : [],
+          // Every cell that had a value held no writable control: the grid
+          // opens an editor when a cell is clicked, so there is nothing to
+          // write into until then. Observed on the live portal 2026-09-17
+          // (Filled 0 of 9). Typing into it is not the way in; pasting is.
+          ...(report.verifiedCells === 0 && report.unresolved > 0 ? { useCopyRows: true } : {}),
         },
       };
+    }
+
+    // The containers as the grid's own columns, tab separated. The operator
+    // clicks the first cell and pastes: that is what Copy Container Details is
+    // for, and it needs no selector for the cell editors at all.
+    case 'content/gridRows': {
+      const tsv = gridRowsAsTsv(message.package, detectGrid(document));
+      return { ok: true, type: 'content/rows', payload: { tsv, rows: message.package.containers.length } };
     }
 
     default:

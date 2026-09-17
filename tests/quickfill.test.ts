@@ -27,7 +27,7 @@ import { detectPage } from '../src/content/pageDetector.js';
 import { fillFields } from '../src/content/filler.js';
 import { detectInttraPage } from '../inttra-extension/src/content/pageDetector.js';
 import { fillInttraFields } from '../inttra-extension/src/content/filler.js';
-import { fillContainerGrid } from '../inttra-extension/src/content/gridWriter.js';
+import { detectGrid, fillContainerGrid, gridRowsAsTsv } from '../inttra-extension/src/content/gridWriter.js';
 import { buildFilingPackage } from '../shared/src/builder.js';
 import { serializeFilingPackage } from '../shared/src/serialize.js';
 import { extractShipment } from '../deckhand/src/extractor.js';
@@ -213,6 +213,26 @@ describe('the first live paste, 2026-09-17', () => {
     expect(report.rowsNeeded).toBe(4);
     expect(report.failed).toBe(0);
     expect(report.containersFilled).toBeGreaterThan(0);
+  });
+
+  it('produces paste-ready rows in the live grid\u2019s own column order', () => {
+    // The live grid refuses cell writes (it opens an editor on click), so the
+    // way in is the one the screen is named after: paste a block. The column
+    // order must be the grid's, not GRID_COLUMNS', or every value lands one
+    // column out.
+    document.body.innerHTML = [
+      '<table><tr>',
+      '<th>Container Number</th><th>Shipper Seal #</th><th>Carrier Seal #</th>',
+      '</tr><tr><td></td><td></td><td></td></tr></table>',
+    ].join('');
+    const result = parsed(MANIFEST);
+    const tsv = gridRowsAsTsv(result.pkg, detectGrid(document));
+    const first = tsv.split('\r\n')[0]?.split('\t') ?? [];
+    // Container, then SHIPPER seal, then carrier - the screen's order, which is
+    // not the order GRID_COLUMNS declares.
+    expect(first[0]).toBe('TLLU7564971');
+    expect(first[1]).toBe('UL-8546727');
+    expect(tsv.split('\r\n')).toHaveLength(4);
   });
 
   it('still prefers the invoice reader when the rows really are an invoice', () => {

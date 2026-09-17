@@ -62,6 +62,20 @@ function report(count: FillCount): void {
     return;
   }
   const head = `Filled ${count.filled} of ${count.total}.`;
+  if (count.useCopyRows) {
+    // Nothing took because the grid holds no writable control until a cell is
+    // clicked. Saying "0 of 9" and stopping would leave the operator stuck in
+    // front of a screen that does have a way in.
+    clear(result);
+    result.className = 'result';
+    appendAll(
+      result,
+      head,
+      ' ',
+      el('span', { className: 'result-detail', text: 'This grid opens an editor when a cell is clicked, so there is nothing to type into. Use Copy rows, click the first cell, and paste.' }),
+    );
+    return;
+  }
   if (!count.missed.length) {
     say(head);
     return;
@@ -69,6 +83,29 @@ function report(count: FillCount): void {
   clear(result);
   result.className = 'result';
   appendAll(result, head, ' ', el('span', { className: 'result-detail', text: `Not written: ${count.missed.join(', ')}.` }));
+}
+
+/**
+ * Put the containers on the clipboard as the grid's own columns.
+ *
+ * Copy Container Details is the screen INTTRA built for pasting a block of
+ * rows, so this is not a workaround: it is the screen used as intended, and it
+ * needs no selector for the cell editors. The content script produces the rows
+ * because only it can see the grid, and therefore its column order.
+ */
+async function copyRows(pkg: StoredPaste['package']): Promise<void> {
+  const response = await toContent({ type: 'content/gridRows', package: pkg });
+  if (!response.ok) {
+    say(response.error, 'error');
+    return;
+  }
+  if (response.type !== 'content/rows') return;
+  try {
+    await navigator.clipboard.writeText(response.payload.tsv);
+    say(`${response.payload.rows} row(s) copied. Click the first cell of the first empty row in INTTRA and paste.`);
+  } catch {
+    say('Could not write to the clipboard.', 'error');
+  }
 }
 
 /** Read the box, keep the result, and say in one line what it was read as. */
@@ -153,7 +190,10 @@ function renderButtons(): void {
   if (place.portal === 'inttra') {
     const pkg = stored.package;
     if (place.isGrid) {
-      buttons.append(fillButton('Fill container grid', () => run({ type: 'content/fillGrid', package: pkg })));
+      buttons.append(
+        fillButton('Fill container grid', () => run({ type: 'content/fillGrid', package: pkg })),
+        fillButton('Copy rows', () => copyRows(pkg)),
+      );
       return;
     }
     buttons.append(fillButton('Fill this screen', () => run({ type: 'content/fillInttra', package: pkg, scope: 'shipment' })));

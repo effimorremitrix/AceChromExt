@@ -27,7 +27,8 @@ export type QuickfillContentRequest =
   | { type: 'content/where' }
   | { type: 'content/fillAce'; shipment: CanonicalShipment; scope: 'shipment' | 'commodityLine'; line?: number }
   | { type: 'content/fillInttra'; package: FilingPackage; scope: 'shipment' | 'container'; containerIndex?: number }
-  | { type: 'content/fillGrid'; package: FilingPackage };
+  | { type: 'content/fillGrid'; package: FilingPackage }
+  | { type: 'content/gridRows'; package: FilingPackage };
 
 /** The whole result surface: how many, and which ones did not take. */
 export interface FillCount {
@@ -35,11 +36,19 @@ export interface FillCount {
   total: number;
   /** Labels of the fields that were not written, for the second line. */
   missed: string[];
+  /**
+   * Set when nothing could be written because the grid's cells hold no
+   * writable control - the click-to-edit case. The popup turns this into the
+   * one sentence that tells the operator to paste instead.
+   */
+  useCopyRows?: boolean;
 }
 
 export type QuickfillContentResponse =
   | { ok: true; type: 'content/where'; payload: Where }
   | { ok: true; type: 'content/count'; payload: FillCount }
+  /** The containers as tab-separated rows, in the grid's own column order. */
+  | { ok: true; type: 'content/rows'; payload: { tsv: string; rows: number } }
   | { ok: false; error: string };
 
 /** The parsed paste, held for the browsing session so a popup reopen is free. */
