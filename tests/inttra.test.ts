@@ -33,6 +33,70 @@ function samplePackage(approved = true): FilingPackage {
   return pkg;
 }
 
+/**
+ * The live workspace, 2026-09-17: a modal grid among other tables.
+ *
+ * ship.inttra.e2open.com draws Copy Container Details as a modal over a
+ * workspace that has tables of its own, and none of the guessed ids or
+ * attributes are there. Every rung of GRID_ROOT_CANDIDATES therefore fails -
+ * the last-resort `table` matches several, and "exactly one" rejects it - so
+ * the page's only real grid went undetected and the popup offered to fill the
+ * step behind the modal instead.
+ */
+describe('finding the grid among other tables', () => {
+  const OTHER_TABLE = '<table><tr><th>Booking</th><th>Status</th></tr><tr><td>EBKG1</td><td>Draft</td></tr></table>';
+  const GRID = [
+    '<table><tr>',
+    '<th>Container Number</th><th>Carrier Seal #</th><th>Shipper Seal #</th><th>HS Code</th>',
+    '</tr><tr>',
+    '<td><input name="r0.c" /></td><td><input name="r0.cs" /></td><td><input name="r0.ss" /></td><td><input name="r0.hs" /></td>',
+    '</tr></table>',
+  ].join('');
+
+  it('was not found before, because more than one table matched', async () => {
+    const { GRID_ROOT_CANDIDATES } = await import('../inttra-extension/src/mappings/containerGrid.js');
+    document.body.innerHTML = `${OTHER_TABLE}<div role="dialog">${GRID}</div>`;
+    // The old last resort: exactly one <table> on the page. There are two.
+    expect(GRID_ROOT_CANDIDATES[GRID_ROOT_CANDIDATES.length - 1]?.selector).toBe('table');
+    expect(document.querySelectorAll('table')).toHaveLength(2);
+  });
+
+  it('picks the table whose headings say it is a container grid', () => {
+    document.body.innerHTML = `${OTHER_TABLE}<div role="dialog">${GRID}</div>`;
+    const detection = detectGrid(document);
+    expect(detection.found).toBe(true);
+    expect(detection.matchedWith).toContain('headings');
+    expect(detection.headers.filter((header) => header.column !== null).map((header) => header.column)).toEqual([
+      'ContainerNumber',
+      'CarrierSeal',
+      'ShipperSeal',
+      'HsCode',
+    ]);
+  });
+
+  it('fills that grid, and leaves the other table alone', () => {
+    document.body.innerHTML = `${OTHER_TABLE}<div role="dialog">${GRID}</div>`;
+    const before = (document.querySelectorAll('table')[0] as HTMLElement).innerHTML;
+    const report = fillContainerGrid(samplePackage(), { doc: document, overwrite: true });
+    expect(report.failed).toBe(0);
+    expect(report.containersFilled).toBeGreaterThan(0);
+    expect((document.querySelector('input[name="r0.c"]') as HTMLInputElement).value).not.toBe('');
+    expect((document.querySelectorAll('table')[0] as HTMLElement).innerHTML).toBe(before);
+  });
+
+  it('ignores a table that has no Container Number column', () => {
+    document.body.innerHTML = OTHER_TABLE;
+    expect(detectGrid(document).found).toBe(false);
+  });
+
+  it('prefers the inner grid when one table wraps another', () => {
+    document.body.innerHTML = `<table><tr><td>${GRID}</td></tr></table>`;
+    const detection = detectGrid(document);
+    expect(detection.found).toBe(true);
+    expect(detection.root?.querySelectorAll('table')).toHaveLength(0);
+  });
+});
+
 describe('page detection', () => {
   it('identifies each observed screen from its step strip and heading', () => {
     document.body.innerHTML = html('inttra-general-details');
