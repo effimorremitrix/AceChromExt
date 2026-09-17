@@ -176,6 +176,32 @@ Diagnostics -> **Run detection on the INTTRA tab** shows which screen was
 detected, which fields resolved, and what the grid looks like, and it lists
 what to capture.
 
+## 5a. First live contact, 2026-09-17
+
+An operator opened the Quickfill Helper on the real portal. Nothing here is a
+DOM capture - it is what was **read off the screen** - so no candidate below is
+marked `verified(...)`. What it settles:
+
+| Fact | Was | Now |
+| --- | --- | --- |
+| Hostname | unconfirmed | **`ship.inttra.e2open.com`** - already covered by the manifest's `https://*.e2open.com/*`, which is why the content script loaded at all |
+| URL shape | unknown | `/siact/siworkspace#/create/<numeric id>`. Note it carries **no screen name**, so `urlHints` can contribute nothing on this portal |
+| Copy Container Details | assumed to be a step | a **MODAL** over whichever step the operator was on |
+| Its grid headings | guessed | `Container Number`, `Carrier Seal #`, `Shipper Seal #`, ..., `HS Code` - all already matched by `GRID_COLUMNS` header aliases |
+| Its buttons | unknown | `Create Containers`, `Reset`, `Cancel`. The helper presses none of them |
+
+**The consequence, and the fix already made.** Because the grid is a modal, the
+step strip *behind* it still reports the underlying step: on the first run the
+popup said "B/L Documents" while a container grid filled the screen. Page
+detection by tab wording therefore cannot identify this screen, and the
+Quickfill content layer no longer asks it to - it calls `detectGrid(document)`
+and lets the presence of a grid settle the matter. `detectInttraPage` is
+unchanged and still wrong about this screen; a capture per section 6 is what
+would fix it there.
+
+Still not captured, and still placeholders: every field selector, the grid root,
+and the cell elements. Section 6 remains the procedure.
+
 ## 6. The live procedure: capturing the real selectors
 
 Do this once, on the first attended session, with a Shipping Instruction open

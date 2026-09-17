@@ -68,7 +68,14 @@ Detection order, first match wins, no picker:
 | JSON that declares a filing package | the package, as it is | `parseFilingPackageJson` |
 | any other JSON object | a saved Deckhand extraction | `parseDeckhandJson` |
 | two or more lines, first line with tabs or two commas | spreadsheet rows | `mapSheetToCanonical` |
+| ...and if those rows are not an invoice | a container table | `extractShipment` |
 | anything else | the carrier's email | `extractShipment` |
+
+The fourth rung is the lesson of the first live paste: the office's container
+manifest (`GALCO / Container # / LOT#: / SEAL# / BOOKING# / ...`) is tabular but
+is not an invoice, and a ladder that stopped on the rung it could not climb
+threw the whole paste away. Deckhand reads that shape and returns every
+container beside its own seal, so the ladder keeps descending.
 
 Every branch produces the same two things: a `FilingPackage` for the INTTRA
 side and a `CanonicalShipment` for the ACE side. The single line under the box
@@ -185,10 +192,15 @@ Quickfill inherits `README.md`'s caveats whole and resolves none of them.
    mapping tables are the thing that needs capturing, and they are shared - but
    it must not be described as working. `docs/INTTRA-INTEGRATION.md` sections 6
    and 7.
-4. **Quickfill itself has never been used on a real shipment**, and the
-   trade-offs in section 3 have never been tested against an operator who is
-   in a hurry. That is exactly the condition under which dropping the checks
-   matters most.
+4. **Quickfill has been opened once on the live INTTRA portal** (2026-09-17)
+   and has still never completed a real shipment. That one run confirmed the
+   hostname and the shape of the Copy Container Details screen, and found two
+   bugs that are now fixed and pinned by tests: a container manifest was
+   thrown away because it was tabular but not an invoice, and the grid screen
+   was misidentified because it is a modal over another step. See
+   `docs/INTTRA-INTEGRATION.md` section 5a. The trade-offs in section 3 have
+   still never been tested against an operator in a hurry, which is exactly
+   the condition under which dropping the checks matters most.
 
 ## 7. The dashboard, and why nothing was added to it
 

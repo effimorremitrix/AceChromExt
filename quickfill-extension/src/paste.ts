@@ -27,7 +27,7 @@ import { looksLikeFilingPackage, parseFilingPackageJson } from '../../shared/src
 import { emptyDecisions, type FilingPackage, type PackageDecisions } from '../../shared/src/filingPackage.js';
 import { aceShipmentFrom } from './aceShipment.js';
 
-export type PasteKind = 'package' | 'deckhand' | 'rows' | 'email';
+export type PasteKind = 'package' | 'deckhand' | 'rows' | 'containers' | 'email';
 
 export interface Parsed {
   kind: PasteKind;
@@ -51,6 +51,7 @@ const KIND_LABELS: Record<PasteKind, string> = {
   package: 'filing package',
   deckhand: 'saved extraction',
   rows: 'spreadsheet rows',
+  containers: 'container table',
   email: 'carrier email',
 };
 
@@ -129,14 +130,42 @@ function summaryFor(kind: PasteKind, pkg: FilingPackage): string {
   return parts.join(' · ');
 }
 
+/** Deckhand found something worth filling: a container, or a booking reference. */
+function deckhandFound(shipment: DeckhandShipment): boolean {
+  return shipment.containers.length > 0 || (shipment.bookingReference?.value ?? '') !== '';
+}
+
+/** The Deckhand branch, which is also where the tabular branch falls through to. */
+function fromDeckhandText(text: string, kind: PasteKind, now?: Date): Parsed {
+  const shipment = extractShipment({ kind: 'text', text, name: 'pasted text' });
+  const pkg = packageFrom(emptyCanonicalShipment(), shipment, now);
+  return { kind, pkg, ace: aceShipmentFrom(pkg), summary: summaryFor(kind, pkg) };
+}
+
 /**
  * Read the box.
  *
  * Detection order, first match wins:
  *   1. JSON that says it is a filing package  -> the package, as it is
  *   2. any other JSON object                  -> a saved Deckhand extraction
- *   3. two or more delimited lines            -> spreadsheet rows
+ *   3. two or more delimited lines            -> spreadsheet rows, and if those
+ *      are not an invoice, Deckhand reads the same rows as a container table
  *   4. anything else                          -> the carrier email
+ *
+ * Step 3's fallthrough is the lesson of the first real paste against the live
+ * INTTRA portal (2026-09-17). The operator pasted the container manifest the
+ * office actually works from:
+ *
+ *   GALCO  Container #  LOT#:  SEAL#  BOOKING#  VARIETY  CONSIGNEE
+ *   3994   TLLU7564971  PK00181  UL-8546727  EBKG18531463  CA STD 5%  Aydin ...
+ *
+ * That is tabular, so it went to the invoice reader, which correctly said it
+ * holds no commodity rows - and the whole paste was thrown away with an error,
+ * even though Deckhand reads that exact shape (it is the DOC CUT table in
+ * tests/deckhand/pastedTable.test.ts) and returns every container beside its
+ * own seal. A ladder that stops on the first rung it cannot climb is the bug;
+ * a tabular paste that is not an invoice is a container table, so it keeps
+ * descending.
  */
 export function parsePaste(text: string, now?: Date): Parsed | ParseFailure {
   const trimmed = text.trim();
@@ -157,14 +186,21 @@ export function parsePaste(text: string, now?: Date): Parsed | ParseFailure {
     }
 
     if (looksTabular(trimmed)) {
-      const result = mapSheetToCanonical({ name: 'pasted', rows: splitRows(trimmed) }, { fileName: 'pasted' });
-      const pkg = packageFrom(result.shipment, null, now);
-      return { kind: 'rows', pkg, ace: aceShipmentFrom(pkg), summary: summaryFor('rows', pkg) };
+      try {
+        const result = mapSheetToCanonical({ name: 'pasted', rows: splitRows(trimmed) }, { fileName: 'pasted' });
+        const pkg = packageFrom(result.shipment, null, now);
+        return { kind: 'rows', pkg, ace: aceShipmentFrom(pkg), summary: summaryFor('rows', pkg) };
+      } catch (invoiceError) {
+        // Not an invoice sheet. Deckhand reads the same rows as a container
+        // table; only if it finds nothing either is the paste really unusable,
+        // and then the invoice reader's message is the more specific one.
+        const containers = fromDeckhandText(trimmed, 'containers', now);
+        if (deckhandFound(containers.pkg.shipment as DeckhandShipment)) return containers;
+        return { error: (invoiceError as Error).message };
+      }
     }
 
-    const shipment = extractShipment({ kind: 'text', text: trimmed, name: 'pasted text' });
-    const pkg = packageFrom(emptyCanonicalShipment(), shipment, now);
-    return { kind: 'email', pkg, ace: aceShipmentFrom(pkg), summary: summaryFor('email', pkg) };
+    return fromDeckhandText(trimmed, 'email', now);
   } catch (error) {
     return { error: (error as Error).message };
   }

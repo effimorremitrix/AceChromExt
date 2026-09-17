@@ -245,7 +245,12 @@ stay honestly described:
    the live integration as working; `docs/QUICKBOOKS-INTEGRATION.md` section 11
    is the procedure for verifying it on the QuickBooks PC.
 
-3. The INTTRA Helper has **never seen the live portal**. Every selector in
+3. The INTTRA Helper's selectors have **never been captured from the live
+   portal**, though the portal itself has now been seen once (2026-09-17,
+   through Quickfill): the hostname is `ship.inttra.e2open.com`, the URL
+   carries no screen name, and Copy Container Details is a **modal over
+   another step**, so tab-wording page detection cannot identify it - detect
+   the grid instead. `docs/INTTRA-INTEGRATION.md` section 5a. Every selector in
    `inttra-extension/src/mappings/` is `placeholder(...)`, every page
    signature is guessed wording, and the hostname is unconfirmed. Never mark
    an INTTRA candidate `verified(...)` unless it was copied from the live DOM;
