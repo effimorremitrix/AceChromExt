@@ -53,13 +53,30 @@ function isEditable(element: Element | null): element is HTMLElement {
   return attribute === '' || attribute === 'true' || attribute === 'plaintext-only';
 }
 
-/** Visible in the layout sense. jsdom has no layout, so hidden attributes decide there. */
+/**
+ * Visible in the layout sense: connected, and hidden neither by itself nor by
+ * any ancestor.
+ *
+ * A browser answers through checkVisibility(), the rendering engine's own
+ * verdict, which sees a hidden ancestor. `display` is not inherited, so a
+ * descendant's computed display never says "none" because of its parent, and
+ * asking the element alone would call a table inside a closed modal visible.
+ * jsdom has no layout and no checkVisibility, so there the walk up asks each
+ * ancestor about itself: the hidden attribute, its inline style, its computed
+ * style.
+ */
 export function isInttraVisible(element: Element): boolean {
-  const node = element as HTMLElement;
-  if (!node.isConnected || node.hidden) return false;
-  if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
-    const style = window.getComputedStyle(node);
-    if (style.display === 'none' || style.visibility === 'hidden') return false;
+  if (!element.isConnected) return false;
+  if (typeof element.checkVisibility === 'function') return element.checkVisibility({ visibilityProperty: true });
+  const computed = typeof window !== 'undefined' && typeof window.getComputedStyle === 'function';
+  for (let current: Element | null = element; current; current = current.parentElement) {
+    const node = current as HTMLElement;
+    if (node.hidden) return false;
+    if (node.style && (node.style.display === 'none' || node.style.visibility === 'hidden')) return false;
+    if (computed) {
+      const style = window.getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+    }
   }
   return true;
 }

@@ -102,9 +102,9 @@ Deckhand and Package tab renderers, and the filing package itself.
 
 A control kind it does not recognise (a click-to-edit widget, for instance)
 is reported as `control: 'none'` with a reason. It is never clicked and no
-mouse event is ever simulated. For such a grid, the **Copy rows (TSV)**
-button puts the container rows on the clipboard in the grid's own column order
-so one paste fills them.
+mouse event is ever simulated. For such a grid, the **Copy rows** button
+puts the container rows on the clipboard as one cell per grid column, in the
+grid's own order, so one paste fills them ("The paste block", below).
 
 ### The grid writer
 
@@ -114,8 +114,13 @@ so one paste fills them.
   structural fallbacks: any ARIA grid, a table that calls itself a grid, the
   only table on the page);
 - reads the **header row** and identifies each column by its heading text
-  against the aliases in `GRID_COLUMNS`. A column is never identified by
-  position; one it cannot identify is reported and its cells are left alone;
+  against the aliases in `GRID_COLUMNS`. A heading that is a dropdown (the
+  two seal headings on the live portal are `<select>`s of seal types) is read
+  as the option it shows, never as its option list (`readHeaderCell`); exact
+  matches claim their columns before any prefix match can, so a "Seal Type"
+  column cannot take Shipper Seal # away from the heading that says so. A
+  column is never identified by position; one it cannot identify is reported
+  and its cells are left alone;
 - reads the existing data rows (`<tbody> <tr>`, or `[role=row]`);
 - writes package container *i* into row *i*: container number, carrier seal,
   shipper seal, cargo description, marks, HS code, package type, package
@@ -132,6 +137,41 @@ The summary the panel shows:
 ```
 Containers filled: 3 / 3   Verified cells: 13   Warnings: 0   Failed: 0   Unresolved: 0
 ```
+
+### The paste block
+
+`gridPasteBlock(package, detection)` is what **Copy rows** puts on the
+clipboard, in both helpers, and on the live portal it is the route:
+
+1. one cell per grid column, in the grid's own order when a grid was detected
+   and in `GRID_COLUMNS` order otherwise; blank where the package has nothing
+   for a column, and blank where the column could not be identified. A paste
+   is positional, so a column left OUT of the row would shift every value
+   after it one column to the left;
+2. starting at the Container Number column, which is the cell the operator
+   pastes into; anything left of it is not in the block;
+3. a line break or tab inside a value becomes a space, so one container stays
+   one row;
+4. every row cut at the right-most column that holds a value in ANY row, and
+   padded to that width, so nothing right of the last value is overwritten
+   with blanks. Columns inside the width that are empty ARE pasted blank,
+   which is why the paste goes into the first empty row;
+5. `\t` between cells, `\r\n` between rows, no trailing newline.
+
+It also says what it did: the headings pasted in order, which of them are
+blank because no package column feeds them, and whether the order is the
+grid's or the default. The panel and the popup show that beside the paste
+instruction. For the manifest of 2026-09-17 against the live header row the
+first two rows are:
+
+```
+TLLU7564971<TAB><TAB>UL-8546727
+TGBU7182073<TAB><TAB>UL-8546730
+```
+
+Carrier Seal # is blank because an unattributed seal is the shipper's
+(`docs/DECKHAND.md`), and the block stops at Shipper Seal # because nothing
+to its right holds a value.
 
 ## 4. Data ownership on the INTTRA screens
 
@@ -167,7 +207,8 @@ in the Package tab (where it is recorded as manual) or in INTTRA.
    Current Page**. Review, then continue in INTTRA yourself.
 5. On Container & Cargo, pick the container in the helper and fill; repeat per
    container. Or, on Copy Container Details, add the rows in INTTRA and press
-   **Containers -> Fill Container Grid**; or **Copy rows (TSV)** and paste.
+   **Containers -> Copy rows** and paste, or **Fill Container Grid** when the
+   cells can be typed into.
 6. Print Instructions and B/L Documents: Fill Current Page fills the freight
    terms and the consignee. Notification Emails: nothing is filled.
 7. Read every field. Save, continue and submit in INTTRA.
@@ -187,17 +228,17 @@ marked `verified(...)`. What it settles:
 | Hostname | unconfirmed | **`ship.inttra.e2open.com`** - already covered by the manifest's `https://*.e2open.com/*`, which is why the content script loaded at all |
 | URL shape | unknown | `/siact/siworkspace#/create/<numeric id>`. Note it carries **no screen name**, so `urlHints` can contribute nothing on this portal |
 | Copy Container Details | assumed to be a step | a **MODAL** over whichever step the operator was on |
-| Its grid headings | guessed | `Container Number`, `Carrier Seal #`, `Shipper Seal #`, ..., `HS Code` - all already matched by `GRID_COLUMNS` header aliases |
+| Its grid headings | guessed | `Container Number`, `Carrier Seal #`, `Shipper Seal #`, ..., `HS Code`, read off the screen and matched by `GRID_COLUMNS` header aliases. The two seal headings are **dropdowns** of seal types (confirmed by the operator on the fourth run, below); their outerHTML is still uncaptured |
 | Its buttons | unknown | `Create Containers`, `Reset`, `Cancel`. The helper presses none of them |
 
 **The consequence, and the fix already made.** Because the grid is a modal, the
 step strip *behind* it still reports the underlying step: on the first run the
 popup said "B/L Documents" while a container grid filled the screen. Page
-detection by tab wording therefore cannot identify this screen, and the
-Quickfill content layer no longer asks it to - it calls `detectGrid(document)`
-and lets the presence of a grid settle the matter. `detectInttraPage` is
-unchanged and still wrong about this screen; a capture per section 6 is what
-would fix it there.
+detection by tab wording therefore cannot identify this screen. Quickfill's
+content layer was the first to stop asking it, by calling `detectGrid(document)`
+and letting the presence of a grid settle the matter; since the fourth run
+(below) `detectInttraPage` itself scores the grid, so the INTTRA Helper's panel
+and the popup answer alike.
 
 **A second run, same day, found the next layer.** With the paste fixed, the
 popup still offered "Fill this screen" for the step behind the modal: the grid
@@ -261,18 +302,59 @@ Two consequences. The screen is now identified by its own id rather than by a
 tab strip that names the step the modal covers - and because a captured marker
 and a guessed tab reading both scored 4, the two tied and a tie is reported as
 `unknown`, which is how a screen with the grid on it came back "not one of the
-Shipping Instructions screens". A marker now scores 6: every marker that
-resolves here is an id from the live DOM, while tab, heading and URL hints are
-guessed wording, and on this screen that wording is not weaker but wrong.
+Shipping Instructions screens". Structure now scores 10 (`EVIDENCE` in
+`pageDetector.ts`): a captured marker, provided it is visible, or the container
+grid itself found by its headings. Tab, heading and URL hints are guessed
+wording worth 4, 3 and 2, so all three together cannot beat one structural
+fact, and on this screen that wording is not weaker but wrong. A marker that is
+in the DOM but hidden counts for nothing, so a modal the portal keeps hidden
+while closed cannot identify every screen as itself.
 
 The name is also the answer to the cells. `editableGrid` renders text and swaps
 in an editor when a cell is clicked, which is exactly the `Filled 0 of 9, all
 unresolved` result, and confirms Copy rows as the route rather than a fallback.
 
+**A fourth run, same day, with the captured ids in the build.** The INTTRA
+Helper loaded from the CI artifact of the merge that carried the two captured
+ids, and with the modal open its panel still read "B/L Documents (low
+confidence)" and refused the grid; Quickfill, in the same browser, found the
+grid and offered Copy rows. So the ids alone did not identify the modal in the
+document that answered the panel. Whether that is because they do not resolve
+as captured, or because the panel was answered by another tab or frame, the
+screenshot could not say. Three changes, so that it cannot happen the same way
+again:
+
+- the grid is the evidence. `detectInttraPage` scores a visible container grid
+  found by its headings as structure, the same 10 as a marker, so the modal is
+  identified by the thing that is demonstrably on it. Both helpers call the
+  same detector, so they answer alike;
+- the panel says which tab it addressed (its title, in the header), prefers
+  an INTTRA tab in its own window, and every build says which build it is
+  (`build <version>+<commit>.<time>` in the header, from `version_name` in the
+  dist manifest, written by `scripts/buildStamp.mjs`);
+- the content script answers the panel at once from a frame that holds the
+  grid or a visible marker, and after a moment from a frame that holds
+  neither, so with the helper in every frame of the tab the frame with the
+  screen is the one whose answer the panel keeps.
+
+The same run settled the seals. Copy rows, pasted into the first Container
+Number cell, filled the container numbers and left both seal columns empty.
+Carrier Seal # empty is right: an unattributed `SEAL#` column is the
+shipper's. Shipper Seal # empty had two causes, both in code shared by the
+two helpers. The two seal headings are **dropdowns** of seal types, and a
+`<select>` read as `textContent` is every option run together, so the second
+seal column matched nothing; and a column that matched nothing was left OUT of
+the pasted row rather than pasted blank, so every value after it shifted one
+column to the left. `readHeaderCell` now reads a dropdown heading as the option
+it shows, and `gridPasteBlock` pastes one cell per grid column (section 3, "The
+paste block"). Neither helper's Copy rows had a test with an unidentified
+column in the middle of the row; both have one now.
+
 Still not captured, and still placeholders: every field selector on the other
-screens, and the grid's cell editors. Section 6 remains the procedure. Capturing
-a cell *while it is being edited* is what would make typing into the grid
-possible; until then, pasting is not a fallback but the route.
+screens, the grid's header row (the seal dropdowns with their options), and the
+grid's cell editors. Section 6 remains the procedure. Capturing a cell *while
+it is being edited* is what would make typing into the grid possible; until
+then, pasting is not a fallback but the route.
 
 ## 6. The live procedure: capturing the real selectors
 
@@ -297,7 +379,9 @@ Details, Print Instructions, B/L Documents, Notification Emails):
 
 1. the grid root element (the outermost `<table>`, or the element with
    `role="grid"`);
-2. the header row, with every column heading;
+2. the header row, with every column heading, including the two seal-type
+   dropdowns: the whole `<select>` with all its `<option>`s and which one is
+   selected;
 3. one empty data row;
 4. one populated data row;
 5. a cell while it is being edited (click into it, then Inspect);
@@ -308,8 +392,10 @@ Details, Print Instructions, B/L Documents, Notification Emails):
 10. the HS Code cell;
 11. the Package Type cell (and, if it is a dropdown, two of its options).
 
-Also note: does the grid accept a paste of tab-separated rows into the first
-cell? Does it add rows on paste, or must rows exist first?
+Also note: a paste of tab-separated rows into the first Container Number cell
+of an existing row took on 2026-09-17 (the container numbers landed). Still
+open: does it add rows on paste, or must rows exist first, and does a value
+pasted under a heading that is a dropdown land under the option shown?
 
 **Installing what was captured**, without a rebuild: Diagnostics -> INTTRA
 selectors -> paste JSON in the shared override format and Save:
@@ -345,7 +431,12 @@ the way that grid gets filled.
 - Every field selector on every screen.
 - Whether dropdowns are native `<select>`s or widgets; whether ports are
   type-ahead controls and what a typed value does to them.
-- The grid: root, headers, cell control kind, row addition, paste behaviour.
+- The grid: its header row's outerHTML (the seal headings are dropdowns), its
+  cell editors, row addition, and paste behaviour beyond the one paste that
+  took. Also a trade-off in detection: any visible table headed Container
+  Number now reads as Copy Container Details, so a Container & Cargo screen
+  that listed containers in a table would too; nothing is lost while its field
+  selectors are placeholders, but it wants checking on the live screen.
 - Whether INTTRA's own validation accepts a value written through the native
   setter plus `input`/`change`, or wants a key event sequence; the writer
   dispatches `keyup` as well, and the read-back will say if a value was

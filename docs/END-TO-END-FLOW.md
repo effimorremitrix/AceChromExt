@@ -31,7 +31,7 @@ These existed before the package and do not depend on it. Tests assert each.
 | **Deckhand** | paste the email (or load `.eml`/`.txt`) -> Extract -> review -> Approve -> `DeckhandShipment` |
 | **Combined** | QuickBooks/Excel invoice + approved Deckhand extraction -> `buildFilingPackage` -> `FilingPackage` |
 | **INTTRA** | `filing-package.json` -> INTTRA Helper Import -> Package (resolve conflicts) -> Fill Current Page |
-| **Containers** | the same package -> Copy Container Details -> Fill Container Grid, or Copy rows (TSV) and paste |
+| **Containers** | the same package -> Copy Container Details -> Copy rows and paste (Fill Container Grid when the cells can be typed into) |
 | **ACE from the package** | `filing-package.json` -> ACE Helper Import -> the same preview, checks and fill, with booking, vessel, container and seal from the approved extraction |
 | **Quickfill** | paste anything of the four shapes into the Quickfill popup -> Fill this page / Fill this screen. No review, no approval, no gate |
 

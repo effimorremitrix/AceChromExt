@@ -82,13 +82,21 @@ side and a `CanonicalShipment` for the ACE side. The single line under the box
 says which branch ran and what came out of it, for example
 
 ```
-Read as: carrier email · EBKG18531408 · 3 containers
+Read as: carrier email · EBKG18531408 · 3 containers · 3 with a seal
 ```
+
+The seal count is a count, not a check: nothing is gated on it. It is there
+because a manifest read as eleven containers and no seals would otherwise
+look, in this line, exactly like one that parsed whole.
 
 The buttons shown depend on the page in the tab: the ACE pair on a CBP host
 that resolves to one of the four AESDirect steps, the INTTRA pair on a
-Shipping Instructions screen, and on the container grid a single **Fill
-container grid**.
+Shipping Instructions screen, and on the container grid **Copy rows** and
+**Fill container grid**, Copy rows first when the grid's cells cannot be
+typed into (the live portal's cannot). After Copy rows the result line names
+the columns pasted, in the grid's own order, and any left blank because no
+package column matches the heading, so the operator can see the seal is in the
+block before pasting it.
 
 `quickfill-extension/src/paste.ts` is pure - no DOM, no `chrome.*` - so the
 whole input path is unit-testable without a browser, and
@@ -202,10 +210,17 @@ Quickfill inherits `README.md`'s caveats whole and resolves none of them.
    hostname and the shape of the Copy Container Details screen, and found two
    bugs that are now fixed and pinned by tests: a container manifest was
    thrown away because it was tabular but not an invoice, and the grid screen
-   was misidentified because it is a modal over another step. See
-   `docs/INTTRA-INTEGRATION.md` section 5a. The trade-offs in section 3 have
-   still never been tested against an operator in a hurry, which is exactly
-   the condition under which dropping the checks matters most.
+   was misidentified because it is a modal over another step. A fourth run the
+   same day found two more, also fixed and pinned: the grid's seal headings
+   are dropdowns and were read as their whole option list, so Shipper Seal #
+   was never identified, and a column that was not identified was left out of
+   the pasted row instead of pasted blank, so the seals were pasted nowhere.
+   See `docs/INTTRA-INTEGRATION.md` section 5a. Every build now carries a
+   stamp (`build <version>+<commit>.<time>` in the popup header), because that
+   run could not at first tell which build was loaded. The trade-offs in
+   section 3 have still never been tested against an operator in a hurry,
+   which is exactly the condition under which dropping the checks matters
+   most.
 
 ## 7. The dashboard, and why nothing was added to it
 

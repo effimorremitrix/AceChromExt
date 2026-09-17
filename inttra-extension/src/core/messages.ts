@@ -5,7 +5,7 @@ import type { SessionLogEntry, SessionLogKind } from '../../../src/core/sessionL
 import type { FilingPackage } from '../../../shared/src/filingPackage.js';
 import type { InttraFieldScope, InttraFillReport } from '../models/InttraField.js';
 import type { InttraPageDetection } from '../content/pageDetector.js';
-import type { GridDetection, GridFillReport } from '../content/gridWriter.js';
+import type { GridDetection, GridFillReport, GridPasteBlock } from '../content/gridWriter.js';
 import type { StoredPackage } from './store.js';
 
 export type InttraBackgroundRequest =
@@ -23,12 +23,22 @@ export type InttraBackgroundResponse =
   | { ok: true; type: 'log/ok' }
   | { ok: false; error: string };
 
+/** What the content script knows about the container grid on its document. */
+export interface InttraGridStatus {
+  /** A container grid, identified by its headings, is on the page. */
+  found: boolean;
+  /** Some cell of it resolves a writable control. False for a click-to-edit grid, where Copy rows is the route. */
+  acceptsTyping: boolean;
+}
+
 export type InttraContentRequest =
   | { type: 'content/ping' }
   | { type: 'content/detectPage' }
   | { type: 'content/diagnostics' }
   | { type: 'content/fill'; scope: InttraFieldScope; containerIndex?: number; package: FilingPackage; dryRun?: boolean; overwrite?: boolean }
   | { type: 'content/fillGrid'; package: FilingPackage; dryRun?: boolean; overwrite?: boolean; anyPage?: boolean }
+  /** The containers as the block to paste into the grid, in the grid's own column order. */
+  | { type: 'content/gridRows'; package: FilingPackage }
   | { type: 'content/revealField'; key: string }
   | { type: 'content/clearHighlights' };
 
@@ -50,10 +60,11 @@ export interface InttraDiagnosticsSnapshot {
 
 export type InttraContentResponse =
   | { ok: true; type: 'content/pong'; version: string }
-  | { ok: true; type: 'content/page'; payload: InttraPageDetection }
+  | { ok: true; type: 'content/page'; payload: InttraPageDetection; grid: InttraGridStatus }
   | { ok: true; type: 'content/diagnostics'; payload: InttraDiagnosticsSnapshot }
   | { ok: true; type: 'content/fillReport'; payload: InttraFillReport }
   | { ok: true; type: 'content/gridReport'; payload: GridFillReport }
+  | { ok: true; type: 'content/rows'; payload: GridPasteBlock }
   | { ok: true; type: 'content/revealed'; found: boolean }
   | { ok: true; type: 'content/ok' }
   | { ok: false; error: string };

@@ -6,21 +6,30 @@
  * It never clicks an INTTRA control, never navigates, never submits, and
  * never sees a credential: the operator logs in as usual and the helper
  * only ever types into fields on a screen the operator already opened.
+ *
+ * It runs in every frame of the tab (all_frames), and the panel sends to the
+ * tab without naming a frame, so Chrome keeps the first reply. A frame that
+ * holds the screen (a visible container grid, or a captured marker) answers
+ * at once; a frame that holds neither answers after a moment, so the frame
+ * with the screen wins the race whichever frame the portal drew it in.
  */
 
 import { clearAllHighlights, revealField } from '../../../src/content/highlight.js';
 import { detectField } from '../../../src/content/fieldDetector.js';
 import { emptyOverrides, unknownOverrideKeys, type SelectorOverrides } from '../../../src/ace/selectors/overrides.js';
 import { DEFAULT_INTTRA_SETTINGS, loadInttraSettings, onInttraSettingsChanged, type InttraHelperSettings } from '../core/settings.js';
-import type { InttraContentRequest, InttraContentResponse, InttraDiagnosticsSnapshot } from '../core/messages.js';
+import type { InttraContentRequest, InttraContentResponse, InttraDiagnosticsSnapshot, InttraGridStatus } from '../core/messages.js';
 import { debug, setDebugLogging, warn } from '../core/logger.js';
 import { loadInttraOverrides, onInttraOverridesChanged } from '../core/overridesStore.js';
 import { inttraFieldsForPage, resolveInttraFields } from '../mappings/index.js';
-import { detectInttraPage } from './pageDetector.js';
+import { detectInttraPage, hasStructuralEvidence } from './pageDetector.js';
 import { fillInttraFields } from './filler.js';
-import { detectGrid, fillContainerGrid } from './gridWriter.js';
+import { detectGrid, fillContainerGrid, gridAcceptsTyping, gridPasteBlock } from './gridWriter.js';
 
 const VERSION = '0.1.0';
+
+/** How long a frame with nothing structural on it waits before answering, so a frame that has the screen answers first. */
+const QUIET_FRAME_DELAY_MS = 150;
 
 let settings: InttraHelperSettings = { ...DEFAULT_INTTRA_SETTINGS };
 let overrides: SelectorOverrides = emptyOverrides();
@@ -57,12 +66,17 @@ function buildDiagnostics(): InttraDiagnosticsSnapshot {
   };
 }
 
+function gridStatus(): InttraGridStatus {
+  const found = detectGrid(document).found;
+  return { found, acceptsTyping: found && gridAcceptsTyping(document) };
+}
+
 function handleMessage(message: InttraContentRequest): InttraContentResponse {
   switch (message.type) {
     case 'content/ping':
       return { ok: true, type: 'content/pong', version: VERSION };
     case 'content/detectPage':
-      return { ok: true, type: 'content/page', payload: detectInttraPage() };
+      return { ok: true, type: 'content/page', payload: detectInttraPage(), grid: gridStatus() };
     case 'content/diagnostics': {
       const snapshot = buildDiagnostics();
       log('diagnostics', `Diagnostics on ${snapshot.page.label}: ${snapshot.fields.filter((field) => field.detection.status === 'FOUND').length}/${snapshot.fields.length} fields, grid ${snapshot.grid.found ? 'found' : 'not found'}.`);
@@ -93,8 +107,11 @@ function handleMessage(message: InttraContentRequest): InttraContentResponse {
     }
     case 'content/fillGrid': {
       const page = detectInttraPage();
+      // A visible container grid identifies the screen as Copy Container
+      // Details whatever the step strip says (pageDetector.ts), so this branch
+      // is reached only when there is no grid on the document at all.
       if (page.page !== 'copyContainerDetails' && page.page !== 'unknown' && !message.anyPage) {
-        return { ok: false, error: `The tab shows ${page.label}, not Copy Container Details. Open the grid screen first.` };
+        return { ok: false, error: `The tab shows ${page.label} and no container grid is on it. Open Copy Container Details first, or tick "Look for the grid even when the screen was not identified".` };
       }
       const report = fillContainerGrid(message.package, {
         doc: document,
@@ -105,6 +122,11 @@ function handleMessage(message: InttraContentRequest): InttraContentResponse {
       });
       log('fill', `${message.dryRun ? 'Dry run on' : 'Filled'} the container grid: containers ${report.containersFilled}/${report.rowsNeeded}, verified cells ${report.verifiedCells}, warnings ${report.warnings}, failed ${report.failed}, unresolved ${report.unresolved}.`);
       return { ok: true, type: 'content/gridReport', payload: report };
+    }
+    case 'content/gridRows': {
+      const block = gridPasteBlock(message.package, detectGrid(document));
+      log('note', `Copied ${block.rows} container row(s) as ${block.width} column(s)${block.fromGrid ? " in the grid's own order" : ' in the default order (no grid found)'}${block.blank.length ? `; left blank: ${block.blank.join(', ')}` : ''}.`);
+      return { ok: true, type: 'content/rows', payload: block };
     }
     case 'content/revealField':
       return { ok: true, type: 'content/revealed', found: revealField(message.key) };
@@ -138,12 +160,20 @@ function boot(): void {
   });
 
   chrome.runtime.onMessage.addListener((message: InttraContentRequest, _sender, sendResponse) => {
-    try {
-      sendResponse(handleMessage(message));
-    } catch (error) {
-      sendResponse({ ok: false, error: `INTTRA Helper failed: ${(error as Error).message}` } satisfies InttraContentResponse);
+    const respond = (): void => {
+      try {
+        sendResponse(handleMessage(message));
+      } catch (error) {
+        sendResponse({ ok: false, error: `INTTRA Helper failed: ${(error as Error).message}` } satisfies InttraContentResponse);
+      }
+    };
+    if (hasStructuralEvidence()) {
+      respond();
+      return false;
     }
-    return false;
+    // Nothing structural here: let a frame that has the screen answer first.
+    setTimeout(respond, QUIET_FRAME_DELAY_MS);
+    return true;
   });
 
   debug(`INTTRA Helper content script ${VERSION} ready on ${location.host}`);

@@ -46,3 +46,19 @@ export function byId<T extends HTMLElement>(id: string): T {
 export function show(node: HTMLElement, visible: boolean): void {
   node.hidden = !visible;
 }
+
+/**
+ * "build <version_name>" from the manifest of the extension this page belongs
+ * to: version, git commit and build time, written by the build scripts. Empty
+ * outside an extension (tests), and empty for a build that predates the
+ * stamp, which is itself the answer to "which build is this?".
+ */
+export function buildStamp(): string {
+  try {
+    const manifest = chrome.runtime.getManifest();
+    const name = manifest.version_name ?? manifest.version;
+    return name ? `build ${name}` : '';
+  } catch {
+    return '';
+  }
+}

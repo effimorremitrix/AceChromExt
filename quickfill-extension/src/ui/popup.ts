@@ -10,7 +10,7 @@
  * interpreted as markup.
  */
 
-import { appendAll, clear, el } from '../../../src/ui/dom.js';
+import { appendAll, buildStamp, clear, el } from '../../../src/ui/dom.js';
 import { isFailure, parsePaste } from '../paste.js';
 import type {
   FillCount,
@@ -100,9 +100,15 @@ async function copyRows(pkg: StoredPaste['package']): Promise<void> {
     return;
   }
   if (response.type !== 'content/rows') return;
+  const block = response.payload;
   try {
-    await navigator.clipboard.writeText(response.payload.tsv);
-    say(`${response.payload.rows} row(s) copied. Click the first cell of the first empty row in INTTRA and paste.`);
+    await navigator.clipboard.writeText(block.tsv);
+    // One line, but it names the columns: the operator can see whether the
+    // seal is in it before pasting, which is the whole check Quickfill keeps.
+    const headings = block.columns.map((column) => column.heading).join(', ');
+    const blank = block.blank.length ? ` Blank: ${block.blank.join(', ')}.` : '';
+    const order = block.fromGrid ? '' : ' No grid was found, so this is the default order.';
+    say(`${block.rows} row(s) copied as ${headings}.${blank}${order} Click the first Container Number cell of the first empty row in INTTRA and paste.`);
   } catch {
     say('Could not write to the clipboard.', 'error');
   }
@@ -214,10 +220,12 @@ function renderButtons(): void {
 }
 
 function layout(): HTMLElement {
+  const stamp = buildStamp();
   const header = el('header', { className: 'app-header' }, [
     el('div', { className: 'brand' }, [
       el('span', { className: 'brand-mark', text: 'Q' }),
       el('span', { className: 'brand-name', text: 'Quickfill' }),
+      stamp ? el('span', { className: 'build-stamp', text: stamp, title: 'The build this popup is running: version, git commit, build time (UTC)' }) : null,
     ]),
   ]);
 

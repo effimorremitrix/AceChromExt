@@ -453,12 +453,28 @@ QuickBooks"), what was written, and what INTTRA holds after the write.
 
 ### Copy Container Details, the grid
 
+The live grid opens an editor when a cell is clicked, so nothing can be typed
+into it: the route is **Copy rows** and paste, in the INTTRA Helper and in
+Quickfill alike.
+
 1. In INTTRA, open **Copy Container Details** and add as many rows as the
    package has containers. The helper never presses Add Row.
-2. In the helper, **Containers**. The table shows the rows it will write.
-3. **Fill Container Grid**. One row per container, the container and its
-   seals together on the row, cargo description and HS code from the invoice
-   where they can be attributed, every cell read back.
+2. In the helper, **Containers**. The table shows the rows it will copy. Press
+   **refresh** in the header if the pill does not say Copy Container Details;
+   the header also names the INTTRA tab the helper is talking to.
+3. **Copy rows** (the first button). The status line says what went on the
+   clipboard: how many rows, the columns in the grid's own order, and any
+   column left blank because no package column matches its heading. If it
+   says the default order was used, the grid was not found: open Copy
+   Container Details in INTTRA and copy again.
+4. In INTTRA, click the **first Container Number cell of the first empty
+   row** and press **Ctrl+V**. The block starts at Container Number and has
+   one cell per column, so it lines up with the grid.
+5. Read the grid. Carrier Seal # stays empty when the source named a seal
+   without saying whose: an unattributed seal is the shipper's.
+6. **Fill Container Grid** is for a grid whose cells can be typed into; the
+   helper leads with it when the INTTRA tab says so. One row per container,
+   the container and its seals together on the row, every cell read back:
 
    ```
    Containers filled: 3 / 3   Verified cells: 13   Warnings: 0   Failed: 0   Unresolved: 0
@@ -470,17 +486,12 @@ QuickBooks"), what was written, and what INTTRA holds after the write.
    | filled | written; INTTRA reformatted it |
    | failed | INTTRA did not keep the value; the cell is tinted red |
    | skipped | the package has no value for this column |
-   | unresolved | the cell has no control the helper can write; see below |
+   | unresolved | the cell has no control the helper can write; use Copy rows |
    | warning | the cell already held a different value and was left alone |
 
-4. If the grid has fewer rows than containers, the report says how many to
+   If the grid has fewer rows than containers, the report says how many to
    add; fill again afterwards.
-5. If cells come back **unresolved**, the grid opens an editor on click,
-   which the helper never simulates. Use **Copy rows (TSV)**: it puts the
-   containers on the clipboard in the grid's own column order (run
-   Diagnostics on the grid screen first so it knows the order); click the
-   first cell of the first empty row in INTTRA and paste.
-6. Read the grid, then continue in INTTRA yourself.
+7. Continue in INTTRA yourself.
 
 ---
 
@@ -535,7 +546,7 @@ contains no credential, and an entry that looks like one is refused.
 | `The Deckhand extraction has not been approved` | the package carries an unreviewed extraction | review it on the Deckhand tab and approve |
 | `Choose one before filling` | the invoice and the email disagree | pick a side on the Package tab |
 | `is a total; it was not split across the N containers` | one invoice weight, several containers | enter each container's gross weight from the packing list |
-| `No writable control in this cell` | the grid opens an editor on click | use Copy rows (TSV) and paste |
+| `No writable control in this cell` | the grid opens an editor on click | use Copy rows and paste |
 | `The grid has N row(s) and the package has M container(s)` | not enough rows | add rows in INTTRA and fill again |
 
 ---
@@ -555,4 +566,6 @@ contains no credential, and an entry that looks like one is refused.
 | Deckhand paired nothing | the email lists containers and seals separately. Match them from the source; do not expect the tool to guess. |
 | "Cannot approve" | a check digit fails, a seal is contradicted, or a list is unpaired. Fix the text and extract again, or match by hand in INTTRA. |
 | The Package tab says not ready | approve the extraction, or resolve the conflict it names. |
+| The header names another screen while Copy Container Details is open | press **refresh**. If it still does, the header shows which tab answered (keep the Shipping Instruction in one tab) and the `build ...` stamp: compare it with the build you last loaded, and rebuild and reload the extension if it is older. Then **Diagnostics**: its evidence list says whether the grid and the modal marker were seen. |
+| Copy rows pasted the container numbers but not the seals | the status line after Copy rows names the columns and any left blank. If Shipper Seal # is not among the columns, run **Diagnostics** and send the header row (the seal headings are dropdowns; the block reads the option each one shows). |
 | Something is wrong and I need to show someone | **Diagnostics**, **Export diagnostics**: one text file with the shipment, the package, the mapping status, the session log and the detection snapshot. Uploaded nowhere. |

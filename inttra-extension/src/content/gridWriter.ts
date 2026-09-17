@@ -8,16 +8,22 @@
  * on the same row.
  *
  * How the grid is read, and what is never done:
- *   - the root is found by selector candidates (placeholders until captured);
+ *   - the root is found by selector candidates (two captured from the live
+ *     modal on 2026-09-17, the rest placeholders), and failing those by its
+ *     own headings;
  *   - columns are identified by HEADER TEXT, matched against the aliases in
- *     mappings/containerGrid.ts. A column that cannot be identified is
- *     reported unresolved and its cells are left alone. Nothing is written
- *     by column position;
+ *     mappings/containerGrid.ts. A heading that is a dropdown (the two seal
+ *     headings on the live portal are selects of seal types) is read as the
+ *     option it shows, never as its option list. A column that cannot be
+ *     identified is reported unresolved and its cells are left alone.
+ *     Nothing is written by column position;
  *   - rows are the grid's existing data rows. The helper never presses Add
  *     Row (automationPolicy.ts): when there are fewer rows than containers it
  *     fills what exists and says how many rows to add;
  *   - a cell whose control cannot be resolved (a click-to-edit widget, say)
- *     is reported, not clicked. The Copy rows (TSV) path exists for that grid.
+ *     is reported, not clicked. For that grid gridPasteBlock produces the rows
+ *     to paste: one cell per grid column, in the grid's own order, blank where
+ *     nothing feeds a column, so the block lines up with the grid.
  */
 
 import type { FilingPackage, PackageContainer } from '../../../shared/src/filingPackage.js';
@@ -37,6 +43,8 @@ export interface GridHeader {
   text: string;
   /** The GRID_COLUMNS key this heading was identified as, or null. */
   column: string | null;
+  /** Every option of a dropdown heading (the seal-type selects on the live portal), for diagnostics. */
+  options?: string[];
 }
 
 export interface GridDetection {
@@ -205,23 +213,101 @@ export function readGridShape(root: Element): GridShape {
   };
 }
 
+export interface HeaderReading {
+  /** What the cell shows: its static text plus, for a dropdown, only the option it shows. */
+  text: string;
+  /** Wordings to identify the column by, most trusted first: the selected option, then the static text. */
+  candidates: string[];
+  /** Every option of a dropdown heading, for diagnostics and the capture request. */
+  options?: string[];
+}
+
+const collapse = (text: string): string => text.replace(/\s+/g, ' ').trim();
+
+/** Elements whose text is not heading wording. An OPTION is read through its <select>, never as text. */
+const NOT_HEADING_TEXT = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'OPTION', 'OPTGROUP']);
+
+/**
+ * Read a header cell the way the operator sees it.
+ *
+ * On the live portal (2026-09-17) the two seal headings are dropdowns of seal
+ * types, and a <select>'s textContent is every option run together:
+ * "Carrier Seal #Shipper Seal #Customs Seal #...". Read that way both seal
+ * columns carry the same wording whichever option each shows: the first is
+ * claimed by prefix as Carrier Seal #, the second matches nothing, and the
+ * shipper's seal is never pasted. With Shipper Seal # as the first option the
+ * carrier's column would be claimed as the shipper's instead, and the seal
+ * would land in the wrong column, silently.
+ *
+ * What identifies a dropdown heading is the option it shows, so that is what
+ * is read, ahead of any static text beside it. The option list is recorded
+ * for diagnostics and never contributes to identification.
+ */
+export function readHeaderCell(cell: Element): HeaderReading {
+  const statics: string[] = [];
+  const options: string[] = [];
+  let chosen = '';
+  const readSelect = (select: HTMLSelectElement): void => {
+    for (const option of Array.from(select.options)) options.push(collapse(option.textContent ?? ''));
+    const selected = select.selectedIndex >= 0 ? select.options[select.selectedIndex] : undefined;
+    const shown = collapse(selected?.textContent ?? '');
+    if (shown !== '' && chosen === '') chosen = shown;
+  };
+  const walk = (parent: Element): void => {
+    for (const child of Array.from(parent.childNodes)) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        statics.push(child.textContent ?? '');
+        continue;
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE) continue;
+      const element = child as Element;
+      if (element instanceof HTMLSelectElement) {
+        readSelect(element);
+        continue;
+      }
+      if (NOT_HEADING_TEXT.has(element.tagName)) continue;
+      walk(element);
+    }
+  };
+  if (cell instanceof HTMLSelectElement) readSelect(cell);
+  else walk(cell);
+  const staticText = collapse(statics.join(' '));
+  const candidates = [chosen, staticText].filter((text) => text !== '');
+  return { text: candidates.join(' '), candidates, ...(options.length ? { options } : {}) };
+}
+
+/**
+ * Which GRID_COLUMNS key each heading is, by wording alone.
+ *
+ * Two passes over the row. First every heading that matches an alias exactly
+ * claims its column; only then does a heading that merely starts with an alias
+ * get to claim what is left. One pass in cell order would let a "Seal Type"
+ * column to the left of "Shipper Seal #" take ShipperSeal through the
+ * four-letter alias "seal", and the real seal column would then match nothing.
+ * A key, once claimed, is never claimed again.
+ */
 function identifyHeaders(headerCells: Element[], columns: GridColumnSpec[]): GridHeader[] {
+  const readings = headerCells.map((cell) => readHeaderCell(cell));
+  const keys: Array<string | null> = readings.map(() => null);
   const taken = new Set<string>();
-  return headerCells.map((cell, index) => {
-    const text = (cell.textContent ?? '').replace(/\s+/g, ' ').trim();
-    const normalized = normalizeHeading(text);
-    let column: string | null = null;
-    if (normalized !== '') {
-      // Exact alias first, then a heading that starts with an alias ("Carrier Seal # *").
-      const exact = columns.find((spec) => !taken.has(spec.key) && spec.headerAliases.includes(normalized));
-      const prefixed = exact ?? columns.find((spec) => !taken.has(spec.key) && spec.headerAliases.some((alias) => alias.length >= 4 && normalized.startsWith(alias)));
-      if (prefixed) {
-        column = prefixed.key;
-        taken.add(prefixed.key);
+  const claim = (index: number, pick: (normalized: string) => GridColumnSpec | undefined): void => {
+    if (keys[index] !== null) return;
+    for (const candidate of readings[index]?.candidates ?? []) {
+      const normalized = normalizeHeading(candidate);
+      if (normalized === '') continue;
+      const spec = pick(normalized);
+      if (spec) {
+        keys[index] = spec.key;
+        taken.add(spec.key);
+        return;
       }
     }
-    return { index, text, column };
-  });
+  };
+  readings.forEach((_reading, index) => claim(index, (normalized) => columns.find((spec) => !taken.has(spec.key) && spec.headerAliases.includes(normalized))));
+  readings.forEach((_reading, index) =>
+    claim(index, (normalized) => columns.find((spec) => !taken.has(spec.key) && spec.headerAliases.some((alias) => alias.length >= 4 && normalized.startsWith(alias)))),
+  );
+  return readings.map((reading, index) => ({ index, text: reading.text, column: keys[index] ?? null, ...(reading.options ? { options: reading.options } : {}) }));
 }
 
 export function detectGrid(doc: ParentNode, columns: GridColumnSpec[] = GRID_COLUMNS): GridDetection & { root: Element | null; shape: GridShape | null } {
@@ -289,14 +375,65 @@ export function gridCellValue(container: PackageContainer, spec: GridColumnSpec)
   return { text: value, provenance: describeProvenance(item), transform: transformed.transform };
 }
 
-/** Tab-separated rows in the grid's own column order when a grid was detected, otherwise in GRID_COLUMNS order. */
+export interface GridPasteBlock {
+  /** Tab-separated cells, CRLF between rows, no trailing newline. */
+  tsv: string;
+  rows: number;
+  /** Cells per row; every row has exactly this many. */
+  width: number;
+  /** The pasted columns in order: the grid heading and the package column feeding it (null: pasted blank). */
+  columns: Array<{ heading: string; column: string | null }>;
+  /** Headings inside the width that no package column feeds. */
+  blank: string[];
+  /** True when the order is the detected grid's own; false when it is GRID_COLUMNS. */
+  fromGrid: boolean;
+}
+
+/** A cell must stay one cell: a line break inside a value would start a new grid row, a tab a new column. */
+const flat = (text: string): string => text.replace(/[\t\r\n]+/g, ' ').trim();
+
+/**
+ * The block to paste into Copy Container Details.
+ *
+ * One cell per grid column, in the grid's own order when a grid was detected
+ * and in GRID_COLUMNS order otherwise; blank where the package has nothing
+ * for a column, and blank where the column could not be identified. The
+ * second is the point: a paste is positional, so a column left OUT of the row
+ * shifts every value after it one column to the left. Observed 2026-09-17,
+ * when the unidentified Shipper Seal # column was dropped from the row, the
+ * container numbers landed, and the seals were pasted nowhere.
+ *
+ * The block starts at the Container Number column, which is the cell the
+ * operator pastes into; anything left of it (a row selector, say) is not in
+ * the block. Each row is cut at the right-most column that holds a value in
+ * ANY row, so nothing right of the last value is overwritten with blanks;
+ * columns inside that width that are empty ARE pasted blank, which is why the
+ * operator pastes into the first empty row.
+ */
+export function gridPasteBlock(pkg: FilingPackage, detection: GridDetection | null, columns: GridColumnSpec[] = GRID_COLUMNS): GridPasteBlock {
+  const fromGrid = !!detection?.found;
+  const gridOrder: Array<{ heading: string; spec: GridColumnSpec | null }> = fromGrid && detection
+    ? detection.headers.map((header) => ({ heading: header.text || `column ${header.index + 1}`, spec: columns.find((spec) => spec.key === header.column) ?? null }))
+    : columns.map((spec) => ({ heading: spec.label, spec }));
+  const anchor = Math.max(0, gridOrder.findIndex(({ spec }) => spec?.key === 'ContainerNumber'));
+  const order = gridOrder.slice(anchor);
+  const values = pkg.containers.map((container) => order.map(({ spec }) => (spec ? flat(gridCellValue(container, spec).text) : '')));
+  const width = Math.max(1, ...values.map((row) => row.reduce((last, cell, index) => (cell !== '' ? index + 1 : last), 0)));
+  const rows = values.map((row) => Array.from({ length: width }, (_, index) => row[index] ?? ''));
+  const pasted = order.slice(0, width);
+  return {
+    tsv: rows.map((row) => row.join('\t')).join('\r\n'),
+    rows: rows.length,
+    width,
+    columns: pasted.map(({ heading, spec }) => ({ heading, column: spec?.key ?? null })),
+    blank: pasted.filter(({ spec }) => spec === null).map(({ heading }) => heading),
+    fromGrid,
+  };
+}
+
+/** The paste block's text alone: tab-separated rows in the grid's own column order. */
 export function gridRowsAsTsv(pkg: FilingPackage, detection: GridDetection | null, columns: GridColumnSpec[] = GRID_COLUMNS): string {
-  const order: GridColumnSpec[] = detection && detection.found
-    ? detection.headers.map((header) => columns.find((spec) => spec.key === header.column) ?? null).filter((spec): spec is GridColumnSpec => spec !== null)
-    : columns;
-  return pkg.containers
-    .map((container) => order.map((spec) => gridCellValue(container, spec).text).join('\t'))
-    .join('\r\n');
+  return gridPasteBlock(pkg, detection, columns).tsv;
 }
 
 export function fillContainerGrid(pkg: FilingPackage, options: GridFillOptions = {}): GridFillReport {
