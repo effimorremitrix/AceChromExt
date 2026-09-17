@@ -25,9 +25,9 @@ import { fillFields } from '../../../src/content/filler.js';
 import { detectPage } from '../../../src/content/pageDetector.js';
 import { DEFAULT_SETTINGS } from '../../../src/core/settings.js';
 import type { FillReport } from '../../../src/models/AceField.js';
-import { detectInttraPage } from '../../../inttra-extension/src/content/pageDetector.js';
+import { detectInttraPage, hasStructuralEvidence } from '../../../inttra-extension/src/content/pageDetector.js';
 import { fillInttraFields } from '../../../inttra-extension/src/content/filler.js';
-import { detectGrid, fillContainerGrid, gridAcceptsTyping, gridRowsAsTsv } from '../../../inttra-extension/src/content/gridWriter.js';
+import { detectGrid, fillContainerGrid, gridAcceptsTyping, gridPasteBlock } from '../../../inttra-extension/src/content/gridWriter.js';
 import type { InttraFillReport } from '../../../inttra-extension/src/models/InttraField.js';
 import type { FillCount, QuickfillContentRequest, QuickfillContentResponse, Where } from '../core/messages.js';
 
@@ -55,19 +55,15 @@ function where(): Where {
   // behind the overlay still reports that underlying step, so asking the strip
   // "which screen is this?" answers about the page the operator is no longer
   // looking at - on the first live run it said "B/L Documents" while a
-  // container grid filled the screen. Detecting the grid itself cannot make
-  // that mistake: if a container grid is on the page, the grid is what there is
-  // to fill.
-  const grid = detectGrid(document);
-  if (grid.found) {
-    return { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: gridAcceptsTyping(document) };
-  }
-
+  // container grid filled the screen. The shared detector now scores a visible
+  // container grid above every wording hint combined, so asking it is asking
+  // the grid, and the INTTRA Helper's panel and this popup cannot disagree.
   const screen = detectInttraPage(document);
   if (screen.page === 'unknown' || screen.confidence === 'none') {
     return { portal: 'none', label: 'This INTTRA page is not one of the Shipping Instructions screens.', hasLines: false, isGrid: false, gridWritable: false };
   }
-  return { portal: 'inttra', label: screen.label, hasLines: false, isGrid: screen.page === 'copyContainerDetails', gridWritable: false };
+  const isGrid = screen.page === 'copyContainerDetails';
+  return { portal: 'inttra', label: screen.label, hasLines: false, isGrid, gridWritable: isGrid && gridAcceptsTyping(document) };
 }
 
 /**
@@ -160,24 +156,40 @@ function handleMessage(message: QuickfillContentRequest): QuickfillContentRespon
       };
     }
 
-    // The containers as the grid's own columns, tab separated. The operator
-    // clicks the first cell and pastes: that is what Copy Container Details is
-    // for, and it needs no selector for the cell editors at all.
-    case 'content/gridRows': {
-      const tsv = gridRowsAsTsv(message.package, detectGrid(document));
-      return { ok: true, type: 'content/rows', payload: { tsv, rows: message.package.containers.length } };
-    }
+    // The containers as the grid's own columns, one cell per column and blank
+    // where nothing feeds one, so the block lines up with the grid. The
+    // operator clicks the first Container Number cell and pastes: that is what
+    // Copy Container Details is for, and it needs no selector for the cell
+    // editors at all.
+    case 'content/gridRows':
+      return { ok: true, type: 'content/rows', payload: gridPasteBlock(message.package, detectGrid(document)) };
 
     default:
       return { ok: false, error: 'Unsupported request.' };
   }
 }
 
+/** How long an INTTRA frame with nothing structural on it waits before answering, so a frame that has the screen answers first. */
+const QUIET_FRAME_DELAY_MS = 150;
+
+// The script runs in every frame of the tab and the popup keeps the first
+// reply. On an INTTRA tab a frame that holds the screen (a visible container
+// grid, or a captured marker) answers at once and a frame that holds neither
+// answers after a moment, so the frame with the screen wins whichever frame
+// the portal drew it in. A CBP tab answers at once: the ACE steps are never
+// in a child frame.
 chrome.runtime.onMessage.addListener((message: QuickfillContentRequest, _sender, sendResponse) => {
-  try {
-    sendResponse(handleMessage(message));
-  } catch (error) {
-    sendResponse({ ok: false, error: `Quickfill failed: ${(error as Error).message}` } satisfies QuickfillContentResponse);
+  const respond = (): void => {
+    try {
+      sendResponse(handleMessage(message));
+    } catch (error) {
+      sendResponse({ ok: false, error: `Quickfill failed: ${(error as Error).message}` } satisfies QuickfillContentResponse);
+    }
+  };
+  if (onCbpHost() || hasStructuralEvidence()) {
+    respond();
+    return false;
   }
-  return false;
+  setTimeout(respond, QUIET_FRAME_DELAY_MS);
+  return true;
 });

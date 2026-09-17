@@ -2,12 +2,32 @@
  * Which INTTRA screen is on the tab?
  *
  * Same scoring as the ACE detector, against the INTTRA signatures: active
- * tab text, headings, URL, marker elements. The score becomes a confidence;
- * 'none' blocks filling. A tie between two screens is 'unknown'.
+ * tab text, headings, URL, marker elements, and for Copy Container Details
+ * the container grid itself. The score becomes a confidence; 'none' blocks
+ * filling. A tie between two screens is 'unknown'.
+ *
+ * Two kinds of evidence, weighted so the second always wins:
+ *
+ *   - wording: the active step tab, a heading, a URL fragment. All guessed
+ *     until captured, and on Copy Container Details WRONG rather than weak,
+ *     because that screen is a modal drawn over another step and the strip
+ *     behind it still names the step it covers (observed 2026-09-17);
+ *   - structure: a marker element whose id was copied from the live DOM, or a
+ *     visible grid whose header row says Container Number (findGridByHeadings,
+ *     the same reading the grid writer uses). Structure scores 10, and the
+ *     three wording rungs together reach at most 4 + 3 + 2 = 9, so a screen
+ *     that is structurally on the page beats any wording behind it.
+ *
+ * A marker counts only while it is visible: a modal wrapper that the portal
+ * keeps in the DOM, hidden, while the modal is closed would otherwise identify
+ * every screen as the modal.
  */
 
 import type { InttraPageId } from '../models/InttraField.js';
+import { GRID_COLUMNS } from '../mappings/containerGrid.js';
 import { INTTRA_PAGE_SIGNATURES, inttraSignatureFor, type InttraPageSignature } from '../pages.js';
+import { isInttraVisible } from './fieldWriter.js';
+import { findGridByHeadings } from './gridWriter.js';
 
 export interface InttraPageDetection {
   page: InttraPageId;
@@ -16,6 +36,9 @@ export interface InttraPageDetection {
   evidence: string[];
   scores: Array<{ page: InttraPageId; score: number; reasons: string[] }>;
 }
+
+/** What each kind of evidence is worth. Structure (marker, grid) outscores every wording rung combined. */
+export const EVIDENCE = Object.freeze({ tab: 4, heading: 3, url: 2, marker: 10, grid: 10 });
 
 const ACTIVE_TAB_SELECTORS = [
   '[aria-selected="true"]',
@@ -35,16 +58,18 @@ function textOf(element: Element | null | undefined): string {
   return (element?.textContent ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
+function safeQueryAll(doc: Document, selector: string): Element[] {
+  try {
+    return Array.from(doc.querySelectorAll(selector));
+  } catch {
+    return [];
+  }
+}
+
 function activeTabTexts(doc: Document): string[] {
   const texts: string[] = [];
   for (const selector of ACTIVE_TAB_SELECTORS) {
-    let elements: Element[] = [];
-    try {
-      elements = Array.from(doc.querySelectorAll(selector));
-    } catch {
-      elements = [];
-    }
-    for (const element of elements) {
+    for (const element of safeQueryAll(doc, selector)) {
       const text = textOf(element);
       if (text && text.length <= 120) texts.push(text);
     }
@@ -61,13 +86,21 @@ function headingTexts(doc: Document): string[] {
   return texts;
 }
 
+/** A marker that is in the DOM but hidden is no evidence of the screen being open. */
+function visibleMarker(doc: Document, signature: InttraPageSignature): string | null {
+  for (const selector of signature.markerSelectors) {
+    if (safeQueryAll(doc, selector).some((element) => isInttraVisible(element))) return selector;
+  }
+  return null;
+}
+
 function scorePage(signature: InttraPageSignature, context: { tabs: string[]; headings: string[]; url: string; doc: Document }): { score: number; reasons: string[] } {
   let score = 0;
   const reasons: string[] = [];
   for (const hint of signature.tabText) {
     const match = context.tabs.find((text) => text.includes(hint));
     if (match) {
-      score += 4;
+      score += EVIDENCE.tab;
       reasons.push(`Active tab reads "${match}"`);
       break;
     }
@@ -75,39 +108,36 @@ function scorePage(signature: InttraPageSignature, context: { tabs: string[]; he
   for (const hint of signature.headingText) {
     const match = context.headings.find((text) => text.includes(hint));
     if (match) {
-      score += 3;
+      score += EVIDENCE.heading;
       reasons.push(`Heading reads "${match}"`);
       break;
     }
   }
   for (const hint of signature.urlHints) {
     if (context.url.includes(hint)) {
-      score += 2;
+      score += EVIDENCE.url;
       reasons.push(`URL contains "${hint}"`);
       break;
     }
   }
-  for (const selector of signature.markerSelectors) {
-    let found = false;
-    try {
-      found = !!context.doc.querySelector(selector);
-    } catch {
-      found = false;
-    }
-    if (found) {
-      // A marker outweighs the tab strip, and deliberately by enough to win on
-      // its own. Every marker that resolves on this portal is an id copied from
-      // the live DOM, while the tab, heading and URL hints are guessed wording
-      // - and on Copy Container Details the tab wording is not merely weaker
-      // but wrong, because the screen is a modal and the strip behind it still
-      // names the step it covers (2026-09-17). Scoring them equally made the
-      // two tie, and a tie is reported as 'unknown'.
-      score += 6;
-      reasons.push(`Marker element ${selector} is present`);
-      break;
-    }
+  const marker = visibleMarker(context.doc, signature);
+  if (marker) {
+    score += EVIDENCE.marker;
+    reasons.push(`Marker element ${marker} is present and visible`);
   }
   return { score, reasons };
+}
+
+/**
+ * Is anything structural on this document: a visible captured marker, or a
+ * visible container grid? The content scripts answer the panel at once when
+ * there is, and after a moment when there is not, so that with the helper
+ * running in every frame of the tab the frame that holds the screen is the
+ * one whose answer the panel keeps.
+ */
+export function hasStructuralEvidence(doc: Document = document): boolean {
+  if (findGridByHeadings(doc, GRID_COLUMNS).root) return true;
+  return INTTRA_PAGE_SIGNATURES.some((signature) => visibleMarker(doc, signature) !== null);
 }
 
 export function detectInttraPage(doc: Document = document): InttraPageDetection {
@@ -120,12 +150,23 @@ export function detectInttraPage(doc: Document = document): InttraPageDetection 
   const scores = INTTRA_PAGE_SIGNATURES.map((signature) => {
     const { score, reasons } = scorePage(signature, context);
     return { page: signature.page as InttraPageId, score, reasons };
-  }).sort((a, b) => b.score - a.score);
+  });
+
+  // The grid is evidence, and it outranks the step strip: if a container grid
+  // is visible, the grid is what there is to fill, whatever the strip behind
+  // the modal says and whether or not the captured wrapper id still matches.
+  const grid = findGridByHeadings(doc, GRID_COLUMNS);
+  const copyContainerDetails = scores.find((entry) => entry.page === 'copyContainerDetails');
+  if (grid.root && copyContainerDetails) {
+    copyContainerDetails.score += EVIDENCE.grid;
+    copyContainerDetails.reasons.push(`A visible container grid is on the page (${grid.score} of ${GRID_COLUMNS.length} columns identified by their headings)`);
+  }
+  scores.sort((a, b) => b.score - a.score);
 
   const best = scores[0];
   const runnerUp = scores[1];
   if (!best || best.score === 0) {
-    return { page: 'unknown', label: 'Unknown page', confidence: 'none', evidence: ['No INTTRA screen could be identified from the tabs, headings, URL, or marker elements.'], scores };
+    return { page: 'unknown', label: 'Unknown page', confidence: 'none', evidence: ['No INTTRA screen could be identified from the tabs, headings, URL, marker elements, or a container grid.'], scores };
   }
   if (runnerUp && best.score === runnerUp.score) {
     return {

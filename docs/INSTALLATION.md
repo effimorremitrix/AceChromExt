@@ -70,6 +70,10 @@ Individual steps, if you prefer:
 7. For the Quickfill Helper, repeat with the `dist-quickfill/` folder. Its icon
    is the amber "Q", so the three are told apart in the toolbar. It has no
    panel: the popup is the whole interface.
+8. Each helper's header shows `build <version>+<commit>.<time>`, the stamp of
+   the folder Chrome loaded (also shown as the version in `chrome://extensions`).
+   If it is not the build you just ran, Chrome is still running an older
+   folder: reload the card, then the portal tab.
 
 ## 4. Check it is alive
 
@@ -116,7 +120,9 @@ npm run verify
 ```
 
 Then click the reload arrow on the ACE Helper card in `chrome://extensions`,
-and reload any open ACE tab.
+and reload any open ACE tab. The same for the INTTRA and Quickfill cards. The
+`build` stamp in each header changes with every build; if it did not, the
+reload did not take.
 
 ## 7. Uninstalling
 

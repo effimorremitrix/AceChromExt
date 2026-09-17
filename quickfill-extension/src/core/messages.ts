@@ -9,6 +9,7 @@
 
 import type { CanonicalShipment } from '../../../src/models/CanonicalInvoice.js';
 import type { FilingPackage } from '../../../shared/src/filingPackage.js';
+import type { GridPasteBlock } from '../../../inttra-extension/src/content/gridWriter.js';
 
 /** Which pair of buttons the popup shows, decided by the page in the tab. */
 export type Portal = 'ace' | 'inttra' | 'none';
@@ -53,8 +54,8 @@ export interface FillCount {
 export type QuickfillContentResponse =
   | { ok: true; type: 'content/where'; payload: Where }
   | { ok: true; type: 'content/count'; payload: FillCount }
-  /** The containers as tab-separated rows, in the grid's own column order. */
-  | { ok: true; type: 'content/rows'; payload: { tsv: string; rows: number } }
+  /** The containers as the block to paste: one cell per grid column, in the grid's own order, with what each column is. */
+  | { ok: true; type: 'content/rows'; payload: GridPasteBlock }
   | { ok: false; error: string };
 
 /** The parsed paste, held for the browsing session so a popup reopen is free. */

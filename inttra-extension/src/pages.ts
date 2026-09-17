@@ -7,11 +7,15 @@
  *
  * The screen names below are what was OBSERVED in the portal's workflow
  * (General Details, Container & Cargo, Copy Container Details, Print
- * Instructions, B/L Documents, Notification Emails). None of the tab, heading,
- * URL or marker values has been captured from the live DOM, so detection is
- * by wording only and reports its confidence; the UI refuses to fill when
- * confidence is 'none'. Capture the real tab strip and headings per
- * docs/INTTRA-INTEGRATION.md and the signatures become exact.
+ * Instructions, B/L Documents, Notification Emails). Every tab, heading and
+ * URL value is guessed wording, so those rungs report a confidence and the UI
+ * refuses to fill when confidence is 'none'. Two markers for Copy Container
+ * Details were copied from the live DOM on 2026-09-17, and that screen is
+ * also identified by its own grid (content/pageDetector.ts): structure
+ * outscores wording. Capture the real tab strip and headings per
+ * docs/INTTRA-INTEGRATION.md and the other signatures become exact.
+ *
+ * This file stays free of DOM code: the dashboard imports it for its labels.
  */
 
 import type { InttraPageId } from './models/InttraField.js';
@@ -53,9 +57,10 @@ export const INTTRA_PAGE_SIGNATURES: InttraPageSignature[] = [
     headingText: ['copy container details', 'copy container', 'paste container details'],
     urlHints: ['copycontainer', 'copy-container', 'containergrid'],
     // Captured from the live DOM on 2026-09-17: the modal wrapper and the grid
-    // container. These are what identify this screen; its tab wording cannot,
-    // because it is a modal over another step and the step strip behind it
-    // still names that step.
+    // container. These, and the grid itself, are what identify this screen;
+    // its tab wording cannot, because it is a modal over another step and the
+    // step strip behind it still names that step. A marker counts only while
+    // it is visible (pageDetector.ts).
     markerSelectors: ['#siCopyContainerWrapperDiv', '#editableGridWrapper', "[data-step='copyContainerDetails']", '#copyContainerDetails'],
     captureHint: 'Open Copy Container Details. Copy the outerHTML of the grid root, its header row, one empty row, one populated row, and a cell while it is being edited. See docs/INTTRA-INTEGRATION.md for the full list.',
   },

@@ -213,17 +213,22 @@ moves when the portal does.
 
 ## 5. Capturing the INTTRA selectors
 
-**Where things stand:** nothing. Every INTTRA selector, every screen
-signature is a placeholder tested against mock
-screens. The helper will report "not found" on a real screen until this is
-done, and it will never write to a field it did not find.
+**Where things stand:** two structural selectors, no field selector. The Copy
+Container Details modal root and its grid container were copied from the live
+DOM on 2026-09-17, and the grid is also found by its own headings, which is
+what identifies that screen; its seal headings are dropdowns, read by the
+option they show. Every field selector and every other screen signature is a
+placeholder tested against mock screens. The helper will report "not found"
+on a real form screen until this is done, and it will never write to a field
+it did not find.
 
 The procedure is the same shape as ACE's, with a longer capture list because
 of the container grid. It is written out in full in
 **[INTTRA-INTEGRATION.md](INTTRA-INTEGRATION.md), section 6**: per screen,
 the active step tab, the heading, and each filled control with its label;
-for Copy Container Details, the grid root, the header row, an empty row, a
-populated row, an edited cell, and the six named cells, in that order.
+for Copy Container Details, the grid root, the header row including the two
+seal-type dropdowns with their options, an empty row, a populated row, an
+edited cell, and the six named cells, in that order.
 
 Install captured selectors through the INTTRA Helper's **Diagnostics**,
 **INTTRA selectors** editor, same JSON format as ACE. Make them permanent in

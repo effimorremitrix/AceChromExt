@@ -183,6 +183,14 @@ who works one portal installs one helper. All three manifests are pinned by the
 invariant tests, and `npm run check:bundle:quickfill` re-checks the combined
 allowlist against the built bundle.
 
+Which INTTRA screen is open is the shared detector's word for both helpers
+(`inttra-extension/src/content/pageDetector.ts`): a visible container grid, or
+a visible captured marker, outscores every wording hint combined, so the popup
+and the INTTRA Helper's panel cannot disagree about the Copy Container Details
+modal. The block both copy for that grid is `gridPasteBlock` in the shared grid
+writer: one cell per grid column, from Container Number rightwards, blank where
+nothing feeds a column.
+
 Nothing in `web/` changed: Quickfill runs Deckhand inside the extension, so
 there is no preparation step to host. `quickfill-extension` is in the list of
 directories that may not import from `web/`, so it cannot grow a dependency on

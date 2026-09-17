@@ -94,7 +94,9 @@ describe('where(): the grid outranks the step strip', () => {
   // Reproduces the live portal on 2026-09-17: Copy Container Details is a
   // MODAL over another step, so the step strip behind it still reports that
   // step. On the first live run the popup said "B/L Documents" while a
-  // container grid filled the screen.
+  // container grid filled the screen. The shared detector now scores the grid
+  // above every wording hint combined, so the popup and the INTTRA Helper's
+  // panel answer the same.
   const MODAL_OVER_ANOTHER_STEP = [
     '<nav><a class="nav-link active">B/L Documents</a></nav>',
     '<div role="dialog"><h2>Copy Container Details</h2>',
@@ -108,10 +110,12 @@ describe('where(): the grid outranks the step strip', () => {
     const { detectGrid } = await import('../inttra-extension/src/content/gridWriter.js');
     document.body.innerHTML = MODAL_OVER_ANOTHER_STEP;
 
-    // The step strip is wrong, and that is exactly why it cannot be trusted.
-    expect(detectInttraPage(document).page).not.toBe('copyContainerDetails');
-    // The grid is present, and that is what there is to fill.
+    // The grid is present, and that is what there is to fill: the step strip
+    // behind it says B/L Documents, and the detector no longer believes it.
     expect(detectGrid(document).found).toBe(true);
+    const page = detectInttraPage(document);
+    expect(page.page).toBe('copyContainerDetails');
+    expect(page.confidence).toBe('high');
   });
 });
 
@@ -126,7 +130,7 @@ describe('the popup', () => {
   it('says in one line what the paste was read as', async () => {
     const box = await mount();
     await paste(box, email);
-    expect(text('.read-as')).toBe('Read as: carrier email · EBKG18531408 · 3 containers');
+    expect(text('.read-as')).toBe('Read as: carrier email · EBKG18531408 · 3 containers · 3 with a seal');
   });
 
   it('keeps the parsed paste in the session store', async () => {
@@ -194,7 +198,21 @@ describe('the popup', () => {
       configurable: true,
       value: { writeText: async (value: string) => void written.push(value) },
     });
-    reply = { ok: true, type: 'content/rows', payload: { tsv: 'MSCU1234566\tSL-4471209', rows: 3 } };
+    reply = {
+      ok: true,
+      type: 'content/rows',
+      payload: {
+        tsv: 'MSCU1234566\tSL-4471209',
+        rows: 3,
+        width: 2,
+        columns: [
+          { heading: 'Container Number', column: 'ContainerNumber' },
+          { heading: 'Carrier Seal #', column: 'CarrierSeal' },
+        ],
+        blank: [],
+        fromGrid: true,
+      },
+    };
     const box = await mount();
     await paste(box, email);
     // Copy rows leads on this grid.
@@ -202,7 +220,35 @@ describe('the popup', () => {
     await settle();
     expect(sent.some((message) => message.type === 'content/gridRows')).toBe(true);
     expect(written).toEqual(['MSCU1234566\tSL-4471209']);
-    expect(text('.result')).toContain('3 row(s) copied');
+    expect(text('.result')).toBe('3 row(s) copied as Container Number, Carrier Seal #. Click the first Container Number cell of the first empty row in INTTRA and paste.');
+  });
+
+  it('names the columns that stay blank after Copy rows', async () => {
+    // The operator can see whether the seal is in the block before pasting,
+    // which is the whole of the checking Quickfill does.
+    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: false };
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => undefined } });
+    reply = {
+      ok: true,
+      type: 'content/rows',
+      payload: {
+        tsv: 'MSCU1234566\t\tSH-001',
+        rows: 3,
+        width: 3,
+        columns: [
+          { heading: 'Container Number', column: 'ContainerNumber' },
+          { heading: 'Seal Type', column: null },
+          { heading: 'Shipper Seal #', column: 'ShipperSeal' },
+        ],
+        blank: ['Seal Type'],
+        fromGrid: true,
+      },
+    };
+    const box = await mount();
+    await paste(box, email);
+    (document.querySelectorAll('.button-primary')[0] as HTMLButtonElement).click();
+    await settle();
+    expect(text('.result')).toContain('3 row(s) copied as Container Number, Seal Type, Shipper Seal #. Blank: Seal Type.');
   });
 
   it('offers nothing on a page that is neither portal', async () => {

@@ -120,7 +120,14 @@ function summaryFor(kind: PasteKind, pkg: FilingPackage): string {
   const booking = pkg.header.bookingReference.value;
   if (booking) parts.push(booking);
   const containers = pkg.containers.length;
-  if (containers) parts.push(`${containers} container${containers === 1 ? '' : 's'}`);
+  if (containers) {
+    parts.push(`${containers} container${containers === 1 ? '' : 's'}`);
+    // How many of them carry a seal. A count, not a check: nothing is gated on
+    // it. It is here because a manifest read as eleven containers and no seals
+    // would otherwise look, in this line, exactly like one that parsed whole.
+    const sealed = pkg.containers.filter((container) => container.shipperSeal.value.trim() !== '' || container.carrierSeal.value.trim() !== '').length;
+    parts.push(`${sealed} with a seal`);
+  }
   // An email-only paste still carries the blank placeholder commodity that
   // `emptyCanonicalShipment` supplies so the package always has an invoice
   // half. Counting it would tell the operator there is a cargo line when there

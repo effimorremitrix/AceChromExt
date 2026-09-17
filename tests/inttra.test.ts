@@ -11,10 +11,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { detectInttraPage } from '../inttra-extension/src/content/pageDetector.js';
-import { readInttraFieldValue, resolveInttraControl, setInttraFieldValue } from '../inttra-extension/src/content/fieldWriter.js';
+import { detectInttraPage, EVIDENCE, hasStructuralEvidence } from '../inttra-extension/src/content/pageDetector.js';
+import { isInttraVisible, readInttraFieldValue, resolveInttraControl, setInttraFieldValue } from '../inttra-extension/src/content/fieldWriter.js';
 import { fillInttraFields, resolvePackageSource } from '../inttra-extension/src/content/filler.js';
-import { detectGrid, fillContainerGrid, gridAcceptsTyping, gridRowsAsTsv, normalizeHeading } from '../inttra-extension/src/content/gridWriter.js';
+import { detectGrid, fillContainerGrid, gridAcceptsTyping, gridPasteBlock, gridRowsAsTsv, normalizeHeading, readHeaderCell } from '../inttra-extension/src/content/gridWriter.js';
 import { ALL_INTTRA_MAPPINGS, GRID_COLUMNS, inttraFieldsForPage, resolveInttraFields, unverifiedInttraFieldKeys } from '../inttra-extension/src/mappings/index.js';
 import { INTTRA_PAGE_SIGNATURES } from '../inttra-extension/src/pages.js';
 import { isInttraUrl } from '../inttra-extension/src/ui/tabs.js';
@@ -116,7 +116,9 @@ describe('finding the grid among other tables', () => {
       '<nav><a class="nav-link active">B/L Documents</a></nav>',
       '<div id="siCopyContainerWrapperDiv"></div>',
     ].join('');
-    expect(detectInttraPage(document).page).toBe('copyContainerDetails');
+    const page = detectInttraPage(document);
+    expect(page.page).toBe('copyContainerDetails');
+    expect(page.confidence).toBe('high');
   });
 
   it('says a grid with inputs can be typed into', () => {
@@ -155,7 +157,174 @@ describe('finding the grid among other tables', () => {
   });
 });
 
+/**
+ * The live grid's header row, 2026-09-17: the two seal headings are dropdowns
+ * of seal types, so the heading a column shows is the option it has selected.
+ * Read as textContent, a <select> is every option run together, and both seal
+ * columns then carry the same wording whichever option each shows.
+ */
+describe('dropdown headings', () => {
+  const SEAL_TYPES = ['Carrier Seal #', 'Shipper Seal #', 'Customs Seal #'];
+  const dropdown = (options: string[], selected: string): string =>
+    `<select>${options.map((option) => `<option${option === selected ? ' selected' : ''}>${option}</option>`).join('')}</select>`;
+  const grid = (first: string, second: string, options = SEAL_TYPES): string =>
+    [
+      '<table><thead><tr>',
+      `<th>*Container Number</th><th>${dropdown(options, first)}</th><th>${dropdown(options, second)}</th><th>HS Code</th>`,
+      '</tr></thead><tbody><tr><td></td><td></td><td></td><td></td></tr></tbody></table>',
+    ].join('');
+  const columnsOf = (): Array<string | null> => detectGrid(document).headers.map((header) => header.column);
+
+  it('reads a dropdown heading as the option it shows, with Carrier Seal # listed first', () => {
+    document.body.innerHTML = grid('Carrier Seal #', 'Shipper Seal #');
+    const detection = detectGrid(document);
+    expect(detection.found).toBe(true);
+    expect(detection.headers.map((header) => header.column)).toEqual(['ContainerNumber', 'CarrierSeal', 'ShipperSeal', 'HsCode']);
+    expect(detection.headers[1]?.text).toBe('Carrier Seal #');
+    expect(detection.headers[2]?.text).toBe('Shipper Seal #');
+    expect(detection.headers[1]?.options).toEqual(SEAL_TYPES);
+  });
+
+  it('reads it the same with Shipper Seal # listed first, so the carrier column is never claimed as the shipper\'s', () => {
+    document.body.innerHTML = grid('Carrier Seal #', 'Shipper Seal #', ['Shipper Seal #', 'Carrier Seal #', 'Customs Seal #']);
+    expect(columnsOf()).toEqual(['ContainerNumber', 'CarrierSeal', 'ShipperSeal', 'HsCode']);
+  });
+
+  it('leaves a dropdown still on its placeholder unidentified, and still identifies the other seal column', () => {
+    document.body.innerHTML = grid('Select One', 'Shipper Seal #', ['Select One', ...SEAL_TYPES]);
+    expect(columnsOf()).toEqual(['ContainerNumber', null, 'ShipperSeal', 'HsCode']);
+    expect(detectGrid(document).missingColumns).toContain('CarrierSeal');
+  });
+
+  it('never reads the option list as the heading', () => {
+    document.body.innerHTML = grid('Carrier Seal #', 'Shipper Seal #');
+    const cell = document.querySelectorAll('th')[1] as Element;
+    expect(cell.textContent).toBe(SEAL_TYPES.join(''));
+    expect(readHeaderCell(cell)).toEqual({ text: 'Carrier Seal #', candidates: ['Carrier Seal #'], options: SEAL_TYPES });
+  });
+
+  it('reads the static text beside a dropdown when the option does not name the column', () => {
+    document.body.innerHTML = '<table><tr><th>Container Number</th><th>Shipper Seal # <select><option selected>Bolt</option><option>Wire</option></select></th></tr><tr><td></td><td></td></tr></table>';
+    expect(columnsOf()).toEqual(['ContainerNumber', 'ShipperSeal']);
+  });
+
+  it('lets a heading that matches exactly claim its column before a prefix can', () => {
+    // "Seal Type" starts with the four-letter alias "seal"; read in cell
+    // order it would take ShipperSeal before the real column is reached.
+    document.body.innerHTML = '<table><tr><th>Container Number</th><th>Seal Type</th><th>Shipper Seal #</th><th>HS Code</th></tr><tr><td></td><td></td><td></td><td></td></tr></table>';
+    expect(columnsOf()).toEqual(['ContainerNumber', null, 'ShipperSeal', 'HsCode']);
+  });
+});
+
+/**
+ * The block to paste: one cell per grid column, in the grid's own order. A
+ * paste is positional, so a column left OUT of the row shifts every value
+ * after it one column left; that is how the shipper's seal was pasted nowhere
+ * on 2026-09-17.
+ */
+describe('the paste block', () => {
+  const UNKNOWN_IN_THE_MIDDLE =
+    '<table><tr><th>Container Number</th><th>Seal Type</th><th>Shipper Seal #</th><th>HS Code</th></tr><tr><td></td><td></td><td></td><td></td></tr></table>';
+
+  it('pastes one cell per grid column, blank where the package has nothing for a column', () => {
+    document.body.innerHTML = UNKNOWN_IN_THE_MIDDLE;
+    const block = gridPasteBlock(samplePackage(), detectGrid(document));
+    expect(block.fromGrid).toBe(true);
+    expect(block.tsv.split('\r\n')).toEqual(['MSCU1234566\t\tSH-001', 'MSDU7654322\t\t', 'TGHU7654320\t\tSL-9']);
+    expect(block.width).toBe(3);
+    expect(block.columns.map((column) => column.column)).toEqual(['ContainerNumber', null, 'ShipperSeal']);
+    expect(block.blank).toEqual(['Seal Type']);
+  });
+
+  it('cuts every row at the widest value in any row, and pads every row to that width', () => {
+    document.body.innerHTML = UNKNOWN_IN_THE_MIDDLE;
+    const block = gridPasteBlock(samplePackage(), detectGrid(document));
+    expect(block.rows).toBe(3);
+    expect(block.tsv.split('\r\n').every((row) => row.split('\t').length === block.width)).toBe(true);
+    expect(block.tsv.endsWith('\r\n')).toBe(false);
+  });
+
+  it('starts at the Container Number column, which is the cell the operator pastes into', () => {
+    document.body.innerHTML = '<table><tr><th><input type="checkbox" /></th><th>Container Number</th><th>Shipper Seal #</th></tr><tr><td></td><td></td><td></td></tr></table>';
+    const block = gridPasteBlock(samplePackage(), detectGrid(document));
+    expect(block.columns[0]?.column).toBe('ContainerNumber');
+    expect(block.tsv.split('\r\n')[0]).toBe('MSCU1234566\tSH-001');
+  });
+
+  it('falls back to the GRID_COLUMNS order when no grid was detected', () => {
+    const block = gridPasteBlock(samplePackage(), null);
+    expect(block.fromGrid).toBe(false);
+    expect(block.columns.map((column) => column.heading)).toEqual(['Container Number', 'Carrier Seal #', 'Shipper Seal #']);
+    expect(block.tsv.split('\r\n')[0]).toBe('MSCU1234566\tSL-4471209\tSH-001');
+  });
+
+  it('keeps one container on one row when a value holds a line break', () => {
+    document.body.innerHTML = html('inttra-container-grid-aria');
+    const pkg = samplePackage();
+    const first = pkg.containers[0];
+    if (!first) throw new Error('no container');
+    const broken: FilingPackage = { ...pkg, containers: [{ ...first, cargoDescription: { value: 'ALMOND\nKERNELS', source: 'manual', detail: 'typed' } }, ...pkg.containers.slice(1)] };
+    const block = gridPasteBlock(broken, detectGrid(document));
+    expect(block.rows).toBe(3);
+    expect(block.tsv.split('\r\n')).toHaveLength(3);
+    expect(block.tsv.split('\r\n')[0]).toBe('MSCU1234566\tSL-4471209\tSH-001\tALMOND KERNELS');
+  });
+});
+
+describe('isInttraVisible', () => {
+  it('is false inside a hidden ancestor, whether by attribute or by style', () => {
+    document.body.innerHTML = [
+      '<div hidden><table id="a"></table></div>',
+      '<div style="display: none"><div><table id="b"></table></div></div>',
+      '<div style="visibility: hidden"><table id="c"></table></div>',
+      '<table id="d"></table>',
+    ].join('');
+    const visible = (id: string): boolean => isInttraVisible(document.getElementById(id) as Element);
+    expect(visible('a')).toBe(false);
+    expect(visible('b')).toBe(false);
+    expect(visible('c')).toBe(false);
+    expect(visible('d')).toBe(true);
+  });
+
+  it('is false for a detached element', () => {
+    expect(isInttraVisible(document.createElement('table'))).toBe(false);
+  });
+});
+
 describe('page detection', () => {
+  it('identifies Copy Container Details by the grid itself, when the strip and heading behind the modal outscore a marker-less modal', () => {
+    // The live portal, 2026-09-17, fourth run: a build that carried the
+    // captured ids still said "B/L Documents" with the grid on screen, so the
+    // ids cannot be the only thing that identifies the modal. The grid is.
+    document.body.innerHTML = [
+      '<nav><a class="nav-link active">B/L Documents</a></nav><h2>Parties</h2>',
+      '<div role="dialog"><table><tr><th>*Container Number</th><th>Carrier Seal #</th><th>Shipper Seal #</th></tr><tr><td></td><td></td><td></td></tr></table></div>',
+    ].join('');
+    const page = detectInttraPage(document);
+    expect(page.page).toBe('copyContainerDetails');
+    expect(page.confidence).toBe('high');
+    expect(page.scores.find((score) => score.page === 'blDocuments')?.score).toBe(EVIDENCE.tab + EVIDENCE.heading);
+    expect(page.scores.find((score) => score.page === 'copyContainerDetails')?.score).toBe(EVIDENCE.grid);
+    expect(page.evidence.some((line) => /container grid/.test(line))).toBe(true);
+    expect(hasStructuralEvidence(document)).toBe(true);
+  });
+
+  it('ignores a marker that is in the DOM but hidden', () => {
+    document.body.innerHTML = [
+      '<nav><a class="nav-link active">B/L Documents</a></nav>',
+      '<div id="siCopyContainerWrapperDiv" style="display: none"><div id="editableGridWrapper"><table><tr><th>Container Number</th></tr><tr><td></td></tr></table></div></div>',
+    ].join('');
+    expect(detectInttraPage(document).page).toBe('blDocuments');
+    expect(detectGrid(document).found).toBe(false);
+    expect(hasStructuralEvidence(document)).toBe(false);
+  });
+
+  it('scores structure above every wording hint combined', () => {
+    const wording = EVIDENCE.tab + EVIDENCE.heading + EVIDENCE.url;
+    expect(EVIDENCE.marker).toBeGreaterThan(wording);
+    expect(EVIDENCE.grid).toBeGreaterThan(wording);
+  });
+
   it('identifies each observed screen from its step strip and heading', () => {
     document.body.innerHTML = html('inttra-general-details');
     const page = detectInttraPage(document);
@@ -447,9 +616,11 @@ describe('the container grid', () => {
     document.body.innerHTML = html('inttra-container-grid-aria');
     const pkg = samplePackage();
     const tsv = gridRowsAsTsv(pkg, detectGrid(document));
-    expect(tsv.split('\r\n')[0]).toBe('MSCU1234566\tSL-4471209\tSH-001\t\t');
+    // Cut at the widest value: nothing right of Shipper Seal # holds one.
+    expect(tsv.split('\r\n')[0]).toBe('MSCU1234566\tSL-4471209\tSH-001');
     expect(tsv.split('\r\n')).toHaveLength(3);
-    expect(gridRowsAsTsv(pkg, null).split('\r\n')[0]?.split('\t')).toHaveLength(GRID_COLUMNS.length);
+    expect(gridRowsAsTsv(pkg, null).split('\r\n')[0]?.split('\t')).toHaveLength(3);
+    expect(GRID_COLUMNS.length).toBeGreaterThan(3);
   });
 });
 

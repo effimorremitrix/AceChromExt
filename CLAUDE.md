@@ -172,6 +172,9 @@ preview → ACE`.
 | an ACE field | `src/ace/mappings/<page>.ts` |
 | an INTTRA field | `inttra-extension/src/mappings/<screen>.ts` (placeholders until captured live) |
 | a grid column on Copy Container Details | `GRID_COLUMNS` in `inttra-extension/src/mappings/containerGrid.ts` |
+| a grid heading that is a dropdown, or the shape of the paste block | `readHeaderCell` and `gridPasteBlock` in `inttra-extension/src/content/gridWriter.ts`, shared by both helpers |
+| what identifies an INTTRA screen, and what each kind of evidence is worth | `EVIDENCE` and `detectInttraPage` in `inttra-extension/src/content/pageDetector.ts`; `pages.ts` stays free of DOM code because the dashboard imports it |
+| the build stamp in the manifests and the headers | `scripts/buildStamp.mjs`, `buildStamp` in `src/ui/dom.ts` |
 | an email shape Deckhand should read | a rule in `deckhand/src/extract/` + a fixture in `tests/fixtures/deckhand/`; never a rule that pairs by position |
 | whose seal an unlabelled seal column is | `sealKindOf` in `deckhand/src/extract/containers.ts`. An unattributed seal is the SHIPPER's, because the operator is the shipper; only "carrier", "line" or "customs" send it the other way. It decides which INTTRA grid column the number lands in, so read `docs/DECKHAND.md` before changing it |
 | a field in the filing package, or the merge policy | `shared/src/filingPackage.ts` + `shared/src/builder.ts` |
@@ -254,16 +257,34 @@ stay honestly described:
    grid-root rung. Also confirmed that day: the hostname
    `ship.inttra.e2open.com`, that the URL carries no screen name, and that
    Copy Container Details is a **modal over another step** - so tab wording
-   cannot identify it, and a captured marker outscores a guessed tab reading
-   (6 against 4) because there the wording is wrong, not merely weaker. The
+   cannot identify it. Detection therefore scores **structure above every
+   wording hint combined**: a captured marker that is VISIBLE, or the
+   container grid itself found by its headings, scores 10, and tab + heading
+   + URL can reach at most 9 (`EVIDENCE` in
+   `inttra-extension/src/content/pageDetector.ts`). A marker that is in the
+   DOM but hidden counts for nothing. The grid is the evidence that held up on
+   the fourth live run that day, when a build carrying the captured ids still
+   read the strip behind the modal, and it is what both helpers now go by. The
    grid is `editableGrid`: its cells hold no control until clicked, so Fill
    can never write one and **Copy rows and paste is the route, not a
-   fallback**. `docs/INTTRA-INTEGRATION.md` section 5a. Never mark
-   an INTTRA candidate `verified(...)` unless it was copied from the live DOM;
+   fallback**. Two facts about that grid, both from the fourth run: its two
+   seal headings are **dropdowns of seal types**, so a heading is read as the
+   option it shows (`readHeaderCell`), never as its option list, which is
+   what had left Shipper Seal # unidentified; and the paste block
+   (`gridPasteBlock`) carries **one cell per grid column** from Container
+   Number rightwards, blank where nothing feeds a column, cut at the widest
+   value, because a column left out of the row shifts every value after it,
+   which is how the seals were pasted nowhere. `docs/INTTRA-INTEGRATION.md`
+   section 5a. Never mark an INTTRA candidate `verified(...)` unless it was
+   copied from the live DOM; the grid's header row is still uncaptured.
    `docs/INTTRA-INTEGRATION.md` section 6 is the capture procedure and
    section 7 the list of what is untested. The helper never presses Add Row,
    Save, Continue or Submit; that is policy in
-   `inttra-extension/src/content/automationPolicy.ts`, not a gap.
+   `inttra-extension/src/content/automationPolicy.ts`, not a gap. Every dist
+   manifest carries `version_name` = version + git commit + build time
+   (`scripts/buildStamp.mjs`), shown as `build ...` in each helper's header,
+   so a stale unpacked build is visible at a glance; the INTTRA panel's
+   header also names the tab it addresses.
 
 4. Deckhand's rules extractor has been shown **fixtures, not a real inbox**.
    PDF and image reading are declared and unavailable, on purpose, because
@@ -280,7 +301,11 @@ stay honestly described:
 6. The Quickfill Helper has **never been used on a real shipment**, and it
    improves nothing in items 1 to 4: it shares the same mapping tables, so it
    fills exactly what the other two fill, which on the live INTTRA portal is
-   currently nothing. What is new about it is what it takes away - the
+   currently nothing on the form screens and, on the container grid, the same
+   paste block the INTTRA Helper copies. Its read-as line counts the
+   containers that carry a seal (a count, not a check), and its Copy rows
+   line names the pasted columns and any left blank. What is new about it is
+   what it takes away - the
    preview, the ten data quality checks, the ISO 6346 block, the Deckhand
    review and Approve click, the conflict screen, the fill gate, the
    overwrite warning and the reference counter. Every one of those removals

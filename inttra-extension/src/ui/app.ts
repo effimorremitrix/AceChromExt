@@ -15,14 +15,14 @@
  * chose to download.
  */
 
-import { el, byId, clear, show } from '../../../src/ui/dom.js';
+import { el, byId, buildStamp, clear, show } from '../../../src/ui/dom.js';
 import { renderDeckhandTab } from '../../../src/ui/deckhandTab.js';
 import { renderPackageTab } from '../../../src/ui/packageTab.js';
 import { formatLog, type SessionLogEntry, type SessionLogKind } from '../../../src/core/sessionLog.js';
 import { emptyOverrides, serializeOverrides, starterOverrides, type SelectorOverrides } from '../../../src/ace/selectors/overrides.js';
 import { buildFilingPackage, fillGate, filingPackageFileName, parseFilingPackageJson, serializeFilingPackage, type FilingPackage } from '../../../shared/src/index.js';
 import { DEFAULT_INTTRA_SETTINGS, loadInttraSettings, saveInttraSettings, type InttraHelperSettings } from '../core/settings.js';
-import type { InttraDiagnosticsSnapshot } from '../core/messages.js';
+import type { InttraDiagnosticsSnapshot, InttraGridStatus } from '../core/messages.js';
 import { emptyStoredPackage, type StoredPackage } from '../core/store.js';
 import { clearInttraOverrides, loadInttraOverrides, saveInttraOverrides } from '../core/overridesStore.js';
 import type { InttraPageDetection } from '../content/pageDetector.js';
@@ -30,7 +30,7 @@ import type { GridFillReport } from '../content/gridWriter.js';
 import type { InttraFillReport } from '../models/InttraField.js';
 import { ALL_INTTRA_MAPPINGS, GRID_COLUMNS, GRID_DEVTOOLS_CHECKLIST, NOTIFICATION_EMAILS_NOTE, unverifiedInttraFieldKeys } from '../mappings/index.js';
 import { INTTRA_PAGE_SIGNATURES } from '../pages.js';
-import { gridRowsAsTsv } from '../content/gridWriter.js';
+import { gridPasteBlock, type GridPasteBlock } from '../content/gridWriter.js';
 import { resolveInttraTab, sendToBackground, sendToTab, type InttraTab } from './tabs.js';
 
 export type Surface = 'popup' | 'panel';
@@ -42,6 +42,8 @@ interface AppState {
   stored: StoredPackage;
   tab: InttraTab | null;
   page: InttraPageDetection | null;
+  /** What the tab said about its container grid the last time it was asked; null until then. */
+  grid: InttraGridStatus | null;
   report: InttraFillReport | null;
   gridReport: GridFillReport | null;
   diagnostics: InttraDiagnosticsSnapshot | null;
@@ -59,6 +61,7 @@ const state: AppState = {
   stored: emptyStoredPackage(),
   tab: null,
   page: null,
+  grid: null,
   report: null,
   gridReport: null,
   diagnostics: null,
@@ -134,9 +137,20 @@ async function store(next: StoredPackage): Promise<void> {
 async function refreshTab(): Promise<void> {
   state.tab = await resolveInttraTab();
   state.page = null;
+  state.grid = null;
   if (!state.tab) return;
   const response = await sendToTab(state.tab.id, { type: 'content/detectPage' });
-  if (response.ok && response.type === 'content/page') state.page = response.payload;
+  if (response.ok && response.type === 'content/page') {
+    state.page = response.payload;
+    // A content script from before the grid status was added answers without
+    // it; null then reads as "cannot type", and Copy rows leads.
+    state.grid = response.grid ?? null;
+  }
+}
+
+/** The first N characters, with a mark when there were more. */
+function shorten(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}\u2026` : text;
 }
 
 function pkg(): FilingPackage | null {
@@ -262,6 +276,49 @@ async function fillGrid(dryRun: boolean): Promise<void> {
   render();
 }
 
+/**
+ * Put the containers on the clipboard as the grid's own columns.
+ *
+ * The INTTRA tab produces the block, because only it can see the grid and
+ * therefore its column order; the panel only copies. Copy Container Details is
+ * the screen INTTRA built for pasting a block of rows into, and on the live
+ * portal, whose cells open an editor on click, it is the only way in. Nothing
+ * is pressed on the operator's behalf: the paste is theirs.
+ */
+async function copyRows(): Promise<void> {
+  const current = pkg();
+  if (!current) {
+    setStatus('Load or build a filing package first.', 'warn');
+    return;
+  }
+  await refreshTab();
+  let block: GridPasteBlock | null = null;
+  let problem = '';
+  if (!state.tab) {
+    problem = 'No INTTRA tab is open, so this is the default column order.';
+  } else {
+    const response = await sendToTab(state.tab.id, { type: 'content/gridRows', package: current });
+    if (response.ok && response.type === 'content/rows') block = response.payload;
+    else problem = `${response.ok ? 'The INTTRA tab returned no rows.' : response.error} This is the default column order.`;
+  }
+  if (!block) block = gridPasteBlock(current, null);
+  else if (!block.fromGrid) problem = 'No container grid was found on the INTTRA tab, so this is the default column order; open Copy Container Details there and copy again.';
+  try {
+    await navigator.clipboard.writeText(block.tsv);
+  } catch {
+    setStatus('Could not copy to the clipboard.', 'error');
+    render();
+    return;
+  }
+  const headings = block.columns.map((column) => column.heading).join(', ');
+  const blank = block.blank.length ? ` Left blank, because no package column matches the heading: ${block.blank.join(', ')}.` : '';
+  const said = `${block.rows} row(s) copied, ${block.width} column(s)${block.fromGrid ? " in the grid's own order" : ''}: ${headings}.${blank}${problem ? ` ${problem}` : ''}`;
+  setStatus(`${said} In INTTRA, click the first Container Number cell of the first empty row and press Ctrl+V.`, problem || block.blank.length ? 'warn' : 'ok');
+  await appendLog('note', said);
+  await refreshLog();
+  render();
+}
+
 async function runDiagnostics(): Promise<void> {
   await refreshTab();
   if (!state.tab) {
@@ -295,9 +352,21 @@ function renderHeader(): HTMLElement {
   const text = !state.tab ? 'No INTTRA tab detected' : page && page.page !== 'unknown' ? `${page.label} (${page.confidence} confidence)` : 'INTTRA screen not identified';
   const refresh = el('button', { className: 'link-button', text: 'refresh', attrs: { type: 'button' } });
   refresh.addEventListener('click', () => void refreshTab().then(render));
+  const stamp = buildStamp();
+  // Which tab answered. The panel is a tab of its own, so the INTTRA tab it
+  // addresses is a choice (tabs.ts), and a wrong choice must be visible.
+  const tabTitle = state.tab ? state.tab.title || state.tab.url : '';
   return el('header', { className: 'app-header' }, [
-    el('div', { className: 'brand' }, [el('span', { className: 'brand-mark', text: 'INTTRA' }), el('span', { className: 'brand-name', text: 'Helper' })]),
-    el('div', { className: 'page-chip' }, [el('span', { className: `pill pill-${tone}`, text }), refresh]),
+    el('div', { className: 'brand' }, [
+      el('span', { className: 'brand-mark', text: 'INTTRA' }),
+      el('span', { className: 'brand-name', text: 'Helper' }),
+      stamp ? el('span', { className: 'build-stamp', text: stamp, title: 'The build this helper is running: version, git commit, build time (UTC)' }) : null,
+    ]),
+    el('div', { className: 'page-chip' }, [
+      el('span', { className: `pill pill-${tone}`, text, ...(tabTitle ? { title: `On the tab: ${tabTitle}` } : {}) }),
+      tabTitle ? el('span', { className: 'tab-title', text: shorten(tabTitle, 36), title: state.tab?.url ?? '' }) : null,
+      refresh,
+    ]),
   ]);
 }
 
@@ -645,14 +714,28 @@ function renderContainers(): HTMLElement {
     el('label', { className: 'checkbox' }, [anyPage, el('span', { text: 'Look for the grid even when the screen was not identified as Copy Container Details' })]),
   );
   const tabReady = !!state.tab;
-  const fillButton = el('button', { className: 'button button-primary', text: 'Fill Container Grid', attrs: { type: 'button', ...(tabReady && ready.ok ? {} : { disabled: 'disabled' }) } });
+  // On a click-to-edit grid Fill cannot write a single cell, so the button
+  // that works leads. The tab says which grid it has; until it has answered,
+  // assume the live portal's, which cannot be typed into.
+  const typeable = !!state.grid?.acceptsTyping;
+  const fillButton = el('button', { className: `button${typeable ? ' button-primary' : ''}`, text: 'Fill Container Grid', attrs: { type: 'button', ...(tabReady && ready.ok ? {} : { disabled: 'disabled' }) } });
   fillButton.addEventListener('click', () => void fillGrid(false));
   const dry = el('button', { className: 'button', text: 'Dry run (write nothing)', attrs: { type: 'button', ...(tabReady ? {} : { disabled: 'disabled' }) } });
   dry.addEventListener('click', () => void fillGrid(true));
-  const copyRows = el('button', { className: 'button', text: 'Copy rows (TSV) for pasting into the grid', attrs: { type: 'button' } });
-  copyRows.addEventListener('click', () => copyToClipboard(gridRowsAsTsv(current, state.gridReport?.detection ?? state.diagnostics?.grid ?? null), 'Container rows'));
-  section.append(el('div', { className: 'actions' }, [fillButton, dry, copyRows]));
-  section.append(el('p', { className: 'small muted', text: 'Copy rows puts the containers on the clipboard as tab-separated rows in the grid\'s own column order when the grid has been detected (run Diagnostics on the grid screen first), otherwise in the order shown above. Click the first cell of the first empty row in INTTRA and paste.' }));
+  const copyRowsButton = el('button', { className: `button${typeable ? '' : ' button-primary'}`, text: 'Copy rows', attrs: { type: 'button' } });
+  copyRowsButton.addEventListener('click', () => void copyRows());
+  section.append(el('div', { className: 'actions' }, typeable ? [fillButton, dry, copyRowsButton] : [copyRowsButton, fillButton, dry]));
+  const gridNote = !state.grid
+    ? 'The INTTRA tab has not yet said whether its grid can be typed into: open Copy Container Details there and press refresh in the header.'
+    : !state.grid.found
+      ? 'No container grid is on the INTTRA tab yet. Open Copy Container Details there, then refresh.'
+      : typeable
+        ? 'The grid on the INTTRA tab can be typed into, so Fill writes it cell by cell and reads every cell back.'
+        : 'The grid on the INTTRA tab opens an editor when a cell is clicked, so nothing can be typed into it: Copy rows is the route.';
+  section.append(
+    el('p', { className: 'small muted', text: gridNote }),
+    el('p', { className: 'small muted', text: 'Copy rows asks the INTTRA tab for the grid\'s column order and copies one cell per grid column, blank where the package has nothing for that column. In INTTRA, click the first Container Number cell of the first empty row and paste (Ctrl+V). The helper presses nothing: the paste is yours.' }),
+  );
   if (state.gridReport) section.append(renderGridReport(state.gridReport));
   return section;
 }
@@ -718,7 +801,7 @@ function renderDetection(snapshot: InttraDiagnosticsSnapshot): HTMLElement {
     el('div', { className: 'diag-block' }, [
       el('div', {}, [el('span', { className: 'label', text: 'Container grid: ' }), el('span', { className: `pill pill-${grid.found ? 'green' : 'red'}`, text: grid.found ? `found (${grid.kind}), ${grid.rowCount} row(s)` : 'not found' })]),
       grid.matchedWith ? el('div', { className: 'small', text: `Root matched by ${grid.matchedWith}` }) : null,
-      grid.headers.length ? el('ul', { className: 'small mono' }, grid.headers.map((header) => el('li', { text: `col ${header.index}: "${header.text}" -> ${header.column ?? '(not identified)'}` }))) : null,
+      grid.headers.length ? el('ul', { className: 'small mono' }, grid.headers.map((header) => el('li', { text: `col ${header.index}: "${header.text}" -> ${header.column ?? '(not identified)'}${header.options ? ` (dropdown: ${header.options.join(' | ')})` : ''}` }))) : null,
       grid.missingColumns.length ? el('div', { className: 'small warn', text: `Columns not identified: ${grid.missingColumns.join(', ')}` }) : null,
       el('ol', { className: 'small mono' }, grid.attempts.map((attempt) => el('li', { text: `${attempt.query} -> ${attempt.matches} match(es)` }))),
     ]),

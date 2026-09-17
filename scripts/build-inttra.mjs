@@ -13,6 +13,7 @@
  */
 
 import { build, context } from 'esbuild';
+import { buildVersionName } from './buildStamp.mjs';
 import { cpSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,6 +46,8 @@ function copyStatic() {
   const manifestPath = join(dist, 'manifest.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   manifest.version = pkg.version;
+  // ...and stamp the build (git commit + time) so a loaded build can be told apart.
+  manifest.version_name = buildVersionName(pkg.version, root);
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 

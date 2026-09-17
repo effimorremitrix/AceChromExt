@@ -44,7 +44,7 @@ import {
 } from './mappingStatus.js';
 import { renderCalculatorPanel } from './calculatorPanel.js';
 import { renderDiagnostics } from './diagnostics.js';
-import { appendAll, byId, clear, el, show } from './dom.js';
+import { appendAll, byId, clear, el, show, buildStamp } from './dom.js';
 import { resolveAceTab, sendToBackground, sendToTab, type AceTab } from './tabs.js';
 import type { PageDetection } from '../content/pageDetector.js';
 import { ALL_MAPPINGS, unverifiedFieldKeys } from '../ace/mappings/index.js';
@@ -461,10 +461,12 @@ function renderHeader(): HTMLElement {
       ? `${page.label} (${page.confidence} confidence)`
       : 'ACE page not identified';
 
+  const stamp = buildStamp();
   return el('header', { className: 'app-header' }, [
     el('div', { className: 'brand' }, [
       el('span', { className: 'brand-mark', text: 'ACE' }),
       el('span', { className: 'brand-name', text: 'Helper' }),
+      stamp ? el('span', { className: 'build-stamp', text: stamp, title: 'The build this helper is running: version, git commit, build time (UTC)' }) : null,
     ]),
     el('div', { className: 'page-chip' }, [el('span', { className: `pill pill-${tone}`, text }), buildRefreshButton()]),
   ]);

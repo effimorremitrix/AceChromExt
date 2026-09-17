@@ -194,8 +194,20 @@ describe('the first live paste, 2026-09-17', () => {
     expect(result.pkg.containers.every((container) => container.status === 'valid')).toBe(true);
   });
 
-  it('says what it read, in one line', () => {
-    expect(parsed(MANIFEST).summary).toBe('container table \u00b7 4 containers');
+  it('says what it read, in one line, seals included', () => {
+    expect(parsed(MANIFEST).summary).toBe('container table \u00b7 4 containers \u00b7 4 with a seal');
+  });
+
+  it('counts the containers that carry a seal, so a manifest read without its seals says so', () => {
+    // A count, not a check: the line changes, nothing is gated. Eleven
+    // containers with no seal beside them must not read like eleven with.
+    const withoutSeals = MANIFEST.split('\n')
+      .map((line) => line.split('\t').filter((_cell, index) => index !== 3).join('\t'))
+      .join('\n');
+    const result = parsed(withoutSeals);
+    expect(result.pkg.containers).toHaveLength(4);
+    expect(result.summary).toBe('container table \u00b7 4 containers \u00b7 0 with a seal');
+    expect(parsed(email('04-booking-confirmation')).summary).toContain('3 with a seal');
   });
 
   it('claims no booking when the table spans two of them', () => {

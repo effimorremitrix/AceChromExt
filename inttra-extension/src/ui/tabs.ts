@@ -26,14 +26,34 @@ export function isInttraUrl(url: string | undefined): boolean {
   }
 }
 
+function asInttraTab(tab: chrome.tabs.Tab): InttraTab | null {
+  if (tab.id === undefined || !isInttraUrl(tab.url)) return null;
+  return { id: tab.id, url: tab.url ?? '', title: tab.title ?? '' };
+}
+
+/**
+ * The INTTRA tab to address.
+ *
+ * From the popup it is the active tab. The panel is a tab of its own, so from
+ * there it is a choice: the INTTRA tab in the panel's own window first, then
+ * any window, most recently used first. The header shows which one was
+ * chosen, because a Shipping Instruction open in a second tab would otherwise
+ * be described as if it were the one the operator is looking at.
+ */
 export async function resolveInttraTab(): Promise<InttraTab | null> {
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (active?.id !== undefined && isInttraUrl(active.url)) return { id: active.id, url: active.url ?? '', title: active.title ?? '' };
-  const candidates = await chrome.tabs.query({ url: INTTRA_URL_PATTERNS });
-  const usable = candidates.filter((tab) => tab.id !== undefined && isInttraUrl(tab.url)).sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0));
-  const best = usable[0];
-  if (!best || best.id === undefined) return null;
-  return { id: best.id, url: best.url ?? '', title: best.title ?? '' };
+  const activeInttra = active ? asInttraTab(active) : null;
+  if (activeInttra) return activeInttra;
+  for (const query of [{ url: INTTRA_URL_PATTERNS, currentWindow: true }, { url: INTTRA_URL_PATTERNS }]) {
+    const candidates = await chrome.tabs.query(query);
+    const usable = candidates
+      .map((tab) => ({ tab, lastAccessed: tab.lastAccessed ?? 0 }))
+      .sort((a, b) => b.lastAccessed - a.lastAccessed)
+      .map(({ tab }) => asInttraTab(tab))
+      .filter((tab): tab is InttraTab => tab !== null);
+    if (usable[0]) return usable[0];
+  }
+  return null;
 }
 
 export async function sendToTab(tabId: number, request: InttraContentRequest): Promise<InttraContentResponse> {

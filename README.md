@@ -111,7 +111,12 @@ plus a smoke test that drives a real Chromium with a mocked ACE host.
    the hostname `ship.inttra.e2open.com`. That makes the container grid
    findable, and its cells turn out to be `editableGrid` ones that hold no
    control until clicked, so there the route is **Copy rows and paste**
-   rather than Fill. The mechanics are tested; the field selectors are not.
+   rather than Fill. The grid itself, found by its headings, is what
+   identifies the screen (a later run that day showed the captured ids alone
+   were not enough); its seal headings are dropdowns, read by the option they
+   show, and the paste block carries one cell per grid column so it lines up.
+   The grid's header row is still to be captured. The mechanics are tested;
+   the field selectors are not.
    **[docs/INTTRA-INTEGRATION.md](docs/INTTRA-INTEGRATION.md) section 5a**
    **[docs/INTTRA-INTEGRATION.md](docs/INTTRA-INTEGRATION.md) section 6** is
    the capture procedure. Deckhand likewise has been shown fixtures, not a
