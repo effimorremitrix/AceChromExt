@@ -232,6 +232,12 @@ This is the screen used as intended rather than a workaround, and it keeps the
 policy intact: the helper puts rows on the clipboard, the operator clicks the
 cell and presses paste. Nothing is pressed on their behalf.
 
+And because Fill can never write one cell of such a grid, Quickfill asks first
+(`gridAcceptsTyping`) and offers **Copy rows first** when the answer is no.
+Leading with a button that cannot work costs a click and a sentence every time.
+Fill stays on the screen: a grid that answers wrongly must not become a grid the
+operator cannot fill.
+
 Still not captured, and still placeholders: every field selector on the other
 screens, and the grid's cell editors. Section 6 remains the procedure. Capturing
 a cell *while it is being edited* is what would make typing into the grid

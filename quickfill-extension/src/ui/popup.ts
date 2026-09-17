@@ -24,7 +24,7 @@ import type {
 import { CONTENT_NOT_READY } from '../core/messages.js';
 
 let stored: StoredPaste | null = null;
-let place: Where = { portal: 'none', label: 'Looking...', hasLines: false, isGrid: false };
+let place: Where = { portal: 'none', label: 'Looking...', hasLines: false, isGrid: false, gridWritable: false };
 
 const box = el('textarea', {
   className: 'paste-box',
@@ -190,10 +190,15 @@ function renderButtons(): void {
   if (place.portal === 'inttra') {
     const pkg = stored.package;
     if (place.isGrid) {
-      buttons.append(
-        fillButton('Fill container grid', () => run({ type: 'content/fillGrid', package: pkg })),
-        fillButton('Copy rows', () => copyRows(pkg)),
-      );
+      const fill = fillButton('Fill container grid', () => run({ type: 'content/fillGrid', package: pkg }));
+      const copy = fillButton('Copy rows', () => copyRows(pkg));
+      // On a click-to-edit grid Fill cannot write a single cell, so offering it
+      // first means a dead-end click and a sentence to read before the button
+      // that works. Ask the grid which it is and lead with the route that
+      // exists. The other stays available: a grid that answers wrongly must
+      // not become a grid the operator cannot fill.
+      if (place.gridWritable) buttons.append(fill, copy);
+      else buttons.append(copy, fill);
       return;
     }
     buttons.append(fillButton('Fill this screen', () => run({ type: 'content/fillInttra', package: pkg, scope: 'shipment' })));
@@ -263,7 +268,7 @@ async function boot(): Promise<void> {
   }
 
   const found = await toContent({ type: 'content/where' });
-  place = found.ok && found.type === 'content/where' ? found.payload : { portal: 'none', label: CONTENT_NOT_READY, hasLines: false, isGrid: false };
+  place = found.ok && found.type === 'content/where' ? found.payload : { portal: 'none', label: CONTENT_NOT_READY, hasLines: false, isGrid: false, gridWritable: false };
   renderButtons();
 }
 

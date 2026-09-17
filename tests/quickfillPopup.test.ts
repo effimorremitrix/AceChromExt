@@ -43,7 +43,7 @@ beforeEach(async () => {
   vi.useFakeTimers();
   vi.resetModules();
   document.body.innerHTML = '<div id="root"></div>';
-  place = { portal: 'ace', label: 'Step 4: Transportation', hasLines: false, isGrid: false };
+  place = { portal: 'ace', label: 'Step 4: Transportation', hasLines: false, isGrid: false, gridWritable: false };
   reply = { ok: true, type: 'content/count', payload: { filled: 3, total: 4, missed: ['Carrier SCAC/IATA'] } };
   sent = [];
   session = null;
@@ -143,7 +143,7 @@ describe('the popup', () => {
   });
 
   it('offers the line picker only on the Commodities step', async () => {
-    place = { portal: 'ace', label: 'Step 3: Commodities', hasLines: true, isGrid: false };
+    place = { portal: 'ace', label: 'Step 3: Commodities', hasLines: true, isGrid: false, gridWritable: false };
     const box = await mount();
     await paste(box, ['InvoiceNumber\tDescription', 'CN-1042\tAlmond Kernels'].join('\n'));
     expect(buttonLabels()).toEqual(['Fill this page', 'Fill line']);
@@ -151,14 +151,23 @@ describe('the popup', () => {
   });
 
   it('shows the INTTRA buttons on an INTTRA screen', async () => {
-    place = { portal: 'inttra', label: 'General Details', hasLines: false, isGrid: false };
+    place = { portal: 'inttra', label: 'General Details', hasLines: false, isGrid: false, gridWritable: false };
     const box = await mount();
     await paste(box, email);
     expect(buttonLabels()).toEqual(['Fill this screen', 'Fill container 1']);
   });
 
-  it('offers both the fill and the paste route on the container grid', async () => {
-    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true };
+  it('leads with Copy rows on a grid that cannot be typed into', async () => {
+    // The live portal's grid: clicking Fill first is a dead end, so it is not
+    // the first button.
+    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: false };
+    const box = await mount();
+    await paste(box, email);
+    expect(buttonLabels()).toEqual(['Copy rows', 'Fill container grid']);
+  });
+
+  it('leads with Fill on a grid that can be typed into', async () => {
+    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: true };
     const box = await mount();
     await paste(box, email);
     expect(buttonLabels()).toEqual(['Fill container grid', 'Copy rows']);
@@ -167,18 +176,19 @@ describe('the popup', () => {
   it('names the paste route when the grid holds no writable control', async () => {
     // The live portal, 2026-09-17: Filled 0 of 9, every cell unresolved,
     // because the grid opens an editor only when a cell is clicked.
-    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true };
+    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: false };
     reply = { ok: true, type: 'content/count', payload: { filled: 0, total: 9, missed: ['9 grid cells'], useCopyRows: true } };
     const box = await mount();
     await paste(box, email);
-    (document.querySelector('.button-primary') as HTMLButtonElement).click();
+    // Fill is the second button on a grid that cannot be typed into.
+    (document.querySelectorAll('.button-primary')[1] as HTMLButtonElement).click();
     await settle();
     expect(text('.result')).toContain('Filled 0 of 9.');
     expect(text('.result')).toContain('Use Copy rows, click the first cell, and paste.');
   });
 
   it('copies the rows to the clipboard in the grid\u2019s own column order', async () => {
-    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true };
+    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: false };
     const written: string[] = [];
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -187,7 +197,8 @@ describe('the popup', () => {
     reply = { ok: true, type: 'content/rows', payload: { tsv: 'MSCU1234566\tSL-4471209', rows: 3 } };
     const box = await mount();
     await paste(box, email);
-    (document.querySelectorAll('.button-primary')[1] as HTMLButtonElement).click();
+    // Copy rows leads on this grid.
+    (document.querySelectorAll('.button-primary')[0] as HTMLButtonElement).click();
     await settle();
     expect(sent.some((message) => message.type === 'content/gridRows')).toBe(true);
     expect(written).toEqual(['MSCU1234566\tSL-4471209']);
@@ -195,7 +206,7 @@ describe('the popup', () => {
   });
 
   it('offers nothing on a page that is neither portal', async () => {
-    place = { portal: 'none', label: 'This CBP page is not one of the four AESDirect filing steps.', hasLines: false, isGrid: false };
+    place = { portal: 'none', label: 'This CBP page is not one of the four AESDirect filing steps.', hasLines: false, isGrid: false, gridWritable: false };
     const box = await mount();
     await paste(box, email);
     expect(buttonLabels()).toEqual([]);

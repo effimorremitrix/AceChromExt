@@ -27,7 +27,7 @@ import { DEFAULT_SETTINGS } from '../../../src/core/settings.js';
 import type { FillReport } from '../../../src/models/AceField.js';
 import { detectInttraPage } from '../../../inttra-extension/src/content/pageDetector.js';
 import { fillInttraFields } from '../../../inttra-extension/src/content/filler.js';
-import { detectGrid, fillContainerGrid, gridRowsAsTsv } from '../../../inttra-extension/src/content/gridWriter.js';
+import { detectGrid, fillContainerGrid, gridAcceptsTyping, gridRowsAsTsv } from '../../../inttra-extension/src/content/gridWriter.js';
 import type { InttraFillReport } from '../../../inttra-extension/src/models/InttraField.js';
 import type { FillCount, QuickfillContentRequest, QuickfillContentResponse, Where } from '../core/messages.js';
 
@@ -42,9 +42,9 @@ function where(): Where {
   if (onCbpHost()) {
     const page = detectPage(document);
     if (page.page === 'unknown' || page.confidence === 'none') {
-      return { portal: 'none', label: 'This CBP page is not one of the four AESDirect filing steps.', hasLines: false, isGrid: false };
+      return { portal: 'none', label: 'This CBP page is not one of the four AESDirect filing steps.', hasLines: false, isGrid: false, gridWritable: false };
     }
-    return { portal: 'ace', label: page.label, hasLines: page.page === 'commodities', isGrid: false };
+    return { portal: 'ace', label: page.label, hasLines: page.page === 'commodities', isGrid: false, gridWritable: false };
   }
 
   // The container grid is evidence, and it outranks the step strip.
@@ -60,14 +60,14 @@ function where(): Where {
   // to fill.
   const grid = detectGrid(document);
   if (grid.found) {
-    return { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true };
+    return { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: gridAcceptsTyping(document) };
   }
 
   const screen = detectInttraPage(document);
   if (screen.page === 'unknown' || screen.confidence === 'none') {
-    return { portal: 'none', label: 'This INTTRA page is not one of the Shipping Instructions screens.', hasLines: false, isGrid: false };
+    return { portal: 'none', label: 'This INTTRA page is not one of the Shipping Instructions screens.', hasLines: false, isGrid: false, gridWritable: false };
   }
-  return { portal: 'inttra', label: screen.label, hasLines: false, isGrid: screen.page === 'copyContainerDetails' };
+  return { portal: 'inttra', label: screen.label, hasLines: false, isGrid: screen.page === 'copyContainerDetails', gridWritable: false };
 }
 
 /**

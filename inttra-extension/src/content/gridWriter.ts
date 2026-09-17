@@ -245,6 +245,30 @@ export function detectGrid(doc: ParentNode, columns: GridColumnSpec[] = GRID_COL
   };
 }
 
+/**
+ * Does this grid hold anything that can be typed into?
+ *
+ * A click-to-edit grid has no control in its cells until a cell is clicked, so
+ * Fill can never write a single value into it, however good the selectors are.
+ * Asking the question before offering the button is the difference between an
+ * operator clicking Fill, reading why it failed, and then clicking Copy rows -
+ * and simply being offered Copy rows first.
+ *
+ * True when any data cell of an identified column resolves a writable control.
+ * False for a grid with no such cell, and false when there is no grid at all.
+ */
+export function gridAcceptsTyping(doc: ParentNode, columns: GridColumnSpec[] = GRID_COLUMNS): boolean {
+  const detection = detectGrid(doc, columns);
+  if (!detection.found || !detection.shape) return false;
+  const indexes = detection.headers.filter((header) => header.column !== null).map((header) => header.index);
+  for (const cells of detection.shape.rows) {
+    for (const index of indexes) {
+      if (resolveInttraControl(cells[index] ?? null).element) return true;
+    }
+  }
+  return false;
+}
+
 export interface GridFillOptions {
   doc?: ParentNode;
   dryRun?: boolean;
