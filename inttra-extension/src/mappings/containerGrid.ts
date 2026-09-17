@@ -20,7 +20,7 @@
 
 import type { PackageContainerField } from '../../../shared/src/filingPackage.js';
 import type { InttraSelectorCandidate } from '../models/InttraField.js';
-import { byLabel, byNearby, placeholder } from './types.js';
+import { byLabel, byNearby, placeholder, verified } from './types.js';
 
 export interface GridColumnSpec {
   key: string;
@@ -49,6 +49,14 @@ export const GRID_COLUMNS: GridColumnSpec[] = [
 
 /** Where the grid lives. Tried in order; the first that resolves to exactly one element wins. */
 export const GRID_ROOT_CANDIDATES: InttraSelectorCandidate[] = [
+  // Copied from the live DOM on 2026-09-17, off the Copy Container Details
+  // modal on ship.inttra.e2open.com: the modal root is
+  // #siCopyContainerWrapperDiv and the grid sits in
+  // <div id="editableGridWrapper" class="col-sm-12 pushdown10">. The wrapper
+  // is not itself the table, so the grid-shaped element inside it is taken;
+  // "editableGrid" is also why no cell can be typed into until it is clicked.
+  verified('attribute', '#editableGridWrapper table, #editableGridWrapper [role="grid"], #editableGridWrapper [role="treegrid"]', 'Captured from the live INTTRA DOM on 2026-09-17.'),
+  verified('attribute', '#siCopyContainerWrapperDiv table, #siCopyContainerWrapperDiv [role="grid"]', 'Captured from the live INTTRA DOM on 2026-09-17: the Copy Container Details modal root.'),
   placeholder('id', '#containerDetailsGrid', 'Placeholder - capture the grid root from the live INTTRA DOM.'),
   placeholder('attribute', "[data-grid='containerDetails'], [aria-label='Container Details' i], [aria-label='Copy Container Details' i]", 'Placeholder - capture the grid root from the live INTTRA DOM.'),
   placeholder('attribute', "table[role='grid'], [role='grid'], [role='treegrid']", 'Structural fallback: any ARIA grid on the page.'),

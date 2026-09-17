@@ -95,7 +95,14 @@ function scorePage(signature: InttraPageSignature, context: { tabs: string[]; he
       found = false;
     }
     if (found) {
-      score += 4;
+      // A marker outweighs the tab strip, and deliberately by enough to win on
+      // its own. Every marker that resolves on this portal is an id copied from
+      // the live DOM, while the tab, heading and URL hints are guessed wording
+      // - and on Copy Container Details the tab wording is not merely weaker
+      // but wrong, because the screen is a modal and the strip behind it still
+      // names the step it covers (2026-09-17). Scoring them equally made the
+      // two tie, and a tie is reported as 'unknown'.
+      score += 6;
       reasons.push(`Marker element ${selector} is present`);
       break;
     }

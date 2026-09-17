@@ -250,9 +250,13 @@ stay honestly described:
    through Quickfill): the hostname is `ship.inttra.e2open.com`, the URL
    carries no screen name, and Copy Container Details is a **modal over
    another step**, so tab-wording page detection cannot identify it - detect
-   the grid instead. `docs/INTTRA-INTEGRATION.md` section 5a. Every selector in
-   `inttra-extension/src/mappings/` is `placeholder(...)` and every page
-   signature is still guessed wording. Never mark
+   the grid instead. `docs/INTTRA-INTEGRATION.md` section 5a. Every FIELD selector in
+   `inttra-extension/src/mappings/` is still `placeholder(...)`. The first
+   real captures landed on 2026-09-17 and are not fields: the Copy Container
+   Details modal root `#siCopyContainerWrapperDiv` and the grid container
+   `#editableGridWrapper`, now a page marker and the first grid-root rung. A
+   captured marker outscores a guessed tab reading (6 against 4) because on
+   that screen the tab wording is wrong, not merely weaker. Never mark
    an INTTRA candidate `verified(...)` unless it was copied from the live DOM;
    `docs/INTTRA-INTEGRATION.md` section 6 is the capture procedure and
    section 7 the list of what is untested. The helper never presses Add Row,

@@ -238,6 +238,37 @@ Leading with a button that cannot work costs a click and a sentence every time.
 Fill stays on the screen: a grid that answers wrongly must not become a grid the
 operator cannot fill.
 
+**The first captured INTTRA selectors, 2026-09-17.** Read off the DevTools
+Elements panel on the live Copy Container Details modal, so these are
+`verified(...)` rather than wording:
+
+```html
+<div id="siCopyContainerWrapperDiv" class="preLoaderWrapper">
+  <div class="preLoaderMask" id="preLoaderMaskSiCopyContainer" style="display: none;"></div>
+  <div class="preLoader" id="preLoaderSiCopyContainer" style="display: none;"></div>
+  <div class="row"> ... bootstrap columns ... </div>
+  <div id="editableGridWrapper" class="col-sm-12 pushdown10"> [the grid] </div>
+  <div class="modal-footer"> ... </div>
+</div>
+```
+
+| Captured | Used as |
+| --- | --- |
+| `#siCopyContainerWrapperDiv` | the modal root: a page-signature marker, and a grid-root scope |
+| `#editableGridWrapper` | the grid container: the first `GRID_ROOT_CANDIDATES` rung |
+
+Two consequences. The screen is now identified by its own id rather than by a
+tab strip that names the step the modal covers - and because a captured marker
+and a guessed tab reading both scored 4, the two tied and a tie is reported as
+`unknown`, which is how a screen with the grid on it came back "not one of the
+Shipping Instructions screens". A marker now scores 6: every marker that
+resolves here is an id from the live DOM, while tab, heading and URL hints are
+guessed wording, and on this screen that wording is not weaker but wrong.
+
+The name is also the answer to the cells. `editableGrid` renders text and swaps
+in an editor when a cell is clicked, which is exactly the `Filled 0 of 9, all
+unresolved` result, and confirms Copy rows as the route rather than a fallback.
+
 Still not captured, and still placeholders: every field selector on the other
 screens, and the grid's cell editors. Section 6 remains the procedure. Capturing
 a cell *while it is being edited* is what would make typing into the grid
