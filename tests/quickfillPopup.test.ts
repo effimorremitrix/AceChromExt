@@ -251,6 +251,38 @@ describe('the popup', () => {
     expect(text('.result')).toContain('3 row(s) copied as Container Number, Seal Type, Shipper Seal #. Blank: Seal Type.');
   });
 
+  it('offers Copy rows alone on an INTTRA screen the detector could not name', async () => {
+    // The fifth live run: the grid was of a shape the detector had never been
+    // shown, and the popup offered nothing. The block needs no detection.
+    place = { portal: 'inttra', label: 'INTTRA screen not identified. Copy rows still copies the container block, in the default column order, for Copy Container Details.', hasLines: false, isGrid: false, gridWritable: false, copyRowsOnly: true };
+    const written: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => void written.push(value) } });
+    reply = {
+      ok: true,
+      type: 'content/rows',
+      payload: {
+        tsv: 'MSCU1234566\tSL-4471209\tSH-001',
+        rows: 3,
+        width: 3,
+        columns: [
+          { heading: 'Container Number', column: 'ContainerNumber' },
+          { heading: 'Carrier Seal #', column: 'CarrierSeal' },
+          { heading: 'Shipper Seal #', column: 'ShipperSeal' },
+        ],
+        blank: [],
+        fromGrid: false,
+      },
+    };
+    const box = await mount();
+    await paste(box, email);
+    expect(buttonLabels()).toEqual(['Copy rows']);
+    expect(text('.where')).toContain('not identified');
+    (document.querySelector('.button-primary') as HTMLButtonElement).click();
+    await settle();
+    expect(written).toEqual(['MSCU1234566\tSL-4471209\tSH-001']);
+    expect(text('.result')).toContain('No grid was found, so this is the default order.');
+  });
+
   it('offers nothing on a page that is neither portal', async () => {
     place = { portal: 'none', label: 'This CBP page is not one of the four AESDirect filing steps.', hasLines: false, isGrid: false, gridWritable: false };
     const box = await mount();

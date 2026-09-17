@@ -14,7 +14,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { detectInttraPage, EVIDENCE, hasStructuralEvidence } from '../inttra-extension/src/content/pageDetector.js';
 import { isInttraVisible, readInttraFieldValue, resolveInttraControl, setInttraFieldValue } from '../inttra-extension/src/content/fieldWriter.js';
 import { fillInttraFields, resolvePackageSource } from '../inttra-extension/src/content/filler.js';
-import { detectGrid, fillContainerGrid, gridAcceptsTyping, gridPasteBlock, gridRowsAsTsv, normalizeHeading, readHeaderCell } from '../inttra-extension/src/content/gridWriter.js';
+import { detectGrid, fillContainerGrid, findContainerGrid, findHeaderRowByText, gridAcceptsTyping, gridPasteBlock, gridRowsAsTsv, normalizeHeading, readHeaderCell } from '../inttra-extension/src/content/gridWriter.js';
+import { probeStructure } from '../inttra-extension/src/content/structureProbe.js';
 import { ALL_INTTRA_MAPPINGS, GRID_COLUMNS, inttraFieldsForPage, resolveInttraFields, unverifiedInttraFieldKeys } from '../inttra-extension/src/mappings/index.js';
 import { INTTRA_PAGE_SIGNATURES } from '../inttra-extension/src/pages.js';
 import { isInttraUrl } from '../inttra-extension/src/ui/tabs.js';
@@ -163,6 +164,132 @@ describe('finding the grid among other tables', () => {
  * Read as textContent, a <select> is every option run together, and both seal
  * columns then carry the same wording whichever option each shows.
  */
+/**
+ * The fifth live run, 2026-09-17: with the merged build the operator's
+ * Diagnostics listed every grid rung at 0, `table` at 2, and "with a Container
+ * Number heading" at 0. So two tables were visible and neither was the grid:
+ * the grid the operator pastes into is not a table, not an ARIA grid, and in
+ * neither captured id. tests/fixtures/inttra-div-grid.html is that page.
+ */
+describe('a grid that is not a table', () => {
+  beforeEach(() => {
+    document.body.innerHTML = html('inttra-div-grid');
+  });
+
+  it('was found by nothing that looks for a table or an ARIA grid', () => {
+    const attempts = detectGrid(document).attempts;
+    const byShape = attempts.find((attempt) => /with a Container Number heading/.test(attempt.query));
+    expect(byShape).toMatchObject({ matches: 0, raw: 2 });
+    expect(attempts.find((attempt) => attempt.query === 'table')).toMatchObject({ matches: 2, raw: 2 });
+  });
+
+  it('is found by the wording of its header row, and read as a div grid with its rows', () => {
+    const grid = detectGrid(document);
+    expect(grid.found).toBe(true);
+    expect(grid.kind).toBe('divGrid');
+    expect(grid.matchedWith).toBe('header row by wording: 4 of 9 columns identified');
+    expect(grid.headers.map((header) => header.column)).toEqual(['ContainerNumber', 'CarrierSeal', 'ShipperSeal', 'HsCode']);
+    expect(grid.headers[1]?.options).toHaveLength(3);
+    expect(grid.rowCount).toBe(3);
+    expect(grid.attempts[grid.attempts.length - 1]).toMatchObject({ matches: 1, raw: 1 });
+    expect(findContainerGrid(document).how).toBe('wording');
+  });
+
+  it('cannot be typed into, so Copy rows is the route, and the block is in its own order', () => {
+    expect(gridAcceptsTyping(document)).toBe(false);
+    const block = gridPasteBlock(samplePackage(), detectGrid(document));
+    expect(block.fromGrid).toBe(true);
+    expect(block.columns.map((column) => column.heading)).toEqual(['Container Number', 'Carrier Seal #', 'Shipper Seal #']);
+    expect(block.tsv.split('\r\n')[0]).toBe('MSCU1234566\tSL-4471209\tSH-001');
+  });
+
+  it('identifies the screen as Copy Container Details, whatever the strip behind the modal says', () => {
+    const page = detectInttraPage(document);
+    expect(page.page).toBe('copyContainerDetails');
+    expect(page.confidence).toBe('high');
+    expect(page.evidence.some((line) => /found by the wording of its header row/.test(line))).toBe(true);
+    expect(hasStructuralEvidence(document)).toBe(true);
+  });
+
+  it('is found inside an open shadow root too', () => {
+    document.body.innerHTML = '<nav><a class="nav-link active">B/L Documents</a></nav><div id="host"></div>';
+    const host = document.getElementById('host') as HTMLElement;
+    host.attachShadow({ mode: 'open' }).innerHTML = html('inttra-div-grid');
+    const grid = detectGrid(document);
+    expect(grid.found).toBe(true);
+    expect(grid.kind).toBe('divGrid');
+    expect(grid.headers.map((header) => header.column)).toEqual(['ContainerNumber', 'CarrierSeal', 'ShipperSeal', 'HsCode']);
+    expect(detectInttraPage(document).page).toBe('copyContainerDetails');
+  });
+
+  it('never takes a form row of labels over inputs for a header row', () => {
+    // The Container & Cargo step: the same words, in a form. Its labels sit
+    // over typed controls, which a grid's header row never does.
+    document.body.innerHTML = [
+      '<nav><a class="nav-link active">Container &amp; Cargo</a></nav><h2>Container &amp; Cargo</h2>',
+      '<div class="form-row">',
+      '<div class="col"><label>Container Number</label><input type="text" /></div>',
+      '<div class="col"><label>Seal Number</label><input type="text" /></div>',
+      '<div class="col"><label>HS Code</label><input type="text" /></div>',
+      '</div>',
+    ].join('');
+    expect(findHeaderRowByText(document)).toMatchObject({ row: null, seeds: 1 });
+    expect(detectGrid(document).found).toBe(false);
+    expect(detectInttraPage(document).page).toBe('containerCargo');
+  });
+
+  it('needs more than the one heading: a lone Container Number label is no grid', () => {
+    document.body.innerHTML = '<div class="summary"><span>Container Number</span><span>TLLU7564971</span></div>';
+    expect(findHeaderRowByText(document).row).toBeNull();
+    expect(detectGrid(document).found).toBe(false);
+  });
+
+  it('reads an editableGrid-style header, a table inside every heading cell, as one header row', () => {
+    const heading = (inner: string): string => `<th><table><tr><td>${inner}</td></tr></table></th>`;
+    document.body.innerHTML = [
+      '<div id="editableGridWrapper"><table class="editableGrid"><thead><tr>',
+      heading('Container Number'),
+      heading('<select><option selected>Carrier Seal #</option><option>Shipper Seal #</option></select>'),
+      heading('<select><option>Carrier Seal #</option><option selected>Shipper Seal #</option></select>'),
+      heading('HS Code'),
+      '</tr></thead><tbody>',
+      '<tr><td></td><td></td><td></td><td></td></tr>'.repeat(2),
+      '</tbody></table></div>',
+    ].join('');
+    const grid = detectGrid(document);
+    expect(grid.kind).toBe('table');
+    expect(grid.headers.map((header) => header.column)).toEqual(['ContainerNumber', 'CarrierSeal', 'ShipperSeal', 'HsCode']);
+    expect(grid.rowCount).toBe(2);
+  });
+
+  it('describes, for the capture, what is around the words Container Number', () => {
+    const probe = probeStructure(document, window);
+    expect(probe.topFrame).toBe(true);
+    expect(probe.frames).toEqual([]);
+    expect(probe.markers).toContainEqual({ selector: '#siCopyContainerWrapperDiv', state: 'absent' });
+    expect(probe.containerNumber).toHaveLength(1);
+    const found = probe.containerNumber[0];
+    expect(found).toMatchObject({ text: 'Container Number', visible: true });
+    expect(found?.ancestors.slice(0, 3)).toEqual(['span.column-name', 'div.grid-header-column', 'div.grid-header-columns']);
+    expect(found?.rows.map((row) => row.row)).toEqual(['div.grid-header-column', 'div.grid-header-columns', 'div#containerGridFifthRun.grid', 'div.modal']);
+    expect(found?.rows[1]?.cells).toEqual(['Container Number', 'Carrier Seal #', 'Shipper Seal #', 'HS Code']);
+  });
+
+  it('says whether each captured marker is absent, hidden or visible, and names the frames', () => {
+    document.body.innerHTML = [
+      '<div id="siCopyContainerWrapperDiv" style="display: none"></div><div id="editableGridWrapper"></div>',
+      '<iframe src="/siact/grid"></iframe><iframe></iframe>',
+    ].join('');
+    const probe = probeStructure(document, window);
+    expect(probe.markers).toContainEqual({ selector: '#siCopyContainerWrapperDiv', state: 'hidden' });
+    expect(probe.markers).toContainEqual({ selector: '#editableGridWrapper', state: 'visible' });
+    expect(probe.frames).toHaveLength(2);
+    expect(probe.frames[0]).toMatch(/localhost/);
+    expect(probe.frames[1]).toBe('(no src)');
+    expect(probe.containerNumber).toEqual([]);
+  });
+});
+
 describe('dropdown headings', () => {
   const SEAL_TYPES = ['Carrier Seal #', 'Shipper Seal #', 'Customs Seal #'];
   const dropdown = (options: string[], selected: string): string =>

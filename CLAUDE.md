@@ -173,6 +173,8 @@ preview → ACE`.
 | an INTTRA field | `inttra-extension/src/mappings/<screen>.ts` (placeholders until captured live) |
 | a grid column on Copy Container Details | `GRID_COLUMNS` in `inttra-extension/src/mappings/containerGrid.ts` |
 | a grid heading that is a dropdown, or the shape of the paste block | `readHeaderCell` and `gridPasteBlock` in `inttra-extension/src/content/gridWriter.ts`, shared by both helpers |
+| how the container grid is found when it is not a table | `findHeaderRowByText` and `findContainerGrid` in `inttra-extension/src/content/gridWriter.ts`; the detector and both content scripts go through `findContainerGrid` |
+| what Diagnostics says about the page's structure (frame, markers, what is around "Container Number") | `inttra-extension/src/content/structureProbe.ts` |
 | what identifies an INTTRA screen, and what each kind of evidence is worth | `EVIDENCE` and `detectInttraPage` in `inttra-extension/src/content/pageDetector.ts`; `pages.ts` stays free of DOM code because the dashboard imports it |
 | the build stamp in the manifests and the headers | `scripts/buildStamp.mjs`, `buildStamp` in `src/ui/dom.ts` |
 | an email shape Deckhand should read | a rule in `deckhand/src/extract/` + a fixture in `tests/fixtures/deckhand/`; never a rule that pairs by position |
@@ -275,8 +277,20 @@ stay honestly described:
    Number rightwards, blank where nothing feeds a column, cut at the widest
    value, because a column left out of the row shifts every value after it,
    which is how the seals were pasted nowhere. `docs/INTTRA-INTEGRATION.md`
-   section 5a. Never mark an INTTRA candidate `verified(...)` unless it was
-   copied from the live DOM; the grid's header row is still uncaptured.
+   section 5a. A fifth run the same day, with that fix in the build, still
+   found no grid: the live grid is **neither a `<table>` nor an ARIA grid**,
+   and in the document that answered neither captured id held one (two
+   visible tables, no Container Number heading between them). So the grid is
+   now found by the **wording of its header row**, whatever it is built from
+   (`findHeaderRowByText` and `findContainerGrid` in `gridWriter.ts`, read as
+   a `divGrid`; the detector and both content scripts go through it),
+   Quickfill offers Copy rows alone on an INTTRA page it cannot name, and
+   Diagnostics carries a Page structure block (`structureProbe.ts`): which
+   frame answered, whether each captured id is absent, hidden or visible, and
+   what surrounds the words "Container Number". That rung has run against
+   mocks only, and the captured ids are unconfirmed on this modal. Never mark
+   an INTTRA candidate `verified(...)` unless it was copied from the live DOM;
+   the grid's header row is still uncaptured.
    `docs/INTTRA-INTEGRATION.md` section 6 is the capture procedure and
    section 7 the list of what is untested. The helper never presses Add Row,
    Save, Continue or Submit; that is policy in
@@ -304,7 +318,9 @@ stay honestly described:
    currently nothing on the form screens and, on the container grid, the same
    paste block the INTTRA Helper copies. Its read-as line counts the
    containers that carry a seal (a count, not a check), and its Copy rows
-   line names the pasted columns and any left blank. What is new about it is
+   line names the pasted columns and any left blank. On an INTTRA page the
+   detector cannot name it offers Copy rows alone, in the default column
+   order, and says so (the fifth live run). What is new about it is
    what it takes away - the
    preview, the ten data quality checks, the ISO 6346 block, the Deckhand
    review and Approve click, the conflict screen, the fill gate, the

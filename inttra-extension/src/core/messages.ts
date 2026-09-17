@@ -6,6 +6,7 @@ import type { FilingPackage } from '../../../shared/src/filingPackage.js';
 import type { InttraFieldScope, InttraFillReport } from '../models/InttraField.js';
 import type { InttraPageDetection } from '../content/pageDetector.js';
 import type { GridDetection, GridFillReport, GridPasteBlock } from '../content/gridWriter.js';
+import type { InttraStructureProbe } from '../content/structureProbe.js';
 import type { StoredPackage } from './store.js';
 
 export type InttraBackgroundRequest =
@@ -45,6 +46,8 @@ export type InttraContentRequest =
 export interface InttraDiagnosticsSnapshot {
   page: InttraPageDetection;
   url: string;
+  /** What the answering document is built from: frame, markers, and what is around the words "Container Number". */
+  structure: InttraStructureProbe;
   fields: Array<{
     key: string;
     label: string;

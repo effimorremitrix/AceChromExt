@@ -13,10 +13,11 @@
  *     because that screen is a modal drawn over another step and the strip
  *     behind it still names the step it covers (observed 2026-09-17);
  *   - structure: a marker element whose id was copied from the live DOM, or a
- *     visible grid whose header row says Container Number (findGridByHeadings,
- *     the same reading the grid writer uses). Structure scores 10, and the
- *     three wording rungs together reach at most 4 + 3 + 2 = 9, so a screen
- *     that is structurally on the page beats any wording behind it.
+ *     visible grid whose header row says Container Number (findContainerGrid,
+ *     the same reading the grid writer uses, whatever the grid is built
+ *     from). Structure scores 10, and the three wording rungs together reach
+ *     at most 4 + 3 + 2 = 9, so a screen that is structurally on the page
+ *     beats any wording behind it.
  *
  * A marker counts only while it is visible: a modal wrapper that the portal
  * keeps in the DOM, hidden, while the modal is closed would otherwise identify
@@ -27,7 +28,7 @@ import type { InttraPageId } from '../models/InttraField.js';
 import { GRID_COLUMNS } from '../mappings/containerGrid.js';
 import { INTTRA_PAGE_SIGNATURES, inttraSignatureFor, type InttraPageSignature } from '../pages.js';
 import { isInttraVisible } from './fieldWriter.js';
-import { findGridByHeadings } from './gridWriter.js';
+import { findContainerGrid } from './gridWriter.js';
 
 export interface InttraPageDetection {
   page: InttraPageId;
@@ -136,7 +137,7 @@ function scorePage(signature: InttraPageSignature, context: { tabs: string[]; he
  * one whose answer the panel keeps.
  */
 export function hasStructuralEvidence(doc: Document = document): boolean {
-  if (findGridByHeadings(doc, GRID_COLUMNS).root) return true;
+  if (findContainerGrid(doc, GRID_COLUMNS).root) return true;
   return INTTRA_PAGE_SIGNATURES.some((signature) => visibleMarker(doc, signature) !== null);
 }
 
@@ -155,11 +156,16 @@ export function detectInttraPage(doc: Document = document): InttraPageDetection 
   // The grid is evidence, and it outranks the step strip: if a container grid
   // is visible, the grid is what there is to fill, whatever the strip behind
   // the modal says and whether or not the captured wrapper id still matches.
-  const grid = findGridByHeadings(doc, GRID_COLUMNS);
+  // The grid is found by its shape when it has one, and by the wording of its
+  // header row when it has not (the live modal's grid is neither a table nor
+  // an ARIA grid, fifth run 2026-09-17).
+  const grid = findContainerGrid(doc, GRID_COLUMNS);
   const copyContainerDetails = scores.find((entry) => entry.page === 'copyContainerDetails');
   if (grid.root && copyContainerDetails) {
     copyContainerDetails.score += EVIDENCE.grid;
-    copyContainerDetails.reasons.push(`A visible container grid is on the page (${grid.score} of ${GRID_COLUMNS.length} columns identified by their headings)`);
+    copyContainerDetails.reasons.push(
+      `A visible container grid is on the page (${grid.score} of ${GRID_COLUMNS.length} columns identified by their headings${grid.how === 'wording' ? ', found by the wording of its header row' : ''})`,
+    );
   }
   scores.sort((a, b) => b.score - a.score);
 

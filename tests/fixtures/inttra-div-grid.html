@@ -1,0 +1,46 @@
+<!--
+  Mock of the live Copy Container Details modal as the fifth run (2026-09-17)
+  showed it to be: the grid is NOT a table and NOT an ARIA grid, and it is
+  inside neither captured id. Its header cells and rows are divs, the header
+  strip and the row canvas are separate containers, the two seal headings are
+  dropdowns of seal types, and the cells hold nothing until clicked. The two
+  tables are the ones the operator's Diagnostics counted: visible, and with no
+  Container Number heading. The step strip behind the modal still names
+  B/L Documents. Nothing here was captured from the live portal.
+-->
+<nav><a class="nav-link active">B/L Documents</a></nav>
+<h2>Parties</h2>
+<table class="workspace-list">
+  <tr><th>Booking</th><th>Status</th></tr>
+  <tr><td>EBKG18531408</td><td>Draft</td></tr>
+</table>
+<div class="modal">
+  <div class="modal-body">
+    <div id="containerGridFifthRun" class="grid">
+      <div class="grid-header">
+        <div class="grid-header-columns">
+          <div class="grid-header-column"><span class="column-name">Container Number</span><div class="resize-handle"></div></div>
+          <div class="grid-header-column"><span class="column-name"><select><option selected>Carrier Seal #</option><option>Shipper Seal #</option><option>Customs Seal #</option></select></span><div class="resize-handle"></div></div>
+          <div class="grid-header-column"><span class="column-name"><select><option>Carrier Seal #</option><option selected>Shipper Seal #</option><option>Customs Seal #</option></select></span><div class="resize-handle"></div></div>
+          <div class="grid-header-column"><span class="column-name">HS Code</span><div class="resize-handle"></div></div>
+        </div>
+      </div>
+      <div class="grid-viewport">
+        <div class="grid-canvas">
+          <div class="grid-row"><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div></div>
+          <div class="grid-row"><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div></div>
+          <div class="grid-row"><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button type="button">Create Containers</button>
+    <button type="button">Reset</button>
+    <button type="button">Cancel</button>
+  </div>
+</div>
+<table class="workspace-list">
+  <tr><th>Document</th><th>Copies</th></tr>
+  <tr><td>B/L</td><td>3</td></tr>
+</table>

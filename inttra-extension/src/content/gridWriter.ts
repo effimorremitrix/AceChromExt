@@ -36,7 +36,8 @@ import { highlightField } from '../../../src/content/highlight.js';
 import { GRID_COLUMNS, GRID_ROOT_CANDIDATES, type GridColumnSpec } from '../mappings/containerGrid.js';
 import { isInttraVisible, readInttraFieldValue, resolveInttraControl, setInttraFieldValue } from './fieldWriter.js';
 
-export type GridKind = 'table' | 'ariaGrid' | 'unknown';
+/** What the grid is built from. 'divGrid': not a table and not an ARIA grid, found by its header row's wording alone (the live modal's grid, 2026-09-17). */
+export type GridKind = 'table' | 'ariaGrid' | 'divGrid' | 'unknown';
 
 export interface GridHeader {
   index: number;
@@ -55,8 +56,8 @@ export interface GridDetection {
   /** Column keys from GRID_COLUMNS that no heading matched. */
   missingColumns: string[];
   rowCount: number;
-  /** Everything tried, for diagnostics. */
-  attempts: Array<{ query: string; matches: number }>;
+  /** Everything tried, for diagnostics: `matches` after the visibility filter, `raw` before it. */
+  attempts: Array<{ query: string; matches: number; raw?: number }>;
 }
 
 export type GridCellStatus = 'verified' | 'filled' | 'failed' | 'skipped' | 'unresolved' | 'warning' | 'dry-run';
@@ -148,28 +149,170 @@ export function findGridByHeadings(
   return best ? { root: best.root, score: best.score } : { root: null, score: 0 };
 }
 
+/** How many ancestors above a Container Number heading's text the header row is looked for. */
+const HEADER_CLIMB = 8;
+
+/**
+ * A control that is typed into. A form row holds one under each of its labels;
+ * a grid's header row holds none (a checkbox to select every row, or a hidden
+ * input, is not one).
+ */
+const TYPED_CONTROL = 'input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]), textarea';
+
+/**
+ * Every text node under a root, in document order, descending into open
+ * shadow roots. The text of SCRIPT, STYLE, TEMPLATE, OPTION and OPTGROUP is
+ * not heading wording and is skipped, as readHeaderCell skips it.
+ */
+function textNodesUnder(root: ParentNode): Text[] {
+  const found: Text[] = [];
+  const stack: Node[] = [root as Node];
+  while (stack.length) {
+    const node = stack.pop() as Node;
+    if (node.nodeType === Node.TEXT_NODE) {
+      found.push(node as Text);
+      continue;
+    }
+    if (node.nodeType === Node.ELEMENT_NODE && NOT_HEADING_TEXT.has((node as Element).tagName)) continue;
+    const children = Array.from(node.childNodes);
+    for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index] as Node);
+    const shadow = (node as Element).shadowRoot;
+    if (shadow) stack.push(shadow);
+  }
+  return found;
+}
+
+/**
+ * Does this wording read as the Container Number heading? An alias exactly,
+ * or a prefix of an alias longer than the bare word "container" - so
+ * "Container Number *" and "Container No." do, and "Container & Cargo" (the
+ * step strip) and "Container Type" (a form label) do not.
+ */
+function readsAsContainerNumber(text: string, columns: GridColumnSpec[]): boolean {
+  const normalized = normalizeHeading(text);
+  if (normalized === '') return false;
+  const spec = columns.find((column) => column.key === 'ContainerNumber');
+  return !!spec && spec.headerAliases.some((alias) => normalized === alias || (alias.length > 'container'.length && normalized.startsWith(alias)));
+}
+
+export interface HeaderRowByText {
+  /** The element whose children are the heading cells. */
+  headerRow: Element;
+  cells: Element[];
+  /** How many GRID_COLUMNS the row identifies. */
+  score: number;
+}
+
+/**
+ * The header row, found by its wording alone, whatever the grid is built from.
+ *
+ * The live modal's grid (fifth run, 2026-09-17) is not a table, not an ARIA
+ * grid and not inside either captured id: two tables were visible to the
+ * helper and neither carried a Container Number heading, so nothing in
+ * GRID_SHAPED ever looked at the grid the operator was pasting into. A header
+ * row is still the thing whose cells say Container Number, Carrier Seal #,
+ * Shipper Seal #; so this starts from the words instead of the markup.
+ *
+ * From every visible text node that reads as the Container Number heading,
+ * climb: the text's parent is tried as the cell, then each ancestor in turn,
+ * and the cell's parent is the candidate row. The smallest row whose element
+ * children identify Container Number plus at least one more column, through
+ * the same identifyHeaders the table reading uses, is the header row. A row
+ * with fewer than two children is a wrapper; a row with a typed control under
+ * a child is a form row (labels over inputs, the Container & Cargo step) and
+ * is never a grid header. Among the matches the row identifying the most
+ * columns wins, ties to the first in document order.
+ *
+ * `seeds` counts the text nodes that read as the heading, for diagnostics:
+ * "the words are on the page, and no row around them is a header row" is a
+ * different finding from "the words are not on the page".
+ */
+export function findHeaderRowByText(doc: ParentNode, columns: GridColumnSpec[] = GRID_COLUMNS): { row: HeaderRowByText | null; seeds: number } {
+  let best: HeaderRowByText | null = null;
+  let seeds = 0;
+  for (const text of textNodesUnder(doc)) {
+    if (!readsAsContainerNumber(text.textContent ?? '', columns)) continue;
+    const start = text.parentElement;
+    if (!start || !isInttraVisible(start)) continue;
+    seeds += 1;
+    let cell: Element | null = start;
+    for (let level = 0; cell && level < HEADER_CLIMB; cell = cell.parentElement, level += 1) {
+      const row = cell.parentElement;
+      if (!row) break;
+      const cells = Array.from(row.children);
+      if (cells.length < 2) continue;
+      if (cells.some((sibling) => sibling.matches(TYPED_CONTROL) || sibling.querySelector(TYPED_CONTROL))) continue;
+      const identified = identifyHeaders(cells, columns).filter((header) => header.column !== null);
+      if (identified.length < 2 || !identified.some((header) => header.column === 'ContainerNumber')) continue;
+      if (!best || identified.length > best.score) best = { headerRow: row, cells, score: identified.length };
+      break;
+    }
+  }
+  return { row: best, seeds };
+}
+
+export interface ContainerGridMatch {
+  root: Element | null;
+  /** How many GRID_COLUMNS the header row identifies. */
+  score: number;
+  /** Set when the grid was found by its wording rather than its shape: the row readGridShape reads the headings from. */
+  headerRow: Element | null;
+  how: 'shape' | 'wording' | null;
+}
+
+/**
+ * The container grid on the document, however it is built: a grid-shaped
+ * element whose headings say so, and failing that a header row found by its
+ * wording alone. The page detector and the content scripts ask this, so that
+ * what identifies the screen is what the grid writer would read.
+ */
+export function findContainerGrid(doc: ParentNode, columns: GridColumnSpec[] = GRID_COLUMNS): ContainerGridMatch {
+  const byShape = findGridByHeadings(doc, columns);
+  if (byShape.root) return { root: byShape.root, score: byShape.score, headerRow: null, how: 'shape' };
+  const byText = findHeaderRowByText(doc, columns).row;
+  if (byText) return { root: byText.headerRow.parentElement ?? byText.headerRow, score: byText.score, headerRow: byText.headerRow, how: 'wording' };
+  return { root: null, score: 0, headerRow: null, how: null };
+}
+
 /**
  * Find the grid root: the first candidate that resolves to exactly one visible
- * element, and failing that the grid-shaped element whose headings say it is a
- * container grid.
+ * element; failing that the grid-shaped element whose headings say it is a
+ * container grid; failing that a header row found by its wording, whatever it
+ * is built from. Every rung is recorded, with what it matched before and
+ * after the visibility filter, so Diagnostics can say which one took.
  */
-export function findGridRoot(doc: ParentNode, columns: GridColumnSpec[] = GRID_COLUMNS): { root: Element | null; matchedWith: string | null; attempts: GridDetection['attempts'] } {
+export function findGridRoot(
+  doc: ParentNode,
+  columns: GridColumnSpec[] = GRID_COLUMNS,
+): { root: Element | null; matchedWith: string | null; headerRow: Element | null; attempts: GridDetection['attempts'] } {
   const attempts: GridDetection['attempts'] = [];
   for (let index = 0; index < GRID_ROOT_CANDIDATES.length; index += 1) {
     const candidate = GRID_ROOT_CANDIDATES[index];
     if (!candidate?.selector) continue;
-    const matches = safeQueryAll(doc, candidate.selector).filter((element) => isInttraVisible(element));
-    attempts.push({ query: candidate.selector, matches: matches.length });
-    if (matches.length === 1) return { root: matches[0] as Element, matchedWith: describeCandidate(index), attempts };
+    const raw = safeQueryAll(doc, candidate.selector);
+    const matches = raw.filter((element) => isInttraVisible(element));
+    attempts.push({ query: candidate.selector, matches: matches.length, raw: raw.length });
+    if (matches.length === 1) return { root: matches[0] as Element, matchedWith: describeCandidate(index), headerRow: null, attempts };
   }
 
   const byHeadings = findGridByHeadings(doc, columns);
-  attempts.push({ query: `${GRID_SHAPED} with a Container Number heading`, matches: byHeadings.root ? 1 : 0 });
+  attempts.push({ query: `${GRID_SHAPED} with a Container Number heading`, matches: byHeadings.root ? 1 : 0, raw: safeQueryAll(doc, GRID_SHAPED).length });
   if (byHeadings.root) {
-    return { root: byHeadings.root, matchedWith: `headings: ${byHeadings.score} of ${columns.length} columns identified`, attempts };
+    return { root: byHeadings.root, matchedWith: `headings: ${byHeadings.score} of ${columns.length} columns identified`, headerRow: null, attempts };
   }
 
-  return { root: null, matchedWith: null, attempts };
+  const byText = findHeaderRowByText(doc, columns);
+  attempts.push({ query: 'a header row found by its Container Number wording, whatever it is built from', matches: byText.row ? 1 : 0, raw: byText.seeds });
+  if (byText.row) {
+    return {
+      root: byText.row.headerRow.parentElement ?? byText.row.headerRow,
+      matchedWith: `header row by wording: ${byText.row.score} of ${columns.length} columns identified`,
+      headerRow: byText.row.headerRow,
+      attempts,
+    };
+  }
+
+  return { root: null, matchedWith: null, headerRow: null, attempts };
 }
 
 interface GridShape {
@@ -183,11 +326,51 @@ function cellsOf(row: Element, kind: GridKind): Element[] {
     const cells = Array.from(row.children).filter((cell) => ['gridcell', 'cell', 'columnheader', 'rowheader'].includes(cell.getAttribute('role') ?? ''));
     return cells.length ? cells : Array.from(row.querySelectorAll('[role="gridcell"], [role="cell"]'));
   }
+  if (kind === 'divGrid') return Array.from(row.children);
   return Array.from(row.children).filter((cell) => cell.tagName === 'TD' || cell.tagName === 'TH');
 }
 
-/** Read the header row and the data rows out of whatever the grid is built from. */
-export function readGridShape(root: Element): GridShape {
+/** How many ancestors above a header row the rows of a grid that is not a table are looked for. */
+const ROWS_CLIMB = 6;
+
+/**
+ * The data rows of a grid that is not a table, given its header row.
+ *
+ * Such a grid keeps its header and its rows in separate containers (a header
+ * strip that stays put, a scrolling canvas of rows), so the rows are looked
+ * for under each ancestor of the header row in turn. A row is a visible
+ * element with exactly as many element children as the header row has
+ * cells - an element with role="row" for choice, and otherwise any element,
+ * keeping the innermost so that a canvas that happens to hold as many rows as
+ * there are columns is not itself taken for a row. The header row, its
+ * ancestors and its own cells are never rows. The first ancestor with any
+ * rows wins; a grid with no rows yet is found all the same.
+ */
+function divGridRows(headerRow: Element, width: number): Element[] {
+  const isRow = (element: Element): boolean =>
+    element !== headerRow && !element.contains(headerRow) && !headerRow.contains(element) && element.children.length === width && isInttraVisible(element);
+  let ancestor = headerRow.parentElement;
+  for (let level = 0; ancestor && level < ROWS_CLIMB; ancestor = ancestor.parentElement, level += 1) {
+    const ariaRows = safeQueryAll(ancestor, '[role="row"]').filter(isRow);
+    if (ariaRows.length) return ariaRows;
+    const candidates = safeQueryAll(ancestor, '*').filter(isRow);
+    const rows = candidates.filter((row) => !candidates.some((other) => other !== row && row.contains(other)));
+    if (rows.length) return rows;
+  }
+  return [];
+}
+
+/**
+ * Read the header row and the data rows out of whatever the grid is built
+ * from. With a header row given (`wordingRow`, found by its wording), the grid
+ * is read from that row whatever the markup around it.
+ */
+export function readGridShape(root: Element, wordingRow?: Element | null): GridShape {
+  if (wordingRow) {
+    const headerCells = cellsOf(wordingRow, 'divGrid');
+    return { kind: 'divGrid', headerCells, rows: divGridRows(wordingRow, headerCells.length).map((row) => cellsOf(row, 'divGrid')) };
+  }
+
   const ariaRows = safeQueryAll(root, '[role="row"]');
   if (root.getAttribute('role') === 'grid' || root.getAttribute('role') === 'treegrid' || (root.tagName !== 'TABLE' && ariaRows.length)) {
     const rows = ariaRows.length ? ariaRows : [];
@@ -202,7 +385,10 @@ export function readGridShape(root: Element): GridShape {
 
   const table = root.tagName === 'TABLE' ? root : root.querySelector('table');
   if (!table) return { kind: 'unknown', headerCells: [], rows: [] };
-  const allRows = Array.from(table.querySelectorAll('tr'));
+  // This table's own rows only. An editableGrid-style header holds a table
+  // inside every heading cell, and reading those nested rows as this table's
+  // would take the last of them - one heading - for the whole header row.
+  const allRows = Array.from(table.querySelectorAll('tr')).filter((row) => row.closest('table') === table);
   const theadRows = allRows.filter((row) => row.closest('thead'));
   const headerRow = theadRows[theadRows.length - 1] ?? allRows.find((row) => row.querySelector('th')) ?? allRows[0] ?? null;
   const dataRows = allRows.filter((row) => row !== headerRow && !row.closest('thead') && !row.closest('tfoot') && !row.querySelector('th'));
@@ -311,11 +497,11 @@ function identifyHeaders(headerCells: Element[], columns: GridColumnSpec[]): Gri
 }
 
 export function detectGrid(doc: ParentNode, columns: GridColumnSpec[] = GRID_COLUMNS): GridDetection & { root: Element | null; shape: GridShape | null } {
-  const { root, matchedWith, attempts } = findGridRoot(doc, columns);
+  const { root, matchedWith, headerRow, attempts } = findGridRoot(doc, columns);
   if (!root) {
     return { found: false, matchedWith: null, kind: 'unknown', headers: [], missingColumns: columns.map((spec) => spec.key), rowCount: 0, attempts, root: null, shape: null };
   }
-  const shape = readGridShape(root);
+  const shape = readGridShape(root, headerRow);
   const headers = identifyHeaders(shape.headerCells, columns);
   const identified = new Set(headers.map((header) => header.column).filter((key): key is string => key !== null));
   return {
