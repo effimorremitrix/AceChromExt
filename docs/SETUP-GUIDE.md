@@ -214,7 +214,7 @@ moves when the portal does.
 ## 5. Capturing the INTTRA selectors
 
 **Where things stand:** nothing. Every INTTRA selector, every screen
-signature and the exact hostname are placeholders tested against mock
+signature is a placeholder tested against mock
 screens. The helper will report "not found" on a real screen until this is
 done, and it will never write to a field it did not find.
 

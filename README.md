@@ -103,9 +103,11 @@ plus a smoke test that drives a real Chromium with a mocked ACE host.
    **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md) section 11**
    says exactly what to run on the QuickBooks PC and what you should see.
 
-3. **The INTTRA Helper has never seen the live portal.** Every selector, page
-   signature and the exact hostname are placeholders tested against mock
-   screens. The mechanics are tested; the selectors are not. A field that
+3. **The INTTRA Helper's selectors have never been captured from the live
+   portal.** The portal itself was opened once, on 2026-09-17, which
+   confirmed the hostname (`ship.inttra.e2open.com`) and that Copy Container Details is a
+   modal over another step. Every selector and every page signature is still
+   a placeholder tested against mock screens. The mechanics are tested; the selectors are not. A field that
    does not resolve is never written, so on a real screen the helper will
    mostly report "not found" until the selectors are captured.
    **[docs/INTTRA-INTEGRATION.md](docs/INTTRA-INTEGRATION.md) section 6** is

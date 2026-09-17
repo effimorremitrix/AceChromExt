@@ -251,8 +251,8 @@ stay honestly described:
    carries no screen name, and Copy Container Details is a **modal over
    another step**, so tab-wording page detection cannot identify it - detect
    the grid instead. `docs/INTTRA-INTEGRATION.md` section 5a. Every selector in
-   `inttra-extension/src/mappings/` is `placeholder(...)`, every page
-   signature is guessed wording, and the hostname is unconfirmed. Never mark
+   `inttra-extension/src/mappings/` is `placeholder(...)` and every page
+   signature is still guessed wording. Never mark
    an INTTRA candidate `verified(...)` unless it was copied from the live DOM;
    `docs/INTTRA-INTEGRATION.md` section 6 is the capture procedure and
    section 7 the list of what is untested. The helper never presses Add Row,

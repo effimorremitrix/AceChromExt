@@ -187,7 +187,8 @@ Quickfill inherits `README.md`'s caveats whole and resolves none of them.
    unchanged by Quickfill and is the most likely thing to be wrong in front of
    a real form.
 3. **INTTRA:** every selector in `inttra-extension/src/mappings/` is a
-   placeholder and the hostname is unconfirmed. On the live portal Quickfill
+   placeholder. The hostname is confirmed (`ship.inttra.e2open.com`, 2026-09-17), which is
+   why the content script loads at all. On the live portal Quickfill
    will currently fill **nothing** there. Building it now is still right - the
    mapping tables are the thing that needs capturing, and they are shared - but
    it must not be described as working. `docs/INTTRA-INTEGRATION.md` sections 6
