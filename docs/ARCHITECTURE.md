@@ -257,7 +257,7 @@ layer data-only.
 | `src/sources/FilingPackageSource.ts` | `filing-package.json` as an ACE data source |
 | `src/ui/deckhandTab.ts`, `src/ui/packageTab.ts` | the Deckhand review and the package screens, rendered by both panels |
 | `inttra-extension/src/pages.ts` | INTTRA screen signatures (wording guessed from the observed workflow) |
-| `inttra-extension/src/mappings/` | one file per screen, plus the container grid's columns and root candidates; all placeholders |
+| `inttra-extension/src/mappings/` | one file per screen, plus the container grid's columns and root candidates. Every field selector is a placeholder; the grid root's first two rungs were captured live on 2026-09-17 |
 | `inttra-extension/src/content/fieldWriter.ts` | `setInttraFieldValue`: native inputs and contenteditable, events, read-back, structured result |
 | `inttra-extension/src/content/gridWriter.ts` | columns identified by header text, one row per container, every cell verified, no Add Row |
 | `inttra-extension/src/content/automationPolicy.ts` | Add Row, Continue, Submit, login: named and frozen off |

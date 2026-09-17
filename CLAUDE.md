@@ -245,18 +245,20 @@ stay honestly described:
    the live integration as working; `docs/QUICKBOOKS-INTEGRATION.md` section 11
    is the procedure for verifying it on the QuickBooks PC.
 
-3. The INTTRA Helper's selectors have **never been captured from the live
-   portal**, though the portal itself has now been seen once (2026-09-17,
-   through Quickfill): the hostname is `ship.inttra.e2open.com`, the URL
-   carries no screen name, and Copy Container Details is a **modal over
-   another step**, so tab-wording page detection cannot identify it - detect
-   the grid instead. `docs/INTTRA-INTEGRATION.md` section 5a. Every FIELD selector in
-   `inttra-extension/src/mappings/` is still `placeholder(...)`. The first
-   real captures landed on 2026-09-17 and are not fields: the Copy Container
-   Details modal root `#siCopyContainerWrapperDiv` and the grid container
-   `#editableGridWrapper`, now a page marker and the first grid-root rung. A
-   captured marker outscores a guessed tab reading (6 against 4) because on
-   that screen the tab wording is wrong, not merely weaker. Never mark
+3. The INTTRA Helper has **two captured selectors and no captured field
+   selector**. Every FIELD selector in `inttra-extension/src/mappings/` is
+   still `placeholder(...)`, so on the live portal the form screens fill
+   nothing. What was captured from the live DOM on 2026-09-17 is structural:
+   the Copy Container Details modal root `#siCopyContainerWrapperDiv` and the
+   grid container `#editableGridWrapper`, now a page marker and the first
+   grid-root rung. Also confirmed that day: the hostname
+   `ship.inttra.e2open.com`, that the URL carries no screen name, and that
+   Copy Container Details is a **modal over another step** - so tab wording
+   cannot identify it, and a captured marker outscores a guessed tab reading
+   (6 against 4) because there the wording is wrong, not merely weaker. The
+   grid is `editableGrid`: its cells hold no control until clicked, so Fill
+   can never write one and **Copy rows and paste is the route, not a
+   fallback**. `docs/INTTRA-INTEGRATION.md` section 5a. Never mark
    an INTTRA candidate `verified(...)` unless it was copied from the live DOM;
    `docs/INTTRA-INTEGRATION.md` section 6 is the capture procedure and
    section 7 the list of what is untested. The helper never presses Add Row,

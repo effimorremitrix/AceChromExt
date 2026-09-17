@@ -2,9 +2,9 @@
 
 > **Status:** built, typechecked and tested against this repository's fixtures.
 > It inherits the repository's verification state exactly and improves none of
-> it: the ACE selectors are still mostly label matches, the INTTRA selectors are
-> still all placeholders, and no dropdown write has ever run against a live
-> portal. A simpler interface verifies nothing. See section 6.
+> it: the ACE selectors are still mostly label matches, every INTTRA field
+> selector is still a placeholder, and no dropdown write has ever run against
+> a live portal. A simpler interface verifies nothing. See section 6.
 
 A third Chrome extension. One popup, one paste box, two buttons.
 
@@ -186,11 +186,13 @@ Quickfill inherits `README.md`'s caveats whole and resolves none of them.
    and **no dropdown write has ever run against the live portal**. This is
    unchanged by Quickfill and is the most likely thing to be wrong in front of
    a real form.
-3. **INTTRA:** every selector in `inttra-extension/src/mappings/` is a
-   placeholder. The hostname is confirmed (`ship.inttra.e2open.com`,
-   2026-09-17), the container grid is found by its headings, and its cells are
-   known to be unwritable until clicked - so on that screen the route is
-   **Copy rows** and paste, not Fill. On the live portal Quickfill
+3. **INTTRA:** every FIELD selector in `inttra-extension/src/mappings/` is a
+   placeholder. Captured live on 2026-09-17: the hostname
+   `ship.inttra.e2open.com`, the Copy Container Details modal root and the
+   grid container, so that screen identifies itself and its grid is found.
+   Its cells are `editableGrid` ones that hold no control until clicked, so
+   there the route is **Copy rows** and paste, not Fill. On the live portal
+   Quickfill
    will currently fill **nothing** there. Building it now is still right - the
    mapping tables are the thing that needs capturing, and they are shared - but
    it must not be described as working. `docs/INTTRA-INTEGRATION.md` sections 6
