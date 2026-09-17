@@ -21,6 +21,12 @@ export interface Where {
   hasLines: boolean;
   /** True when this INTTRA screen is the container grid. */
   isGrid: boolean;
+  /**
+   * True when the grid holds a control that can be typed into. False for a
+   * click-to-edit grid, where Copy rows is the only route and therefore the
+   * button that should come first.
+   */
+  gridWritable: boolean;
 }
 
 export type QuickfillContentRequest =

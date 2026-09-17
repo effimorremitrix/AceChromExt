@@ -14,7 +14,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { detectInttraPage } from '../inttra-extension/src/content/pageDetector.js';
 import { readInttraFieldValue, resolveInttraControl, setInttraFieldValue } from '../inttra-extension/src/content/fieldWriter.js';
 import { fillInttraFields, resolvePackageSource } from '../inttra-extension/src/content/filler.js';
-import { detectGrid, fillContainerGrid, gridRowsAsTsv, normalizeHeading } from '../inttra-extension/src/content/gridWriter.js';
+import { detectGrid, fillContainerGrid, gridAcceptsTyping, gridRowsAsTsv, normalizeHeading } from '../inttra-extension/src/content/gridWriter.js';
 import { ALL_INTTRA_MAPPINGS, GRID_COLUMNS, inttraFieldsForPage, resolveInttraFields, unverifiedInttraFieldKeys } from '../inttra-extension/src/mappings/index.js';
 import { INTTRA_PAGE_SIGNATURES } from '../inttra-extension/src/pages.js';
 import { isInttraUrl } from '../inttra-extension/src/ui/tabs.js';
@@ -82,6 +82,29 @@ describe('finding the grid among other tables', () => {
     expect(report.containersFilled).toBeGreaterThan(0);
     expect((document.querySelector('input[name="r0.c"]') as HTMLInputElement).value).not.toBe('');
     expect((document.querySelectorAll('table')[0] as HTMLElement).innerHTML).toBe(before);
+  });
+
+  it('says a grid with inputs can be typed into', () => {
+    document.body.innerHTML = `<div role="dialog">${GRID}</div>`;
+    expect(gridAcceptsTyping(document)).toBe(true);
+  });
+
+  it('says a click-to-edit grid cannot', () => {
+    // The live portal, 2026-09-17: the cells hold no control until clicked, so
+    // Fill can never write one value into them however good the selectors are.
+    const CLICK_TO_EDIT = [
+      '<table><tr>',
+      '<th>Container Number</th><th>Carrier Seal #</th><th>Shipper Seal #</th><th>HS Code</th>',
+      '</tr><tr><td></td><td></td><td></td><td></td></tr></table>',
+    ].join('');
+    document.body.innerHTML = `<div role="dialog">${CLICK_TO_EDIT}</div>`;
+    expect(detectGrid(document).found).toBe(true);
+    expect(gridAcceptsTyping(document)).toBe(false);
+  });
+
+  it('says no when there is no grid at all', () => {
+    document.body.innerHTML = OTHER_TABLE;
+    expect(gridAcceptsTyping(document)).toBe(false);
   });
 
   it('ignores a table that has no Container Number column', () => {
