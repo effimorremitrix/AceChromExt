@@ -1,14 +1,14 @@
 # INTTRA Helper
 
-> **Status: built against mock screens; nothing captured from the live
-> portal.** Every selector in `inttra-extension/src/mappings/` is a
-> placeholder, every page signature is wording guessed from the observed
-> workflow, and the two host patterns in the manifest are the vendor's
-> domains rather than the confirmed address of the Shipping Instructions
-> screens. The mechanics (page detection, field detection, the writer with
-> read-back, the grid writer, the refusal to guess or click) are tested
-> against `tests/fixtures/inttra-*.html`. The selectors are not tested against
-> anything real yet. Section 6 is the procedure that changes that.
+> **Status: built against mock screens; two structural selectors captured
+> from the live portal, no field selector.** Every field selector in
+> `inttra-extension/src/mappings/` is a placeholder and every page signature
+> but one is guessed wording. What is real, from 2026-09-17 (section 5a): the
+> hostname `ship.inttra.e2open.com`, the Copy Container Details modal root
+> `#siCopyContainerWrapperDiv`, and the grid container `#editableGridWrapper`.
+> The mechanics (page detection, field detection, the writer with read-back,
+> the grid writer, the refusal to guess or click) are tested against
+> `tests/fixtures/inttra-*.html`. Section 6 is the procedure for the rest.
 
 The INTTRA Helper is a second Chrome MV3 extension, in `inttra-extension/`,
 built to `dist-inttra/`. It is separate from the ACE Helper so that ACE keeps
