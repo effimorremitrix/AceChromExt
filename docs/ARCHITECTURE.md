@@ -141,6 +141,53 @@ editable, e-mailable and archivable; a private channel would have meant a
 second import path to maintain, a second thing to validate, and a Chrome
 extension that had to talk to a local process.
 
+## Phase 6: Quickfill, the same code with the ceremony removed
+
+```
+                    ┌──────────────────────────────────────┐
+   one paste box ──▶│ quickfill-extension/                 │
+   (email | package │   src/paste.ts    detect + build     │──▶ fillFields()         ──▶ ACE
+    | extraction    │   src/aceShipment ungated ACE view   │──▶ fillInttraFields()   ──▶ INTTRA
+    | rows)         │   src/content/    one script, both   │──▶ fillContainerGrid()
+                    └──────────────────────────────────────┘
+```
+
+Quickfill is a third *extension*, not a third *codebase*. It owns no mapping
+table, no selector table, no transformer and no writer: it calls
+`src/content/filler.ts`, `inttra-extension/src/content/filler.ts` and
+`gridWriter.ts`, so a selector CBP changes is still fixed once and all three
+extensions get the fix. `tests/quickfillInvariants.test.ts` asserts that it
+declares no `mappings/` or `selectors/` folder and imports neither field writer
+directly, so the sharing cannot quietly stop.
+
+Its own code is four small things: the detection ladder and package build in
+`paste.ts` (pure, no DOM, no `chrome.*`), an ungated package-to-ACE view in
+`aceShipment.ts`, one content script that answers for both portals, and a popup.
+
+What it removes, and what that is worth, is `docs/QUICKFILL.md` section 3. Two
+things it does **not** remove:
+
+- **It presses nothing.** It fills through the two extensions' own fillers, and
+  both carry an `automationPolicy.ts` whose switches are frozen `false`. Speed
+  does not buy the right to press Save, Add Row, Continue or Certify.
+- **It does not guess.** Several containers and one ACE container field still
+  means the field is left empty, and a grid shorter than the container list is
+  filled as far as it goes rather than extended.
+
+The one structural thing that is genuinely new is the **host list**: Quickfill
+is the only extension that asks for the CBP hosts and the INTTRA/e2open hosts at
+once. Keeping that combined list in its own manifest is the reason it is a
+separate extension rather than a mode inside one of the others - the ACE Helper
+and the INTTRA Helper cannot acquire each other's permissions, and an operator
+who works one portal installs one helper. All three manifests are pinned by the
+invariant tests, and `npm run check:bundle:quickfill` re-checks the combined
+allowlist against the built bundle.
+
+Nothing in `web/` changed: Quickfill runs Deckhand inside the extension, so
+there is no preparation step to host. `quickfill-extension` is in the list of
+directories that may not import from `web/`, so it cannot grow a dependency on
+the dashboard either. `docs/QUICKFILL.md` section 7.
+
 ## Why the canonical model sits in the middle
 
 The spreadsheet, ACE's DOM and QuickBooks all change for unrelated reasons.
@@ -191,6 +238,9 @@ layer data-only.
 | `src/content/fieldWriter.ts` | `setAceFieldValue` - the single write path |
 | `src/content/filler.ts` | orchestration; produces a `FillReport` |
 | `src/content/highlight.ts` | temporary tinting, restored afterwards |
+| `quickfill-extension/src/paste.ts` | the one input: detect the shape, build the package, auto-resolve. Pure |
+| `quickfill-extension/src/aceShipment.ts` | package -> ACE model with no gate; the ungated twin of `shared/src/aceView.ts` |
+| `quickfill-extension/src/content/` | one content script for both portals; tallies a report to a count |
 | `src/ui/app.ts` | the shared UI, rendered in both surfaces |
 | `src/ui/importer.ts` | the XLSX parser, injected only into the panel |
 | `src/core/store.ts` | session-memory storage of the imported shipment |
@@ -284,6 +334,7 @@ so `popup.js` is ~27 kB instead of ~380 kB.
 | --- | --- | --- |
 | Settings | `chrome.storage.local` | until uninstall |
 | Imported shipment | `chrome.storage.session` | until the browser closes or Clear Imported Data |
+| Quickfill's pasted shipment | `chrome.storage.session` | until the browser closes or Clear |
 | ACE credentials | nowhere | never read |
 
 `chrome.storage.session` is memory-backed, is not written to disk, and is not
@@ -301,6 +352,12 @@ The architecture has room for these and does not do them:
 line automation later means adding a step *after* the fill report, gated behind
 an explicit user action; it does not require changing the fill path.
 
+This survives Quickfill unchanged. Quickfill removes the checks, not the
+boundary: it fills through the same fillers, `tests/quickfillInvariants.test.ts`
+asserts the same `.click()` / `.submit()` ban over its own content layer, and it
+deliberately declares no `automationPolicy.ts` of its own so there is no second
+place to turn Save on.
+
 ## Extending it
 
 | To do this | Change |
@@ -311,6 +368,7 @@ an explicit user action; it does not require changing the fill path.
 | Add a second invoice source | implement `InvoiceSourceAdapter` in `companion/src/adapter/` |
 | Add an ACE field | the relevant `src/ace/mappings/*.ts` |
 | Add a transformation rule | `src/ace/transformers/` + register it in `index.ts` |
+| Teach Quickfill another paste shape | the detection ladder in `quickfill-extension/src/paste.ts`. Never a format picker: one box is the product |
 | Fix a selector after an ACE change | the mapping's `candidates`, per `docs/ACE-MAPPING.md` |
 | Add a validation rule | `src/excel/validator.ts` |
 | Add QuickBooks (phase 2) | a new producer of `CanonicalShipment`; nothing downstream changes |

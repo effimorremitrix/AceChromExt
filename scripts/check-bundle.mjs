@@ -9,10 +9,14 @@
  *
  *   npm run check:bundle             dist/        (the ACE Helper; cbp.dhs.gov only)
  *   npm run check:bundle:inttra      dist-inttra/ (the INTTRA Helper; inttra.com and e2open.com only)
+ *   npm run check:bundle:quickfill   dist-quickfill/ (Quickfill; both portals' hosts)
  *   npm run check:bundle:web         dist-web/    (the operator dashboard; no host at all)
  *
- * The two extensions are checked separately, each against its own host
- * allowlist, so neither can pick up the other's hosts. The dashboard is
+ * The three extensions are checked separately, each against its own host
+ * allowlist, so the two single-portal helpers cannot pick up each other's
+ * hosts. Quickfill is the one that legitimately names both, which is why it is
+ * a separate extension with a separate allowlist rather than a mode in one of
+ * the others. The dashboard is
  * checked with `--allow none`: a browser page that names no host and has no
  * network API cannot send shipment data anywhere.
  */
@@ -33,7 +37,7 @@ const dist = join(dirname(fileURLToPath(import.meta.url)), '..', distName);
 const allowArgument = argument('--allow', 'cbp.dhs.gov');
 const OWN_HOSTS = allowArgument === 'none' ? [] : allowArgument.split(',').map((host) => host.trim()).filter(Boolean);
 
-const BUILD_COMMANDS = { dist: 'build', 'dist-inttra': 'build:inttra', 'dist-web': 'build:web' };
+const BUILD_COMMANDS = { dist: 'build', 'dist-inttra': 'build:inttra', 'dist-quickfill': 'build:quickfill', 'dist-web': 'build:web' };
 
 if (!existsSync(dist)) {
   console.error(`${distName}/ is missing. Run: npm run ${BUILD_COMMANDS[distName] ?? 'build'}`);

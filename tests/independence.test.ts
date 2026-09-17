@@ -21,7 +21,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = resolve(__dirname, '..');
-const SKIP = new Set(['node_modules', '.git', 'dist', 'dist-inttra', 'dist-companion', 'dist-web', 'coverage', '.vitest']);
+const SKIP = new Set(['node_modules', '.git', 'dist', 'dist-inttra', 'dist-quickfill', 'dist-companion', 'dist-web', 'coverage', '.vitest']);
 
 function walk(dir: string): string[] {
   const found: string[] = [];

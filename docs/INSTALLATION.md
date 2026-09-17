@@ -1,9 +1,18 @@
-# Installing ACE Helper and INTTRA Helper
+# Installing ACE Helper, INTTRA Helper and Quickfill Helper
 
-Both are unpacked Chrome extensions. Neither is on the Chrome Web Store, so
+All three are unpacked Chrome extensions. None is on the Chrome Web Store, so
 each is loaded in developer mode from a folder you build locally: `dist/` for
-the ACE Helper, `dist-inttra/` for the INTTRA Helper. Load one, the other, or
-both; they do not depend on each other.
+the ACE Helper, `dist-inttra/` for the INTTRA Helper, `dist-quickfill/` for the
+Quickfill Helper. Load any one, any two, or all three; they do not depend on
+each other and each keeps its own storage.
+
+Which to install:
+
+| | Install |
+| --- | --- |
+| You want the preview, the data quality checks, the mapping status and the F2 calculator | **ACE Helper** |
+| You file shipping instructions on INTTRA | **INTTRA Helper** |
+| You want one paste box and one click, and you check the form yourself | **Quickfill Helper** - read [QUICKFILL.md](QUICKFILL.md) section 3 first: it lists every check it drops and what that costs |
 
 ## 1. Prerequisites
 
@@ -14,13 +23,15 @@ both; they do not depend on each other.
 
 ```bash
 npm install
-npm run verify      # typecheck + tests + template + both builds + both bundle checks
+npm run verify      # typecheck + tests + template + all builds + all bundle checks
 ```
 
-`npm run verify` writes the ACE Helper to `dist/` and the INTTRA Helper to
+`npm run verify` writes the ACE Helper to `dist/`, the INTTRA Helper to
 `dist-inttra/` (same layout: `manifest.json`, `popup.html`, `panel.html`,
 `styles/`, `inttraContent.js`, `popup.js`, `panel.js`, `serviceWorker.js`,
-`icons/`):
+`icons/`), and the Quickfill Helper to `dist-quickfill/` (no panel; just
+`manifest.json`, `popup.html`, `styles/`, `quickfillContent.js`, `popup.js`,
+`serviceWorker.js`, `icons/`):
 
 ```
 dist/
@@ -37,13 +48,15 @@ Individual steps, if you prefer:
 | --- | --- |
 | `npm run build` | builds `dist/` (ACE Helper) |
 | `npm run build:inttra` | builds `dist-inttra/` (INTTRA Helper) |
+| `npm run build:quickfill` | builds `dist-quickfill/` (Quickfill Helper) |
 | `npm run build:watch` / `build:inttra:watch` | rebuilds on every change (then press the reload button in `chrome://extensions`) |
 | `npm test` | runs the test suite |
 | `npm run typecheck` | TypeScript, no emit |
 | `npm run template` | regenerates `templates/ACE_Import_Template.xlsx` |
-| `npm run icons` | regenerates the PNG icons |
+| `npm run icons` / `icons:inttra` / `icons:quickfill` | regenerates the PNG icons of each extension |
 | `npm run check:bundle` | checks the built `dist/` for eval, network APIs, and any URL host but CBP - covers bundled dependencies, not just our own source |
 | `npm run check:bundle:inttra` | the same check on `dist-inttra/`, allowing only INTTRA and e2open hosts |
+| `npm run check:bundle:quickfill` | the same check on `dist-quickfill/`, allowing both portals' hosts - Quickfill is the only extension that may name both |
 | `npm run smoke` | end-to-end test: loads `dist/` into a real Chromium, serves the mock ACE screens *from the ACE host* by request interception, and drives F2, import, and both Fill buttons. Needs `dist/` built first; set `CHROME_PATH` if Chrome is not in a standard location. It never contacts the real ACE portal. See the note below on which Chrome build to point it at. |
 
 ## 3. Load it into Chrome
@@ -54,6 +67,9 @@ Individual steps, if you prefer:
 4. Select the `dist/` folder (not the repository root).
 5. Pin "ACE Helper" to the toolbar so the popup is one click away.
 6. For the INTTRA Helper, repeat with the `dist-inttra/` folder.
+7. For the Quickfill Helper, repeat with the `dist-quickfill/` folder. Its icon
+   is the amber "Q", so the three are told apart in the toolbar. It has no
+   panel: the popup is the whole interface.
 
 ## 4. Check it is alive
 
@@ -113,7 +129,7 @@ Imported shipment data was only ever in memory, so nothing is left on disk.
 | Job | What it runs |
 | --- | --- |
 | **Verify** (Node 20 and 22) | typecheck, the 700 unit tests, all three builds, and a check that the committed template and both icon sets still match their generators |
-| **Bundle supply-chain check** | `npm run check:bundle` against `dist/` and `npm run check:bundle:inttra` against `dist-inttra/` |
+| **Bundle supply-chain check** | `npm run check:bundle` against `dist/`, `npm run check:bundle:inttra` against `dist-inttra/`, and `npm run check:bundle:quickfill` against `dist-quickfill/` |
 | **End-to-end** | `npm run smoke` against the mocked ACE host, in a pinned Chrome for Testing build |
 
 The Verify job uploads the built unpacked extension as a workflow artifact

@@ -4,7 +4,7 @@
  *
  * The dashboard is a static page that does everything in the browser. It
  * must not be able to send shipment data anywhere, keep it in browser
- * storage, reach into either extension's content layer or the companion's
+ * storage, reach into any extension's content layer or the companion's
  * runtime, or fill a portal. A future developer who adds "just one API
  * call" fails this file first.
  */
@@ -110,14 +110,14 @@ describe('the dashboard reuses the domain code and nothing runtime-specific', ()
   });
 
   it('is imported by nothing that ships in an extension or the companion', () => {
-    const local = ['src', 'inttra-extension', 'companion', 'deckhand', 'shared'].flatMap((dir) => walk(join(ROOT, dir), '.ts'));
+    const local = ['src', 'inttra-extension', 'quickfill-extension', 'companion', 'deckhand', 'shared'].flatMap((dir) => walk(join(ROOT, dir), '.ts'));
     for (const path of local) {
       expect(stripComments(readFileSync(path, 'utf8')), path).not.toMatch(/from\s+['"][^'"]*\/web\//);
     }
   });
 
-  it('leaves both extension manifests exactly as they were: storage only, portal hosts only, no dashboard host', () => {
-    for (const manifestPath of [join(ROOT, 'extension', 'manifest.json'), join(ROOT, 'inttra-extension', 'manifest.json')]) {
+  it('leaves every extension manifest storage-only, portal hosts only, no dashboard host', () => {
+    for (const manifestPath of [join(ROOT, 'extension', 'manifest.json'), join(ROOT, 'inttra-extension', 'manifest.json'), join(ROOT, 'quickfill-extension', 'manifest.json')]) {
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
       expect(manifest['permissions']).toEqual(['storage']);
       const csp = (manifest['content_security_policy'] as { extension_pages: string }).extension_pages;

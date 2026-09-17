@@ -24,6 +24,7 @@
     "deckhand/**/*.ts",
     "shared/**/*.ts",
     "inttra-extension/**/*.ts",
+    "quickfill-extension/**/*.ts",
     "companion/**/*.ts",
     "web/**/*.ts",
     "tests/**/*.ts",
