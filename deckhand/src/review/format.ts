@@ -31,10 +31,10 @@ export function formatBlock(shipment: DeckhandShipment, options: { ascii?: boole
     lines.push('Containers');
     const width = Math.max(...shipment.containers.map((container) => containerDisplay(container).length));
     for (const container of review.containers) {
-      const seal = container.carrierSeal.value ? `carrier seal ${container.carrierSeal.value}` : `carrier seal (${container.carrierSeal.note})`;
-      const shipper = container.shipperSeal.value ? `  shipper seal ${container.shipperSeal.value}` : '';
+      const seal = container.shipperSeal.value ? `shipper seal ${container.shipperSeal.value}` : `shipper seal (${container.shipperSeal.note})`;
+      const carrier = container.carrierSeal.value ? `  carrier seal ${container.carrierSeal.value}` : '';
       const flag = container.number.mark === 'warn' ? `  <-- ${container.number.note.toUpperCase()}` : '';
-      lines.push(`  ${String(container.index + 1).padStart(2)}. ${container.number.value.padEnd(width)}  ${markGlyph(container.number.mark, ascii)}  ${seal}  ${markGlyph(container.carrierSeal.mark, ascii)}${shipper}${flag}`);
+      lines.push(`  ${String(container.index + 1).padStart(2)}. ${container.number.value.padEnd(width)}  ${markGlyph(container.number.mark, ascii)}  ${seal}  ${markGlyph(container.shipperSeal.mark, ascii)}${carrier}${flag}`);
     }
   }
 
@@ -81,25 +81,28 @@ export function formatTsv(shipment: DeckhandShipment): string {
 }
 
 /** The two columns of the INTTRA container template: the number, and the seal on it. */
-export const CONTAINER_SEAL_COLUMNS = ['Container Number', 'Seal Number'] as const;
+export const CONTAINER_SEAL_COLUMNS = ['Container Number', 'Shipper Seal'] as const;
 
 /**
  * Container and seal, and nothing else.
  *
- * The three-column rows above carry a shipper seal column because the grid has
- * one. Most carrier emails have a single SEAL# column, the template being
- * filled has two cells per row, and the third column is then an empty column
- * to delete by hand every time. So this is the same rows with the carrier seal
- * only.
+ * The three-column rows above carry both seal columns because the grid has
+ * both. Most documents have a single SEAL# column, the template being filled
+ * has two cells per row, and the third column is then an empty column to
+ * delete by hand every time. So this is the same rows with one seal.
  *
- * A shipper seal is NOT promoted into the gap when the carrier seal is
+ * That one seal is the SHIPPER's, because a seal column that names no owner is
+ * read as the shipper's (see sealKindOf in deckhand/src/extract/containers.ts),
+ * so it is the column a one-seal document fills.
+ *
+ * A carrier seal is NOT promoted into the gap when the shipper seal is
  * missing. They are different numbers on different bolts, and a row that is
  * blank is fixed in seconds where a row carrying the wrong seal is not fixed
- * at all. `shipperSealsOmitted` below is how the screen says so out loud.
+ * at all. `carrierSealsOmitted` below is how the screen says so out loud.
  */
 export function formatContainerSealTsv(shipment: DeckhandShipment): string {
   return containerRows(shipment)
-    .map((item) => `${item.container}\t${item.carrierSeal}`)
+    .map((item) => `${item.container}\t${item.shipperSeal}`)
     .join(CRLF);
 }
 
@@ -113,17 +116,17 @@ export function formatContainerColumn(shipment: DeckhandShipment): string {
 /** The seal column, aligned row for row with formatContainerColumn. */
 export function formatSealColumn(shipment: DeckhandShipment): string {
   return containerRows(shipment)
-    .map((item) => item.carrierSeal)
+    .map((item) => item.shipperSeal)
     .join(CRLF);
 }
 
 /**
  * How many rows would lose a seal by taking the two-column shape: rows with a
- * shipper seal and no carrier seal. Zero for the ordinary email, which has one
- * seal column; above zero it has to be said before anything is pasted.
+ * carrier seal and no shipper seal. Zero for the ordinary document, which has
+ * one seal column; above zero it has to be said before anything is pasted.
  */
-export function shipperSealsOmitted(shipment: DeckhandShipment): number {
-  return containerRows(shipment).filter((item) => item.carrierSeal === '' && item.shipperSeal !== '').length;
+export function carrierSealsOmitted(shipment: DeckhandShipment): number {
+  return containerRows(shipment).filter((item) => item.shipperSeal === '' && item.carrierSeal !== '').length;
 }
 
 const csvCell = (value: string): string => (/["\n\r,]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);

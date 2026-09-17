@@ -126,6 +126,61 @@ export function normalizeCountryCode(input: unknown): CodeResult {
 }
 
 /**
+ * US state / territory names -> the two-letter USPS code ACE Step 1 expects.
+ *
+ * ACE "Origin State" is the state the goods actually come from, not the state
+ * of the export port: almonds grown in California and railed to Norfolk file
+ * CA, not VA. The dropdown renders "CA - CALIFORNIA", and the field writer
+ * already matches an option by its code prefix, so normalising to the code is
+ * enough.
+ */
+const US_STATE_NAMES: Record<string, string> = {
+  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA',
+  colorado: 'CO', connecticut: 'CT', delaware: 'DE', florida: 'FL', georgia: 'GA',
+  hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA',
+  kansas: 'KS', kentucky: 'KY', louisiana: 'LA', maine: 'ME', maryland: 'MD',
+  massachusetts: 'MA', michigan: 'MI', minnesota: 'MN', mississippi: 'MS',
+  missouri: 'MO', montana: 'MT', nebraska: 'NE', nevada: 'NV',
+  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+  'north carolina': 'NC', 'north dakota': 'ND', ohio: 'OH', oklahoma: 'OK',
+  oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT',
+  virginia: 'VA', washington: 'WA', 'west virginia': 'WV', wisconsin: 'WI',
+  wyoming: 'WY',
+  'district of columbia': 'DC', 'washington dc': 'DC', 'washington d c': 'DC',
+  'puerto rico': 'PR', 'virgin islands': 'VI', 'us virgin islands': 'VI',
+  guam: 'GU', 'american samoa': 'AS', 'northern mariana islands': 'MP',
+};
+
+/** The set of codes ACE accepts, used by the validator to flag a typo before a fill. */
+export const US_STATE_CODES = new Set(Object.values(US_STATE_NAMES));
+
+/** US state name or code -> two-letter USPS code, for ACE Step 1 Origin State. */
+export function normalizeUsState(input: unknown): CodeResult {
+  const text = cleanText(input);
+  if (text === '') return plain('');
+
+  if (/^[A-Za-z]{2}$/.test(text)) {
+    const code = text.toUpperCase();
+    if (US_STATE_CODES.has(code)) return plain(code);
+    return {
+      value: code,
+      transform: null,
+      note: `Origin State "${text}" is not a US state code. Confirm in ACE.`,
+    };
+  }
+
+  const mapped = US_STATE_NAMES[text.toLowerCase().replace(/[^a-z ]+/g, ' ').replace(/\s+/g, ' ').trim()];
+  if (mapped) return { value: mapped, transform: `"${text}" -> ${mapped}`, note: null };
+
+  return {
+    value: upperCase(text),
+    transform: null,
+    note: `Origin State "${text}" is not in the local state table. Confirm in ACE.`,
+  };
+}
+
+/**
  * Unit of measure -> the Schedule B unit abbreviations ACE expects.
  * Only unambiguous aliases are mapped.
  */

@@ -42,8 +42,8 @@ const EMAIL = readFileSync(join(__dirname, 'fixtures', 'deckhand', '04-booking-c
 
 const ROW: Array<string | number> = [
   1, 'OS', '0802.12.0000', 'SHELLED ALMONDS', 79832, 'KG', '', '', 'D', 651217.6, 176000, 'lb', 'EAR99', 'C33',
-  'Aydin Kuruyemis San Ve Tic A.S', 'CN-1042', '2026-09-21', 'Organize Sanayi Bolgesi 3. Cadde No 14', '', 'Aydin', '', '09100', 'TR', 'CIF', 'NET 120', '2027-01-19',
-  '3993', 'MSC Line', 'MSC FIRENZE V.541W', 'EBKG18531408', C1, 'SL-4471209', 'TR',
+  'Aydin Kuruyemis San Ve Tic A.S', 'CN-1042', '2026-09-21', 'Organize Sanayi Bolgesi 3. Cadde No 14', '', 'Aydin', '', '09100', 'TR', 'CA', 'CIF', 'NET 120', '2027-01-19',
+  '3993', 'MSCU', 'MSC FIRENZE V.541W', 'EBKG18531408', C1, 'SH-001', 'TR',
 ];
 
 function invoiceFromRows(rows: Array<Array<string | number>>): { shipment: CanonicalShipment; source: CommercialSource } {
@@ -56,9 +56,20 @@ function invoiceFromRows(rows: Array<Array<string | number>>): { shipment: Canon
   return { shipment: loaded.shipment, source: { id: 'excel', label: descriptor.label, detail: descriptor.detail } };
 }
 
-const invoice = (overrides: Partial<Record<number, string | number>> = {}): ReturnType<typeof invoiceFromRows> => {
+/**
+ * ROW with named columns replaced.
+ *
+ * Addressed by column name rather than by position: these fixtures used to
+ * carry raw indices, and adding OriginState to the template on 2026-09-16
+ * silently shifted every override past BillToCountry onto the wrong field.
+ */
+const invoice = (overrides: Partial<Record<(typeof TEMPLATE_COLUMNS)[number], string | number>> = {}): ReturnType<typeof invoiceFromRows> => {
   const row = [...ROW];
-  for (const [index, value] of Object.entries(overrides)) row[Number(index)] = value as string | number;
+  for (const [column, value] of Object.entries(overrides)) {
+    const index = TEMPLATE_COLUMNS.indexOf(column as (typeof TEMPLATE_COLUMNS)[number]);
+    if (index < 0) throw new Error(`No template column named "${column}".`);
+    row[index] = value as string | number;
+  }
   return invoiceFromRows([row]);
 };
 
@@ -73,7 +84,7 @@ describe('commercial data only', () => {
     expect(pkg.header.invoiceNumber.value).toBe('CN-1042');
     expect(pkg.header.totalWeightKg).toMatchObject({ value: '79832', source: 'derived' });
     expect(pkg.containers).toHaveLength(1);
-    expect(pkg.containers[0]).toMatchObject({ containerNumber: { value: C1, source: 'excel' }, carrierSeal: { value: 'SL-4471209' }, status: 'valid' });
+    expect(pkg.containers[0]).toMatchObject({ containerNumber: { value: C1, source: 'excel' }, shipperSeal: { value: 'SH-001' }, status: 'valid' });
     expect(pkg.containers[0]?.cargoDescription.value).toBe('SHELLED ALMONDS');
     expect(pkg.containers[0]?.hsCode).toMatchObject({ value: '0802.12', source: 'derived' });
     expect(pkg.containers[0]?.grossWeightKg).toMatchObject({ value: '79832', source: 'derived' });
@@ -141,7 +152,7 @@ describe('QuickBooks + Deckhand', () => {
     expect(pkg.header.vessel).toMatchObject({ value: 'MSC FIRENZE', source: 'deckhand', confirmedBy: 'excel' });
     const first = pkg.containers.find((container) => container.containerNumber.value === C1);
     expect(first?.containerNumber.confirmedBy).toBe('excel');
-    expect(first?.carrierSeal).toMatchObject({ value: 'SL-4471209', source: 'deckhand', confirmedBy: 'excel' });
+    expect(first?.shipperSeal).toMatchObject({ value: 'SH-001', source: 'deckhand', confirmedBy: 'excel' });
     expect(pkg.conflicts).toEqual([]);
   });
 
@@ -159,7 +170,7 @@ describe('QuickBooks + Deckhand', () => {
   });
 
   it('flags a vessel conflict, follows Deckhand until resolved, and blocks filling', () => {
-    const { shipment, source } = invoice({ 28: 'MSC FIRENZE II' });
+    const { shipment, source } = invoice({ Vessel: 'MSC FIRENZE II' });
     let pkg = buildFilingPackage({ invoice: shipment, commercialSource: source, shipment: deckhand(), deckhandApproved: true, now: NOW });
     expect(pkg.conflicts).toHaveLength(1);
     expect(pkg.conflicts[0]).toMatchObject({ field: 'vessel', material: true, commercialValue: 'MSC FIRENZE II', deckhandValue: 'MSC FIRENZE', resolution: 'unresolved' });
@@ -179,7 +190,7 @@ describe('QuickBooks + Deckhand', () => {
   });
 
   it('flags a booking conflict and a container the document does not carry', () => {
-    const { shipment, source } = invoice({ 29: 'OTHER-BOOKING', 30: withCheckDigit('HLXU999999') });
+    const { shipment, source } = invoice({ BookingNumber: 'OTHER-BOOKING', ContainerNumber: withCheckDigit('HLXU999999') });
     let pkg = buildFilingPackage({ invoice: shipment, commercialSource: source, shipment: deckhand(), deckhandApproved: true, now: NOW });
     expect(pkg.conflicts.map((conflict) => conflict.field).sort()).toEqual(['bookingReference', 'containers']);
     expect(pkg.header.bookingReference.value).toBe('EBKG18531408');
@@ -190,15 +201,19 @@ describe('QuickBooks + Deckhand', () => {
   });
 
   it('flags a seal conflict on the matching container', () => {
-    const { shipment, source } = invoice({ 31: 'SL-DIFFERENT' });
+    // The SealNumber column is the operator's own seal, so it meets the
+    // document's SHIPPER seal (SH-001 on this container), not its carrier seal.
+    const { shipment, source } = invoice({ SealNumber: 'SL-DIFFERENT' });
     const pkg = buildFilingPackage({ invoice: shipment, commercialSource: source, shipment: deckhand(), deckhandApproved: true, now: NOW });
-    const conflict = pkg.conflicts.find((item) => item.field === 'carrierSeal');
-    expect(conflict).toMatchObject({ container: C1, commercialValue: 'SL-DIFFERENT', deckhandValue: 'SL-4471209', material: true });
+    const conflict = pkg.conflicts.find((item) => item.field === 'shipperSeal');
+    expect(conflict).toMatchObject({ container: C1, commercialValue: 'SL-DIFFERENT', deckhandValue: 'SH-001', material: true });
+    expect(pkg.containers.find((container) => container.containerNumber.value === C1)?.shipperSeal.value).toBe('SH-001');
+    // The carrier seal from the document's explicit column is untouched.
     expect(pkg.containers.find((container) => container.containerNumber.value === C1)?.carrierSeal.value).toBe('SL-4471209');
   });
 
   it('never silently overwrites: both values stay in the package', () => {
-    const { shipment, source } = invoice({ 28: 'MSC FIRENZE II' });
+    const { shipment, source } = invoice({ Vessel: 'MSC FIRENZE II' });
     const pkg = buildFilingPackage({ invoice: shipment, commercialSource: source, shipment: deckhand(), now: NOW });
     const json = serializeFilingPackage(pkg);
     expect(json).toContain('MSC FIRENZE II');
@@ -217,7 +232,7 @@ describe('QuickBooks + Deckhand', () => {
   });
 
   it('rebuilds deterministically from its two halves and its decisions', () => {
-    const { shipment, source } = invoice({ 28: 'MSC FIRENZE II' });
+    const { shipment, source } = invoice({ Vessel: 'MSC FIRENZE II' });
     const pkg = resolveConflict(buildFilingPackage({ invoice: shipment, commercialSource: source, shipment: deckhand(), deckhandApproved: true, approvedAt: NOW.toISOString(), now: NOW }), 'vessel', 'deckhand');
     expect(rebuildFilingPackage(pkg)).toEqual(pkg);
   });
@@ -225,7 +240,7 @@ describe('QuickBooks + Deckhand', () => {
 
 describe('serialization', () => {
   it('round-trips through filing-package.json and rebuilds the merged values from the sources', () => {
-    const { shipment, source } = invoice({ 28: 'MSC FIRENZE II' });
+    const { shipment, source } = invoice({ Vessel: 'MSC FIRENZE II' });
     const pkg = resolveConflict(approveDeckhand(buildFilingPackage({ invoice: shipment, commercialSource: source, shipment: deckhand(), now: NOW }), NOW), 'vessel', 'commercial');
     const json = serializeFilingPackage(pkg);
     expect(looksLikeFilingPackage(json)).toBe(true);
@@ -251,7 +266,7 @@ describe('serialization', () => {
 
 describe('the ACE view', () => {
   it('overlays the approved transport identifiers onto the canonical model with Deckhand provenance', () => {
-    const { shipment, source } = invoice({ 28: '', 29: '', 30: '', 31: '' });
+    const { shipment, source } = invoice({ Vessel: '', BookingNumber: '', ContainerNumber: '', SealNumber: '' });
     const one = deckhand(`Booking: EBKG18531408\nVessel: MSC FIRENZE\n${C2} | Seal: SL-77`);
     const pkg = approveDeckhand(buildFilingPackage({ invoice: shipment, commercialSource: source, shipment: one, now: NOW }), NOW);
     const view = aceShipmentFromPackage(pkg);
@@ -270,7 +285,7 @@ describe('the ACE view', () => {
   });
 
   it('does not apply unapproved Deckhand values', () => {
-    const { shipment, source } = invoice({ 28: '', 29: '' });
+    const { shipment, source } = invoice({ Vessel: '', BookingNumber: '' });
     const pkg = buildFilingPackage({ invoice: shipment, commercialSource: source, shipment: deckhand(), now: NOW });
     const view = aceShipmentFromPackage(pkg);
     expect(view.shipment.invoice.bookingNumber).toBe('');

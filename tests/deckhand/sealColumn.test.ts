@@ -1,7 +1,9 @@
 /**
  * The seal column: two columns, no heading, no labels.
  *
- * The shape a carrier email actually arrives in more often than any table:
+ * A very common paste shape, and one that names nobody as the seal's owner, so
+ * the seals land on the shipper side like every other unattributed seal (see
+ * sealKindOf in deckhand/src/extract/containers.ts):
  *
  *     MSDU7776110  7548801
  *     MEDU7011340  7548805
@@ -32,7 +34,7 @@ const PAIRS: Array<[string, string]> = [
 
 const read = (text: string) => {
   const shipment = extractShipment({ kind: 'text', text, name: 'pasted text' });
-  return shipment.containers.map((c) => [c.containerNumber.normalized ?? c.containerNumber.raw, c.carrierSeal?.raw ?? '']);
+  return shipment.containers.map((c) => [c.containerNumber.normalized ?? c.containerNumber.raw, c.shipperSeal?.raw ?? '']);
 };
 
 describe('a two-column list with no heading', () => {
@@ -61,9 +63,9 @@ describe('a two-column list with no heading', () => {
 
   it('marks the seal as not certain, because the column named itself', () => {
     const shipment = extractShipment({ kind: 'text', text: PAIRS.map(([c, s]) => `${c} ${s}`).join('\n'), name: 't' });
-    expect(shipment.containers[0]?.carrierSeal?.confidence).toBe('low');
+    expect(shipment.containers[0]?.shipperSeal?.confidence).toBe('low');
     const review = buildReview(shipment);
-    expect(review.containers[0]?.carrierSeal.mark).toBe('check');
+    expect(review.containers[0]?.shipperSeal.mark).toBe('check');
     // Not certain is not the same as blocking: the rows are still approvable.
     expect(review.canApprove).toBe(true);
   });
@@ -129,14 +131,65 @@ describe('a heading still wins where there is one', () => {
   it('reads the labelled table at full confidence, not as an unlabelled column', () => {
     const text = ['Container #\tSEAL#', 'MSDU7776110\t7548801', 'MEDU7011340\t7548805'].join('\n');
     const shipment = extractShipment({ kind: 'text', text, name: 't' });
-    expect(shipment.containers.map((c) => c.carrierSeal?.raw)).toEqual(['7548801', '7548805']);
-    expect(shipment.containers[0]?.carrierSeal?.confidence).toBe('high');
+    expect(shipment.containers.map((c) => c.shipperSeal?.raw)).toEqual(['7548801', '7548805']);
+    expect(shipment.containers[0]?.shipperSeal?.confidence).toBe('high');
   });
 
   it('keeps a labelled seal labelled', () => {
     const text = ['MSDU7776110 | Seal No: SL-1', 'MEDU7011340 | Seal No: SL-2'].join('\n');
     const shipment = extractShipment({ kind: 'text', text, name: 't' });
-    expect(shipment.containers.map((c) => c.carrierSeal?.raw)).toEqual(['SL-1', 'SL-2']);
-    expect(shipment.containers[0]?.carrierSeal?.confidence).toBe('high');
+    expect(shipment.containers.map((c) => c.shipperSeal?.raw)).toEqual(['SL-1', 'SL-2']);
+    expect(shipment.containers[0]?.shipperSeal?.confidence).toBe('high');
+  });
+});
+
+/**
+ * The loading list the operator's own office produces.
+ *
+ * Reported on 2026-09-16: Deckhand read this table correctly except that it
+ * filed the SEAL# column as the CARRIER's seal. The seals on a shipper's own
+ * loading list are the ones that office applied, so they are shipper seals.
+ * The columns either side of SEAL# are there because they were in the real
+ * document: the rule has to survive them.
+ */
+describe("a shipper's own loading list", () => {
+  const LOADING_LIST = [
+    'GALCO\tContainer #\tLOT#:\tSEAL#\tBOOKING#\tVARIETY\tCONSIGNEE',
+    '3994\tTLLU7564971\tPK00181\tUL-8546727\tEBKG18531463\tCA STD 5%\tAydin Kuruyemis',
+    '4000\tTGBU7182073\tPK00183\tUL-8546730\tEBKG18531463\tCT18/20 SSR\tAydin Kuruyemis',
+    '3999\tUETU7528305\tPK00182\tUL-8546729\tEBKG18592770\tCT18/20US.#1\tBaymar Kuruyemis',
+  ].join('\n');
+
+  const shipment = extractShipment({ kind: 'text', text: LOADING_LIST, name: 'loading list' });
+
+  it('pairs every container with the seal on its own row', () => {
+    expect(shipment.containers.map((c) => [c.containerNumber.normalized, c.shipperSeal?.raw])).toEqual([
+      ['TLLU7564971', 'UL-8546727'],
+      ['TGBU7182073', 'UL-8546730'],
+      ['UETU7528305', 'UL-8546729'],
+    ]);
+    expect(shipment.unassignedSeals).toEqual([]);
+  });
+
+  it('files an unattributed SEAL# column as the shipper seal, not the carrier seal', () => {
+    for (const container of shipment.containers) {
+      expect(container.shipperSeal).not.toBeNull();
+      expect(container.carrierSeal).toBeNull();
+    }
+  });
+
+  it('says on the record that the attribution was assumed, not read', () => {
+    // The document never says whose seal it is. The operator sees that on the
+    // review screen rather than having to take the label on trust.
+    expect(shipment.containers[0]?.shipperSeal?.label).toContain('unattributed');
+  });
+
+  it('is not confused by the booking, lot and variety columns around the seal', () => {
+    // Neither the LOT# nor the BOOKING# cell may be mistaken for a seal, and
+    // no seal may go missing because the row is seven columns wide.
+    for (const container of shipment.containers) {
+      expect(container.shipperSeal?.raw).toMatch(/^UL-/);
+    }
+    expect(shipment.containers.every((c) => c.evidence === 'same_row')).toBe(true);
   });
 });

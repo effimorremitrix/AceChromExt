@@ -23,7 +23,7 @@ import {
   formatSealColumn,
   formatTsv,
   serializeDeckhandShipment,
-  shipperSealsOmitted,
+  carrierSealsOmitted,
   DOCUMENT_READERS,
   type DeckhandShipment,
   type ReviewMark,
@@ -151,7 +151,7 @@ function renderReview(state: DeckhandState, ctx: DeckhandTabContext): HTMLElemen
   const copyRows = el('button', { className: 'button button-small', text: 'Copy grid rows (3 col)', attrs: { type: 'button' } });
   copyRows.addEventListener('click', () => ctx.copyToClipboard(formatTsv(state.shipment), 'Container rows'));
 
-  const omitted = shipperSealsOmitted(state.shipment);
+  const omitted = carrierSealsOmitted(state.shipment);
   const copyPairs = el('button', {
     className: 'button button-small',
     text: 'Copy container + seal (2 col)',
@@ -161,7 +161,7 @@ function renderReview(state: DeckhandState, ctx: DeckhandTabContext): HTMLElemen
     ctx.copyToClipboard(formatContainerSealTsv(state.shipment), 'Container and seal rows');
     if (omitted > 0) {
       ctx.setStatus(
-        `Copied, but ${omitted} row(s) carry a shipper seal and no carrier seal. Those seal cells are empty: a shipper seal is not the carrier seal and was not put in its place. Fill them from the source.`,
+        `Copied, but ${omitted} row(s) carry a carrier seal and no shipper seal. Those seal cells are empty: a carrier seal is not the shipper seal and was not put in its place. Fill them from the source.`,
         'warn',
       );
     }

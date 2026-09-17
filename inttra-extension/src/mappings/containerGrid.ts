@@ -37,8 +37,8 @@ export interface GridColumnSpec {
 
 export const GRID_COLUMNS: GridColumnSpec[] = [
   { key: 'ContainerNumber', label: 'Container Number', headerAliases: ['containernumber', 'containerno', 'container', 'equipmentnumber', 'containerid'], source: 'containerNumber', transforms: ['text', 'upper'], maxLength: 11, expected: true },
-  { key: 'CarrierSeal', label: 'Carrier Seal #', headerAliases: ['carrierseal', 'carriersealno', 'carriersealnumber', 'sealno', 'sealnumber', 'seal'], source: 'carrierSeal', transforms: ['text', 'upper'], maxLength: 15, expected: true },
-  { key: 'ShipperSeal', label: 'Shipper Seal #', headerAliases: ['shipperseal', 'shippersealno', 'shippersealnumber'], source: 'shipperSeal', transforms: ['text', 'upper'], maxLength: 15 },
+  { key: 'CarrierSeal', label: 'Carrier Seal #', headerAliases: ['carrierseal', 'carriersealno', 'carriersealnumber', 'lineseal', 'customsseal'], source: 'carrierSeal', transforms: ['text', 'upper'], maxLength: 15 },
+  { key: 'ShipperSeal', label: 'Shipper Seal #', headerAliases: ['shipperseal', 'shippersealno', 'shippersealnumber', 'sealno', 'sealnumber', 'seal'], source: 'shipperSeal', transforms: ['text', 'upper'], maxLength: 15, expected: true },
   { key: 'CargoDescription', label: 'Cargo Description', headerAliases: ['cargodescription', 'descriptionofgoods', 'goodsdescription', 'description'], source: 'cargoDescription', transforms: ['text'], maxLength: 512 },
   { key: 'MarksAndNumbers', label: 'Marks & Numbers', headerAliases: ['marksnumbers', 'marksandnumbers', 'marksnos', 'marks'], source: 'marksAndNumbers', transforms: ['text'], maxLength: 512 },
   { key: 'HsCode', label: 'HS Code', headerAliases: ['hscode', 'hs', 'harmonizedcode', 'htscode', 'commoditycode'], source: 'hsCode', transforms: ['text'], maxLength: 12 },

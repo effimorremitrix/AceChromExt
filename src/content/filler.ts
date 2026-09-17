@@ -48,6 +48,20 @@ export interface FillRequest {
   overwrite?: boolean;
   /** Operator-captured selectors, tried ahead of the built-in candidates. */
   overrides?: SelectorOverrides | null;
+  /**
+   * Values that belong to the operator rather than to the shipment.
+   *
+   * Only the Shipment Reference Number so far, which comes from the running
+   * counter in src/core/referenceCounter.ts. It is not part of the canonical
+   * model because it is not a property of the goods: it is the filer's own
+   * sequence, and two imports of the same spreadsheet get two different ones.
+   */
+  operator?: OperatorValues | null;
+}
+
+export interface OperatorValues {
+  /** ACE Step 1 Shipment Reference Number. Empty means "nothing to file here". */
+  shipmentReference?: string;
 }
 
 /** Resolve a mapping's dotted source path against the canonical model. */
@@ -55,9 +69,15 @@ export function resolveSource(
   source: string,
   shipment: CanonicalShipment,
   commodity: CanonicalCommodity | null,
+  operator: OperatorValues | null = null,
 ): { found: boolean; value: unknown } {
   const [root, field] = source.split('.');
   if (!root || !field) return { found: false, value: null };
+
+  if (root === 'operator') {
+    const values = (operator ?? {}) as Record<string, unknown>;
+    return field in values ? { found: true, value: values[field] } : { found: false, value: null };
+  }
 
   if (root === 'invoice') {
     const invoice = shipment.invoice as unknown as Record<string, unknown>;
@@ -114,6 +134,15 @@ function detectionMessage(detection: FieldDetection): string {
 
 export function fillFields(request: FillRequest, doc: Document = document): FillReport {
   const { shipment, page, scope, settings, dryRun = false, overwrite = false } = request;
+
+  // The Shipment Reference Number is the filer's own running sequence when a
+  // counter has been set up, and the invoice number when one has not - which
+  // is what this field always used to be, so a profile that never configures
+  // a counter behaves exactly as before.
+  const operator: OperatorValues = {
+    shipmentReference: request.operator?.shipmentReference || shipment.invoice.invoiceNumber,
+  };
+
   const report = emptyFillReport(page, scope, request.line);
 
   const commodity =
@@ -147,7 +176,7 @@ export function fillFields(request: FillRequest, doc: Document = document): Fill
   const root = scope === 'commodityLine' ? findLineContainer(page, doc) ?? doc : doc;
 
   for (const mapping of mappings) {
-    const outcome = fillOne(mapping, { shipment, commodity, settings, dryRun, overwrite }, root);
+    const outcome = fillOne(mapping, { shipment, commodity, settings, dryRun, overwrite, operator }, root);
     report.outcomes.push(outcome);
   }
 
@@ -160,10 +189,11 @@ interface FillOneContext {
   settings: AceHelperSettings;
   dryRun: boolean;
   overwrite: boolean;
+  operator: OperatorValues | null;
 }
 
 function fillOne(mapping: AceFieldMapping, ctx: FillOneContext, root: ParentNode): FillOutcome {
-  const { shipment, commodity, settings, dryRun, overwrite } = ctx;
+  const { shipment, commodity, settings, dryRun, overwrite, operator } = ctx;
   const base: FillOutcome = {
     key: mapping.key,
     label: mapping.label,
@@ -172,7 +202,7 @@ function fillOne(mapping: AceFieldMapping, ctx: FillOneContext, root: ParentNode
     selector: describeCandidate(mapping.candidates),
   };
 
-  const resolved = resolveSource(mapping.source, shipment, commodity);
+  const resolved = resolveSource(mapping.source, shipment, commodity, operator);
   if (!resolved.found) {
     return { ...base, status: 'error', message: `Mapping source "${mapping.source}" is not part of the canonical model.` };
   }

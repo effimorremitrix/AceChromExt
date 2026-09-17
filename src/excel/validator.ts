@@ -12,7 +12,7 @@
  */
 
 import type { CanonicalShipment } from '../models/CanonicalInvoice.js';
-import { isKnownUom, scheduleBDigits } from '../ace/transformers/codes.js';
+import { isKnownUom, scheduleBDigits, US_STATE_CODES } from '../ace/transformers/codes.js';
 
 export type IssueSeverity = 'error' | 'warning';
 
@@ -76,6 +76,40 @@ export function validateShipment(shipment: CanonicalShipment): ValidationResult 
     issues.push(issue('warning', 'shipment', 'destination', 'Destination', 'No country of ultimate destination.'));
   } else if (!/^[A-Z]{2}$/.test(invoice.destination)) {
     issues.push(issue('warning', 'shipment', 'destination', 'Destination', `Destination "${invoice.destination}" is not a two-letter ISO country code.`));
+  }
+
+  // ACE Step 1 Origin State: the US state the goods come from, not the state
+  // of the export port. Almonds railed from northern California to Norfolk are
+  // CA, not VA, so a wrong-but-plausible value here is invisible on screen and
+  // worth flagging before the fill.
+  if (invoice.originState.trim() === '') {
+    issues.push(issue('warning', 'shipment', 'originState', 'Origin State', 'No origin state. ACE Step 1 requires the US state the goods come from.'));
+  } else if (!US_STATE_CODES.has(invoice.originState)) {
+    issues.push(
+      issue(
+        'warning',
+        'shipment',
+        'originState',
+        'Origin State',
+        `Origin State "${invoice.originState}" is not a US state code. ACE expects a two-letter code such as CA or TX.`,
+      ),
+    );
+  }
+
+  // The Carrier column feeds ACE's "Carrier SCAC/IATA" box, whose live value
+  // is the 4-letter SCAC "MSCU". A full carrier name is the likeliest thing to
+  // find in a spreadsheet and the likeliest thing for ACE to reject.
+  const carrier = invoice.carrier.trim();
+  if (carrier !== '' && !/^[A-Za-z0-9]{2,4}$/.test(carrier)) {
+    issues.push(
+      issue(
+        'warning',
+        'shipment',
+        'carrier',
+        'Carrier',
+        `Carrier "${invoice.carrier}" is not a SCAC or IATA code. ACE Step 4 asks for a code such as MSCU, not a carrier name.`,
+      ),
+    );
   }
 
   if (invoice.containerNumber.trim() !== '' && !/^[A-Z]{4}\d{6,7}$/.test(invoice.containerNumber.replace(/[\s-]/g, ''))) {

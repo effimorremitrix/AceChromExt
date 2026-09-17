@@ -1,6 +1,7 @@
 /** Typed message protocol between the popup/panel, the background worker, and the content script. */
 
 import type { AcePageId, FieldDetection, FillReport } from '../models/AceField.js';
+import type { OperatorValues } from '../content/filler.js';
 import type { CanonicalShipment } from '../models/CanonicalInvoice.js';
 import type { AceHelperSettings } from './settings.js';
 import type { ValidationResult } from '../excel/validator.js';
@@ -60,6 +61,8 @@ export type ContentRequest =
       settings: AceHelperSettings;
       dryRun?: boolean;
       overwrite?: boolean;
+      /** Operator state the shipment does not carry; today only the Shipment Reference Number. */
+      operator?: OperatorValues | null;
     }
   | { type: 'content/revealField'; key: string }
   | { type: 'content/clearHighlights' };

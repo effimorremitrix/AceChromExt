@@ -92,7 +92,7 @@ describe('content script', () => {
   });
 
   it('opens the calculator on F2 in a numeric field, and not elsewhere', () => {
-    const weight = document.getElementById('shippingWeight') as HTMLInputElement;
+    const weight = document.getElementById('commodityLines[0].shipmentWeight.stringField') as HTMLInputElement;
     weight.focus();
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true }));
     expect(document.querySelector('#ace-helper-calculator-host')).not.toBeNull();
@@ -109,7 +109,7 @@ describe('content script', () => {
   });
 
   it('ignores F2 with a modifier held', () => {
-    (document.getElementById('shippingWeight') as HTMLInputElement).focus();
+    (document.getElementById('commodityLines[0].shipmentWeight.stringField') as HTMLInputElement).focus();
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', ctrlKey: true, bubbles: true }));
     expect(document.querySelector('#ace-helper-calculator-host')).toBeNull();
   });
@@ -134,6 +134,7 @@ describe('content script', () => {
           billToState: '',
           billToPostalCode: '',
           billToCountry: '',
+          originState: '',
           poNumber: '',
           freightTerms: '',
           paymentTerms: '',

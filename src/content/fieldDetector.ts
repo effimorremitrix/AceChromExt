@@ -57,9 +57,94 @@ function safeQueryAll(root: ParentNode, selector: string): Element[] {
   }
 }
 
+/**
+ * Resolve a Select2 widget back to the <select> it is standing in front of.
+ *
+ * Captured from live AESDirect on 2026-09-16: every Step 1 dropdown is a
+ * Select2 3.x combobox. Select2 leaves the real <select> in the form (tagged
+ * `.select2-offscreen`) and builds a parallel widget beside it:
+ *
+ *   <a class="select2-choice"><span class="select2-chosen" id="select2-chosen-5">Please Select</span>
+ *   <div class="select2-drop"><input class="select2-input" id="s2id_autogen4_search">
+ *   <div id="select2-drop-mask">                       <- a page-wide overlay
+ *
+ * Three things follow, and all three are why a naive match goes wrong:
+ *
+ *   1. `select2-chosen-5`, `select2-results-4` and `s2id_autogen4` are numbered
+ *      from one global counter, so they shift whenever CBP adds or reorders a
+ *      dropdown. They must never be used as selectors.
+ *   2. Select2 copies the field's label text onto its own offscreen label
+ *      ("Origin State *"), so a label search finds BOTH the search box and the
+ *      real <select> and the field is reported AMBIGUOUS.
+ *   3. `select2-drop-mask` is a full-page overlay, which is what an Inspect
+ *      click lands on while a dropdown is open.
+ *
+ * So: anything that resolves to Select2's own furniture is mapped back to the
+ * backing <select> here, before visibility and ambiguity are judged. The route
+ * is the container id, which Select2 builds as `s2id_` + the original id; when
+ * the original has no id Select2 uses `autogen<n>` instead, and we fall back to
+ * the offscreen <select> inside the container's own form group. If that group
+ * holds more than one, they are all returned and the caller reports AMBIGUOUS
+ * rather than guessing. No positional logic is used either way.
+ */
+export function resolveSelect2(element: Element): Element[] {
+  const container = select2Container(element);
+  if (!container) return [element];
+
+  const containerId = container.id;
+  if (containerId.startsWith('s2id_')) {
+    const originalId = containerId.slice('s2id_'.length);
+    // `autogen<n>` means the source <select> carries no id of its own.
+    if (!/^autogen\d+$/.test(originalId)) {
+      const source = container.ownerDocument?.getElementById(originalId);
+      if (source) return [source];
+    }
+  }
+
+  // No usable id: the backing <select> is the offscreen one in the same group.
+  let group: Element | null = container.parentElement;
+  while (group) {
+    const offscreen = safeQueryAll(group, 'select.select2-offscreen');
+    if (offscreen.length) return offscreen;
+    group = group.parentElement;
+  }
+  return [];
+}
+
+/** The `.select2-container` an element belongs to, or null if it is not Select2 furniture. */
+function select2Container(element: Element): Element | null {
+  if (element.classList.contains('select2-offscreen') && element.tagName === 'SELECT') return null;
+  if (element.id === 'select2-drop-mask') {
+    // The overlay is not attached to any one field; nothing can be resolved.
+    return null;
+  }
+  const closest = element.closest?.('.select2-container');
+  if (closest) return closest;
+
+  // The drop panel is appended to <body>, away from its container, but its
+  // search box is named `<containerId>_search`.
+  const id = element.id;
+  if (id.endsWith('_search')) {
+    const containerId = id.slice(0, -'_search'.length);
+    const container = element.ownerDocument?.getElementById(containerId);
+    if (container?.classList.contains('select2-container')) return container;
+    // The container may not carry the id when Select2 auto-generated it.
+    if (containerId.startsWith('s2id_')) {
+      const byAttr = element.ownerDocument?.querySelector(`[id='${containerId}']`);
+      if (byAttr) return byAttr;
+    }
+  }
+  return null;
+}
+
+/** Map every match through Select2 resolution and drop duplicates. */
+function throughSelect2(elements: Element[]): Element[] {
+  return [...new Set(elements.flatMap((element) => resolveSelect2(element)))];
+}
+
 /** Controls that could plausibly be written: visible and writable. */
 function usableControls(elements: Element[]): Element[] {
-  return elements.filter((element) => isVisible(element) && isWritable(element));
+  return throughSelect2(elements).filter((element) => isVisible(element) && isWritable(element));
 }
 
 /** Elements that can carry a panel or section title. */

@@ -19,6 +19,14 @@ export interface CanonicalInvoice {
   billToPostalCode: string;
   /** ISO 3166-1 alpha-2 country of the consignee address. */
   billToCountry: string;
+  /**
+   * US state the goods actually come from, as a two-letter code.
+   *
+   * ACE Step 1 "Origin State". This is NOT the state of the export port and
+   * NOT the consignee's state: pecans grown in Texas and shipped through
+   * Savannah file TX, not GA. ACE takes one per filing, not one per line.
+   */
+  originState: string;
   poNumber: string;
   freightTerms: string;
   paymentTerms: string;
@@ -101,6 +109,7 @@ export function emptyInvoice(): CanonicalInvoice {
     billToState: '',
     billToPostalCode: '',
     billToCountry: '',
+    originState: '',
     poNumber: '',
     freightTerms: '',
     paymentTerms: '',
@@ -147,6 +156,7 @@ export const INVOICE_FIELDS = [
   'billToState',
   'billToPostalCode',
   'billToCountry',
+  'originState',
   'poNumber',
   'freightTerms',
   'paymentTerms',

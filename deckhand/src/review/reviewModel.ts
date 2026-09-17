@@ -79,7 +79,11 @@ function sealRow(container: DeckhandContainer, index: number, kind: 'carrierSeal
   }
   const seal = container[kind];
   if (!seal) {
-    if (kind === 'shipperSeal') return { path, label, value: '', mark: 'ok', note: 'none in the document' };
+    // The shipper seal is the one a document is expected to carry: an
+    // unattributed "Seal" column lands there, so its absence means no seal was
+    // found at all. A missing CARRIER seal is ordinary - most documents never
+    // state one - so it is reported without a warning.
+    if (kind === 'carrierSeal') return { path, label, value: '', mark: 'ok', note: 'none in the document' };
     if (container.evidence === null) return { path, label, value: '', mark: 'warn', note: 'not paired: the document did not show a seal beside this container' };
     return { path, label, value: '', mark: 'warn', note: 'missing' };
   }

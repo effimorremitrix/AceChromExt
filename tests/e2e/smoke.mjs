@@ -31,6 +31,19 @@ const root = join(here, '..', '..');
 const dist = join(root, 'dist');
 const fixtures = join(root, 'tests', 'fixtures');
 
+/**
+ * The live ACE ids, as attribute selectors.
+ *
+ * AESDirect names its controls for their Spring binding path
+ * (`commodityLines[0].quantity1.stringField`, captured 2026-09-16), and such
+ * an id cannot be written as `#...`: the brackets and dots parse as attribute
+ * and class selectors, so the query matches nothing and the check passes
+ * vacuously. They have to be attribute matches.
+ */
+const QUANTITY_1 = "[id='commodityLines[0].quantity1.stringField']";
+const VALUE_OF_GOODS = "[id='commodityLines[0].goodsValue.stringField']";
+const SHIPPING_WEIGHT = "[id='commodityLines[0].shipmentWeight.stringField']";
+
 let chromium;
 try {
   ({ chromium } = await import('playwright-core'));
@@ -87,9 +100,9 @@ function checkTrue(label, actual) {
 /** A deliberately messy workbook: every value needs normalizing. */
 function writeMessyWorkbook(path) {
   const rows = [
-    ['Line', 'ScheduleB', 'CommodityDescription', 'Quantity1', 'UOM1', 'Origin', 'ValueOfGoods', 'ShippingWeight', 'ECCN', 'LicenseCode', 'InvoiceNumber', 'InvoiceDate', 'CustomerName', 'Destination', 'PONumber', 'FreightTerms'],
-    [1, '0802120000', 'SHELLED ALMONDS', 79833, 'kilograms', 'USA', '$633,600.00', '176,000 lb', 'EAR99', 'c33', 'INV-20451', '3/12/2026', 'MEDITERRANEAN FOODS LTD', 'Israel', 'PO-88213', 'CIF'],
-    [2, '0813.20.0000', 'DRIED PRUNES', 12400, 'KG', 'D', 48360, 12850, 'EAR99', 'C33', '', '', '', '', '', ''],
+    ['Line', 'ScheduleB', 'CommodityDescription', 'Quantity1', 'UOM1', 'Origin', 'ValueOfGoods', 'ShippingWeight', 'ECCN', 'LicenseCode', 'InvoiceNumber', 'InvoiceDate', 'CustomerName', 'Destination', 'OriginState', 'PONumber', 'FreightTerms'],
+    [1, '0802120000', 'SHELLED ALMONDS', 79833, 'kilograms', 'USA', '$633,600.00', '176,000 lb', 'EAR99', 'c33', 'INV-20451', '3/12/2026', 'MEDITERRANEAN FOODS LTD', 'Israel', 'California', 'PO-88213', 'CIF'],
+    [2, '0813.20.0000', 'DRIED PRUNES', 12400, 'KG', 'D', 48360, 12850, 'EAR99', 'C33', '', '', '', '', '', '', ''],
   ];
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), 'Shipment');
@@ -158,7 +171,7 @@ try {
 
   // --- 1. calculator ----------------------------------------------------
   console.log('--- F2 calculator ---');
-  await ace.focus('#shippingWeight');
+  await ace.focus(SHIPPING_WEIGHT);
   await ace.keyboard.press('F2');
   await ace.waitForTimeout(300);
   checkTrue(
@@ -176,18 +189,18 @@ try {
 
   await ace.keyboard.press('Enter');
   await ace.waitForTimeout(200);
-  check('Enter inserts only the result, with no separators', await ace.inputValue('#shippingWeight'), '7750');
+  check('Enter inserts only the result, with no separators', await ace.inputValue(SHIPPING_WEIGHT), '7750');
   checkTrue('the calculator closes after inserting', await ace.evaluate(() => !document.querySelector('#ace-helper-calculator-host')));
 
-  await ace.fill('#valueOfGoods', '999');
-  await ace.focus('#valueOfGoods');
+  await ace.fill(VALUE_OF_GOODS, '999');
+  await ace.focus(VALUE_OF_GOODS);
   await ace.keyboard.press('F2');
   await ace.keyboard.type('+ 1');
   await ace.keyboard.press('Escape');
   await ace.waitForTimeout(200);
-  check('Escape leaves the field untouched', await ace.inputValue('#valueOfGoods'), '999');
+  check('Escape leaves the field untouched', await ace.inputValue(VALUE_OF_GOODS), '999');
 
-  await ace.focus('#quantity1');
+  await ace.focus(QUANTITY_1);
   await ace.keyboard.press('F2');
   await ace.keyboard.type('10 / 0');
   await ace.waitForTimeout(200);
@@ -198,10 +211,10 @@ try {
   );
   await ace.keyboard.press('Enter');
   await ace.waitForTimeout(200);
-  check('Enter does not insert an invalid result', await ace.inputValue('#quantity1'), '');
+  check('Enter does not insert an invalid result', await ace.inputValue(QUANTITY_1), '');
   await ace.keyboard.press('Escape');
-  await ace.fill('#valueOfGoods', '');
-  await ace.fill('#shippingWeight', '');
+  await ace.fill(VALUE_OF_GOODS, '');
+  await ace.fill(SHIPPING_WEIGHT, '');
 
   // --- 2. import --------------------------------------------------------
   console.log('\n--- Excel import ---');
@@ -260,11 +273,11 @@ try {
     await ace.evaluate(() => ({
       scheduleB: document.getElementById('scheduleBNumber').value,
       description: document.getElementById('commodityDescription').value,
-      quantity1: document.getElementById('quantity1').value,
+      quantity1: document.getElementById('commodityLines[0].quantity1.stringField').value,
       uom1: document.getElementById('unitOfMeasure1').value,
       origin: document.getElementById('originOfGoods').value,
-      value: document.getElementById('valueOfGoods').value,
-      weight: document.getElementById('shippingWeight').value,
+      value: document.getElementById('commodityLines[0].goodsValue.stringField').value,
+      weight: document.getElementById('commodityLines[0].shipmentWeight.stringField').value,
       eccn: document.getElementById('eccn').value,
       license: document.getElementById('licenseCode').value,
     })),
@@ -282,7 +295,7 @@ try {
   );
 
   const tints = await ace.evaluate(() => ({
-    transformed: document.getElementById('shippingWeight').style.backgroundColor,
+    transformed: document.getElementById('commodityLines[0].shipmentWeight.stringField').style.backgroundColor,
     plain: document.getElementById('commodityDescription').style.backgroundColor,
   }));
   checkTrue('a transformed field is tinted yellow', tints.transformed === 'rgb(255, 247, 224)');
@@ -305,12 +318,14 @@ try {
     'the shipment form is populated',
     await ace.evaluate(() => ({
       reference: document.getElementById('shipmentReferenceNumber').value,
-      departureDate: document.getElementById('departureDate').value,
+      departureDate: document.getElementById('estExportDate').value,
       destination: document.getElementById('countryOfDestination').value,
+      // "California" in the sheet, CA in ACE.
+      originState: document.getElementById('originState').value,
       // ACE has no PO / INCO boxes; the columns are reference data only.
       portOfUnlading: document.getElementById('portOfUnlading').value,
     })),
-    { reference: 'INV-20451', departureDate: '03/12/2026', destination: 'IL', portOfUnlading: '' },
+    { reference: 'INV-20451', departureDate: '03/12/2026', destination: 'IL', originState: 'CA', portOfUnlading: '' },
   );
 
   // --- 4b. Phase 3 screens ---------------------------------------------

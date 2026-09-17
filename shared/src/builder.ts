@@ -353,8 +353,10 @@ function buildContainers(
       if (match) {
         match.number = { ...match.number, confirmedBy: invoiceContainer.source };
         if (invoiceSeal.value !== '') {
-          const reconciled = reconcile('carrierSeal', `Carrier seal of ${match.number.value}`, match.carrierSeal, invoiceSeal, sameId, true, decisions, 'deckhand', match.number.value);
-          match.carrierSeal = reconciled.value;
+          // The SealNumber column is the operator's own seal, so it meets the
+          // document's shipper seal, not its carrier seal (2026-09-16).
+          const reconciled = reconcile('shipperSeal', `Shipper seal of ${match.number.value}`, match.shipperSeal, invoiceSeal, sameId, true, decisions, 'deckhand', match.number.value);
+          match.shipperSeal = reconciled.value;
           if (reconciled.conflict) conflicts.push(reconciled.conflict);
         }
       } else {
@@ -372,12 +374,12 @@ function buildContainers(
           resolution,
         });
         if (resolution === 'commercial') {
-          seeds = [{ number: invoiceContainer, status: validateContainerNumber(invoiceContainer.value), carrierSeal: invoiceSeal, shipperSeal: missing() }];
+          seeds = [{ number: invoiceContainer, status: validateContainerNumber(invoiceContainer.value), carrierSeal: missing(), shipperSeal: invoiceSeal }];
         }
       }
     }
   } else if (invoiceContainer.value !== '') {
-    seeds = [{ number: invoiceContainer, status: validateContainerNumber(invoiceContainer.value), carrierSeal: invoiceSeal, shipperSeal: missing() }];
+    seeds = [{ number: invoiceContainer, status: validateContainerNumber(invoiceContainer.value), carrierSeal: missing(), shipperSeal: invoiceSeal }];
     if (seeds[0]!.status !== 'valid') {
       notes.push({ severity: 'warning', message: `Container ${invoiceContainer.value} from the commercial data ${seeds[0]!.status === 'invalid' ? 'fails its ISO 6346 check digit' : 'is not a container number format'}.` });
     }

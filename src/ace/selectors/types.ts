@@ -132,6 +132,11 @@ export function byFrameworkName(name: string): AceSelectorCandidate {
  * This is what survives a portal that namespaces its controls. It is listed
  * after the exact selectors and before the label strategies: more specific
  * than a label, less certain than an exact id.
+ *
+ * Note that live AESDirect does NOT end its ids with the logical name - it
+ * ends them with `.stringField` (see `bindingPath`). This helper is kept for
+ * the parties and transportation controls whose real ids are still uncaptured,
+ * and for any future portal that namespaces the plain way.
  */
 export function byIdSuffix(name: string): AceSelectorCandidate {
   return {
@@ -139,6 +144,54 @@ export function byIdSuffix(name: string): AceSelectorCandidate {
     selector: `[id$='${name}' i], [name$='${name}' i]`,
     verified: false,
     note: 'Suffix fallback, for portals that namespace control ids.',
+  };
+}
+
+/**
+ * The binding path AESDirect actually uses.
+ *
+ * Captured from the live DOM on 2026-09-16: every control we have seen is
+ * named for its Spring command path, with a `.stringField` wrapper on the
+ * scalar ones and a `[n]` index on the repeating ones:
+ *
+ *   commodityLines[0].quantity1.stringField
+ *   commodityLines[0].goodsValue.stringField
+ *   shipmentInfo.conveyanceName.stringField
+ *
+ * Two consequences the old `byIdSuffix` guesses got wrong:
+ *
+ *   1. The id ends in `.stringField`, so a suffix match on the logical name
+ *      ("quantity1") matches nothing at all.
+ *   2. `#commodityLines[0].quantity1.stringField` is not a valid CSS id
+ *      selector - the brackets and dots would parse as attribute and class
+ *      selectors. It has to be written as an attribute match.
+ *
+ * `bindingPath('commodityLines[0].quantity1')` produces the exact match for
+ * the captured line; `bindingSuffix('quantity1')` produces the index-free form
+ * that also resolves lines 2..n. A commodity-scoped field resolves inside the
+ * open "Line N Details" panel, so the index-free form stays unambiguous.
+ */
+export function bindingPath(path: string, note = 'Captured from the live AESDirect DOM on 2026-09-16.'): AceSelectorCandidate {
+  const full = `${path}.stringField`;
+  return {
+    strategy: 'attribute',
+    selector: `[id='${full}'], [name='${full}']`,
+    verified: true,
+    note,
+  };
+}
+
+/** The same binding path with the `commodityLines[n]` prefix left open. */
+export function bindingSuffix(
+  name: string,
+  note = 'Line-index-free form of the id captured on 2026-09-16; resolves inside the open Line N Details panel.',
+): AceSelectorCandidate {
+  const tail = `.${name}.stringField`;
+  return {
+    strategy: 'attribute',
+    selector: `[id$='${tail}'], [name$='${tail}']`,
+    verified: true,
+    note,
   };
 }
 

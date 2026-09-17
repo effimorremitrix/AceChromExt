@@ -7,12 +7,27 @@
  * inside that container (see PAGE_SIGNATURES.lineContainerHeadings), so a
  * write can never land on a different commodity line.
  *
- * SELECTOR STATUS: label wording captured from the live AESDirect Line
- * Details screen on 2026-09-14; DOM ids not yet captured. See
- * docs/ACE-MAPPING.md.
+ * SELECTOR STATUS: all twelve labels were confirmed against a live Line 1
+ * Details screenshot on 2026-09-16, and three of the ids were captured from
+ * the DOM the same day (1st Quantity, Value of Goods, Shipping Weight). Those
+ * three also carry a `title` attribute whose text is exactly the visible
+ * label, which is why the label candidates have been resolving all along.
+ * The remaining nine ids follow the same `commodityLines[n].<field>.stringField`
+ * shape but have not been read off the screen, so they stay placeholders.
+ * See docs/ACE-MAPPING.md.
  */
 
-import { byFrameworkName, byIdSuffix, byLabel, byNearby, capturedLabel, placeholder, type SelectorTable } from './types.js';
+import {
+  bindingPath,
+  bindingSuffix,
+  byFrameworkName,
+  byIdSuffix,
+  byLabel,
+  byNearby,
+  capturedLabel,
+  placeholder,
+  type SelectorTable,
+} from './types.js';
 
 const LINE = "[data-section='commodityLine']";
 
@@ -61,14 +76,17 @@ export const COMMODITY_SELECTORS: SelectorTable = {
 
   Quantity1: {
     candidates: [
-      placeholder('id', '#quantity1'),
-      placeholder('name', "input[name='quantity1']"),
-      byFrameworkName('quantity1'),
-      byIdSuffix('quantity1'),
+      // Captured 2026-09-16:
+      // <input id="commodityLines[0].quantity1.stringField"
+      //        name="commodityLines[0].quantity1.stringField" title="1st Quantity"
+      //        class="form-control nonNegativeIntegersOnly" type="text" maxlength="10">
+      bindingPath('commodityLines[0].quantity1'),
+      bindingSuffix('quantity1'),
       capturedLabel(['1st Quantity']),
       byLabel(['Quantity 1', 'Quantity1', 'First Quantity']),
     ],
-    devtoolsHint: 'Line Details -> inspect the 1st Quantity box. Confirm it rejects commas (it normally does).',
+    devtoolsHint:
+      'Line Details -> inspect the 1st Quantity box. class="nonNegativeIntegersOnly" and maxlength=10, so it takes a whole number with no commas, no decimal point and no sign.',
   },
 
   UOM1: {
@@ -124,30 +142,36 @@ export const COMMODITY_SELECTORS: SelectorTable = {
 
   ValueOfGoods: {
     candidates: [
-      placeholder('id', '#valueOfGoods'),
-      placeholder('name', "input[name='valueOfGoods']"),
-      placeholder('attribute', "input[data-field='valueOfGoods']"),
-      byFrameworkName('valueOfGoods'),
-      byIdSuffix('valueOfGoods'),
+      // Captured 2026-09-16: the ACE path is `goodsValue`, not `valueOfGoods`.
+      // <input id="commodityLines[0].goodsValue.stringField"
+      //        name="commodityLines[0].goodsValue.stringField"
+      //        title="Value of Goods (whole US Dollars)"
+      //        class="form-control nonNegativeIntegersOnly" maxlength="10">
+      bindingPath('commodityLines[0].goodsValue'),
+      bindingSuffix('goodsValue'),
       capturedLabel(['Value of Goods (whole US Dollars)']),
       byLabel(['Value of Goods', 'Value', 'Commodity Value']),
-      byNearby(LINE, "input[name*='value' i]"),
+      byNearby(LINE, "input[name*='goodsValue' i]"),
     ],
     devtoolsHint:
-      'Line Details -> inspect the Value of Goods box. The label says whole US dollars, so the mapping files a whole number; confirm ACE keeps it.',
+      'Line Details -> inspect the Value of Goods box. class="nonNegativeIntegersOnly", maxlength=10: whole US dollars, no separators.',
   },
 
   ShippingWeight: {
     candidates: [
-      placeholder('id', '#shippingWeight'),
-      placeholder('name', "input[name='shippingWeight']"),
-      byFrameworkName('shippingWeight'),
-      byIdSuffix('shippingWeight'),
+      // Captured 2026-09-16: the ACE path is `shipmentWeight` (shipment, not
+      // shipping) while the visible label reads "Shipping Weight".
+      // <input id="commodityLines[0].shipmentWeight.stringField"
+      //        name="commodityLines[0].shipmentWeight.stringField"
+      //        title="Shipping Weight (whole Kilograms)"
+      //        class="form-control nonNegativeIntegersOnly" maxlength="10">
+      bindingPath('commodityLines[0].shipmentWeight'),
+      bindingSuffix('shipmentWeight'),
       capturedLabel(['Shipping Weight (whole Kilograms)']),
       byLabel(['Shipping Weight', 'Gross Weight', 'Shipping Weight (Kilograms)', 'Shipping Weight (KG)']),
     ],
     devtoolsHint:
-      'Line Details -> inspect the Shipping Weight box. The label says whole kilograms, which is what the importer produces.',
+      'Line Details -> inspect the Shipping Weight box. class="nonNegativeIntegersOnly", maxlength=10: whole kilograms, no separators.',
   },
 
   ECCN: {

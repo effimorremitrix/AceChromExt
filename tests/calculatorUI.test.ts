@@ -36,14 +36,14 @@ function press(key: string): void {
 }
 
 function target(): HTMLInputElement {
-  return document.getElementById('valueOfGoods') as HTMLInputElement;
+  return document.getElementById('commodityLines[0].goodsValue.stringField') as HTMLInputElement;
 }
 
 describe('calculator overlay', () => {
   beforeEach(() => {
     document.body.innerHTML = `
-      <label for="valueOfGoods">Value of Goods</label>
-      <input type="text" id="valueOfGoods" />`;
+      <label for="commodityLines[0].goodsValue.stringField">Value of Goods</label>
+      <input type="text" id="commodityLines[0].goodsValue.stringField" />`;
     configureCalculator({ rounding: () => ({ mode: 'decimals', decimals: 2 }), dispatchBlur: true });
   });
 

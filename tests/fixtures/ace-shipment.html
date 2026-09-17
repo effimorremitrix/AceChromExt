@@ -2,8 +2,15 @@
   Mock ACE "Step 1: Shipment" screen, shaped after the live AESDirect portal
   as captured on 2026-09-14: the real labels (with the required star, the
   conditional diamond and the info icon ACE renders beside them), the real
-  field set, and "CODE - DESCRIPTION" dropdown options. The ids are stand-ins:
-  nothing here was copied from the live DOM.
+  field set, and "CODE - DESCRIPTION" dropdown options.
+
+  Departure Date carries its real id (estExportDate), copied from the live DOM
+  on 2026-09-16. Every other id here is still a stand-in.
+
+  The live dropdowns on this step are Select2 3.x comboboxes over a hidden
+  <select>; they are plain <select> elements here so that this fixture stays
+  about field detection. resolveSelect2 has its own test in
+  tests/aceMapping.test.ts.
 -->
 <div id="filing">
   <h1>Create Export Filing (Filer ID 943488789, ITN TBD)</h1>
@@ -49,9 +56,9 @@
       <input type="text" id="portOfUnlading" name="portOfUnlading" />
     </div>
     <div class="form-group">
-      <label for="departureDate">Departure Date <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
+      <label for="estExportDate">Departure Date <span class="required">*</span> <i class="fa fa-info-circle"></i></label>
       <div class="input-group">
-        <input type="text" id="departureDate" name="departureDate" placeholder="MM/DD/YYYY" />
+        <input type="text" id="estExportDate" name="estExportDate" maxlength="10" class="form-control" placeholder="MM/DD/YYYY" />
         <button type="button" class="calendar" aria-label="Open calendar"></button>
       </div>
     </div>

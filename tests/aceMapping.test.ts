@@ -6,10 +6,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { detectField, detectFields } from '../src/content/fieldDetector.js';
+import { detectField, detectFields, resolveSelect2 } from '../src/content/fieldDetector.js';
+import { setAceFieldValue } from '../src/content/fieldWriter.js';
 import { detectPage, findLineContainer } from '../src/content/pageDetector.js';
 import { fillFields, resolveSource } from '../src/content/filler.js';
-import { ALL_MAPPINGS, fieldByKey, fieldsForPage, unverifiedFieldKeys } from '../src/ace/mappings/index.js';
+import { fieldsWithoutCapturedSelector, ALL_MAPPINGS, fieldByKey, fieldsForPage, unverifiedFieldKeys } from '../src/ace/mappings/index.js';
 import { DEFAULT_SETTINGS } from '../src/core/settings.js';
 import { emptyProvenance, type CanonicalShipment } from '../src/models/CanonicalInvoice.js';
 import type { AceFieldMapping } from '../src/models/AceField.js';
@@ -41,6 +42,7 @@ function shipment(): CanonicalShipment {
       billToState: '',
       billToPostalCode: '3303201',
       billToCountry: 'IL',
+      originState: 'CA',
       poNumber: 'PO-88213',
       freightTerms: 'CIF',
       paymentTerms: 'NET 30',
@@ -91,8 +93,11 @@ describe('mapping registry', () => {
 
   it('points every mapping at a canonical path', () => {
     for (const mapping of ALL_MAPPINGS) {
-      expect(mapping.source, mapping.key).toMatch(/^(invoice|commodity)\.[a-zA-Z0-9]+$/);
-      const probe = resolveSource(mapping.source, shipment(), shipment().commodities[0] ?? null);
+      // `operator.` is the one root outside the canonical model: values that
+      // belong to the filer rather than to the goods. Only the Shipment
+      // Reference Number so far (src/core/referenceCounter.ts).
+      expect(mapping.source, mapping.key).toMatch(/^(invoice|commodity|operator)\.[a-zA-Z0-9]+$/);
+      const probe = resolveSource(mapping.source, shipment(), shipment().commodities[0] ?? null, { shipmentReference: '4088' });
       expect(probe.found, `${mapping.key} -> ${mapping.source}`).toBe(true);
     }
   });
@@ -115,10 +120,41 @@ describe('mapping registry', () => {
   });
 
   it('reports which selectors still need verification', () => {
-    // Steps 1-3 carry labels captured from the live portal on 2026-09-14;
-    // Step 4 was not captured. This test is the tripwire that keeps the list
-    // honest as fields are verified against live ACE.
-    expect(unverifiedFieldKeys()).toEqual(['Carrier', 'Vessel', 'BookingNumber', 'ContainerNumber', 'SealNumber']);
+    // Every field now carries label wording read off a live AESDirect screen
+    // (Steps 1-3 on 2026-09-14, Step 4 on 2026-09-16), so nothing is a pure
+    // guess any more.
+    expect(unverifiedFieldKeys()).toEqual([]);
+  });
+
+  it('names the fields whose DOM id has still not been captured', () => {
+    // The sharper tripwire: a captured label is not a captured id, and these
+    // are the fields that would break if CBP reworded a label. Five ids were
+    // copied from the live DOM on 2026-09-16 (Departure Date, 1st Quantity,
+    // Value of Goods, Shipping Weight, Conveyance Name) plus Transportation
+    // Reference Number; everything below is still waiting on a DevTools
+    // capture. Shorten this list, never lengthen it.
+    expect(fieldsWithoutCapturedSelector()).toEqual([
+      'ShipmentReferenceNumber',
+      'OriginState',
+      'Destination',
+      'UltimateConsigneeName',
+      'UltimateConsigneeAddress',
+      'UltimateConsigneeAddress2',
+      'UltimateConsigneeCity',
+      'UltimateConsigneeState',
+      'UltimateConsigneePostalCode',
+      'UltimateConsigneeCountry',
+      'ExportInformationCode',
+      'ScheduleB',
+      'CommodityDescription',
+      'UOM1',
+      'Quantity2',
+      'UOM2',
+      'Origin',
+      'ECCN',
+      'LicenseCode',
+      'Carrier',
+    ]);
   });
 
   it('marks a captured label as verified without pretending it is an id', () => {
@@ -324,19 +360,19 @@ describe('fillFields - commodity line', () => {
 
     expect((document.getElementById('scheduleBNumber') as HTMLInputElement).value).toBe('0802.12.0000');
     expect((document.getElementById('commodityDescription') as HTMLInputElement).value).toBe('SHELLED ALMONDS');
-    expect((document.getElementById('quantity1') as HTMLInputElement).value).toBe('79833');
+    expect((document.getElementById('commodityLines[0].quantity1.stringField') as HTMLInputElement).value).toBe('79833');
     expect((document.getElementById('unitOfMeasure1') as HTMLInputElement).value).toBe('KG');
     expect((document.getElementById('originOfGoods') as HTMLSelectElement).value).toBe('D');
     // The live label says whole US dollars.
-    expect((document.getElementById('valueOfGoods') as HTMLInputElement).value).toBe('633600');
-    expect((document.getElementById('shippingWeight') as HTMLInputElement).value).toBe('79832');
+    expect((document.getElementById('commodityLines[0].goodsValue.stringField') as HTMLInputElement).value).toBe('633600');
+    expect((document.getElementById('commodityLines[0].shipmentWeight.stringField') as HTMLInputElement).value).toBe('79832');
     expect((document.getElementById('licenseCode') as HTMLSelectElement).value).toBe('C33');
     expect((document.getElementById('eccn') as HTMLInputElement).value).toBe('EAR99');
   });
 
   it('dispatches input and change for each field it writes', () => {
     const events: string[] = [];
-    const weight = document.getElementById('shippingWeight') as HTMLInputElement;
+    const weight = document.getElementById('commodityLines[0].shipmentWeight.stringField') as HTMLInputElement;
     weight.addEventListener('input', () => events.push('input'));
     weight.addEventListener('change', () => events.push('change'));
 
@@ -456,7 +492,7 @@ describe('fillFields - shipment level', () => {
     const report = fillFields({ shipment: shipment(), page: 'shipment', scope: 'shipment', settings }, document);
 
     expect((document.getElementById('shipmentReferenceNumber') as HTMLInputElement).value).toBe('INV-20451');
-    expect((document.getElementById('departureDate') as HTMLInputElement).value).toBe('03/12/2026');
+    expect((document.getElementById('estExportDate') as HTMLInputElement).value).toBe('03/12/2026');
     expect((document.getElementById('countryOfDestination') as HTMLSelectElement).value).toBe('IL');
     expect(report.errors).toBe(0);
 
@@ -527,5 +563,98 @@ describe('resolveSource', () => {
     expect(resolveSource('invoice.nope', data, null).found).toBe(false);
     expect(resolveSource('nonsense', data, null).found).toBe(false);
     expect(resolveSource('commodity.scheduleB', data, null).found).toBe(false);
+  });
+});
+
+/**
+ * The Select2 3.x widget ACE puts over every dropdown.
+ *
+ * Shaped after what came back from live AESDirect on 2026-09-16: the real
+ * <select> stays in the form tagged `select2-offscreen`, a parallel widget is
+ * built beside it, the drop panel is moved to <body>, and Select2 copies the
+ * field's label onto its own offscreen label for the search box. The numbers
+ * in `select2-chosen-3`, `select2-results-4` and `s2id_autogen4` come from one
+ * global counter, which is why none of them may be used as a selector.
+ */
+function select2Widget(options: { sourceId?: string; uid?: number } = {}): string {
+  const { sourceId, uid = 4 } = options;
+  const containerId = `s2id_${sourceId ?? `autogen${uid}`}`;
+  const idAttr = sourceId ? ` id="${sourceId}"` : '';
+  return `
+    <div class="form-group">
+      <label for="${sourceId ?? `${containerId}_search`}">Origin State <span class="required">*</span></label>
+      <select${idAttr} name="originState" class="select2-offscreen" tabindex="-1">
+        <option value="">Please Select</option>
+        <option value="CA">CA - CALIFORNIA</option>
+        <option value="TX">TX - TEXAS</option>
+      </select>
+      <div class="select2-container" id="${containerId}">
+        <a href="javascript:void(0)" class="select2-choice select2-default" tabindex="-1">
+          <span class="select2-chosen" id="select2-chosen-${uid}">Please Select</span>
+          <span class="select2-arrow" role="presentation"><b role="presentation"></b></span>
+        </a>
+      </div>
+    </div>
+    <div class="select2-drop select2-display-none" style="display: none;">
+      <div class="select2-search">
+        <label for="${containerId}_search" class="select2-offscreen">Origin State * </label>
+        <input type="text" class="select2-input" role="combobox" id="${containerId}_search" />
+      </div>
+      <ul class="select2-results" role="listbox" id="select2-results-${uid}"></ul>
+    </div>
+    <div id="select2-drop-mask" class="select2-drop-mask" style="display: block;"></div>`;
+}
+
+describe('Select2 dropdowns', () => {
+  it('resolves the widget back to the <select> when the source keeps its id', () => {
+    document.body.innerHTML = select2Widget({ sourceId: 'originState' });
+    const chosen = document.getElementById('select2-chosen-4') as Element;
+    expect(resolveSelect2(chosen).map((element) => (element as HTMLSelectElement).name)).toEqual(['originState']);
+  });
+
+  it('resolves it through the form group when Select2 had to invent the container id', () => {
+    // `s2id_autogen4` is what the live Origin State capture showed, which
+    // means the source <select> carries no id of its own.
+    document.body.innerHTML = select2Widget();
+    const chosen = document.getElementById('select2-chosen-4') as Element;
+    const resolved = resolveSelect2(chosen) as HTMLSelectElement[];
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0]?.name).toBe('originState');
+  });
+
+  it('resolves the drop panel search box, which lives away from its container', () => {
+    document.body.innerHTML = select2Widget();
+    const search = document.getElementById('s2id_autogen4_search') as Element;
+    expect((resolveSelect2(search)[0] as HTMLSelectElement | undefined)?.name).toBe('originState');
+  });
+
+  it('resolves nothing from the page-wide overlay rather than guessing a field', () => {
+    document.body.innerHTML = select2Widget();
+    const mask = document.getElementById('select2-drop-mask') as Element;
+    expect(resolveSelect2(mask)).toEqual([mask]);
+  });
+
+  it('leaves a plain control alone', () => {
+    document.body.innerHTML = '<input id="plain" name="plain" />';
+    const plain = document.getElementById('plain') as Element;
+    expect(resolveSelect2(plain)).toEqual([plain]);
+  });
+
+  it('detects Origin State by label without tripping over Select2s copied label', () => {
+    // Without resolution this is two matches - the real <select> and Select2's
+    // search box - and the field is refused as AMBIGUOUS.
+    document.body.innerHTML = select2Widget();
+    const field = fieldByKey('OriginState') as AceFieldMapping;
+    const detection = detectField(field, { root: document });
+    expect(detection.status).toBe('FOUND');
+    expect((detection.element as HTMLSelectElement | null)?.name).toBe('originState');
+  });
+
+  it('writes the state code into the backing <select>', () => {
+    document.body.innerHTML = select2Widget();
+    const field = fieldByKey('OriginState') as AceFieldMapping;
+    const element = detectField(field, { root: document }).element as HTMLSelectElement;
+    expect(setAceFieldValue(element, 'TX').ok).toBe(true);
+    expect(element.value).toBe('TX');
   });
 });

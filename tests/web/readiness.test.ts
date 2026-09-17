@@ -40,7 +40,9 @@ describe('ACE readiness', () => {
     expect(ace.data?.fromPackage).toBe(true);
     expect(ace.preflight?.blocking).toEqual([]);
     expect(ace.mapping).toHaveLength(ALL_MAPPINGS.length);
-    const booking = ace.mapping.find((row) => row.key === 'BookingNumber');
+    // Renamed on 2026-09-16: ACE Step 4 files the booking number in its
+    // Transportation Reference Number box.
+    const booking = ace.mapping.find((row) => row.key === 'TransportationReferenceNumber');
     expect(booking?.aceValue).toBe('EBKG18531408');
     expect(booking?.source).toContain('Deckhand');
     const weight = ace.mapping.find((row) => row.key === 'ShippingWeight');
@@ -77,9 +79,14 @@ describe('INTTRA readiness', () => {
 
   it('reads the INTTRA Helper mappings against the package, screen by screen', () => {
     const inttra = inttraReadiness(ready);
-    // Ready: the helper will accept the package; the values nobody holds are optional and listed as steps instead.
-    expect(inttra.status).toBe('ready');
+    // Review, not ready, and correctly so: the Shipper Seal # is the seal an
+    // unattributed "Seal" column feeds and the one the operator applies, so it
+    // is an expected grid column. MSDU7654322 carries only a carrier seal in
+    // this document, which is a real cell for the operator to fill rather than
+    // something to invent. The gate still passes: the package is fillable.
+    expect(inttra.status).toBe('review');
     expect(inttra.gate?.ok).toBe(true);
+    expect(inttra.grid.rows[1]?.cells.find((cell) => cell.key === 'ShipperSeal')?.status).toBe('missing');
     const general = inttra.screens.find((screen) => screen.page === 'generalDetails')!;
     expect(general.label).toBe('General Details');
     const booking = general.fields.find((field) => field.key === 'BookingNumber')!;
@@ -94,6 +101,7 @@ describe('INTTRA readiness', () => {
     const first = cargo[0]!;
     expect(first.fields.find((field) => field.key === 'ContainerNumber')?.value).toBe('MSCU1234566');
     expect(first.fields.find((field) => field.key === 'CarrierSeal')?.value).toBe('SL-4471209');
+    expect(first.fields.find((field) => field.key === 'ShipperSeal')?.value).toBe('SH-001');
     expect(first.fields.find((field) => field.key === 'CargoDescription')?.provenance).toContain('QuickBooks');
     // Three containers and one invoice weight: not split, so missing, with the reason.
     const weight = first.fields.find((field) => field.key === 'GrossWeight')!;
@@ -102,9 +110,9 @@ describe('INTTRA readiness', () => {
 
     expect(inttra.grid.rows).toHaveLength(3);
     expect(inttra.grid.rows.map((row) => row.containerNumber)).toEqual(['MSCU1234566', 'MSDU7654322', 'TGHU7654320']);
-    expect(inttra.grid.rows[2]?.cells.find((cell) => cell.key === 'CarrierSeal')?.value).toBe('SL-9');
+    // Container 3's seal is headed just "Seal:", so it is read as the shipper's.
+    expect(inttra.grid.rows[2]?.cells.find((cell) => cell.key === 'ShipperSeal')?.value).toBe('SL-9');
     expect(inttra.grid.rows[0]?.cells.find((cell) => cell.key === 'ShipperSeal')?.value).toBe('SH-001');
-    expect(inttra.grid.rows[1]?.cells.find((cell) => cell.key === 'ShipperSeal')?.status).toBe('empty');
     expect(inttra.grid.rows[0]?.cells.find((cell) => cell.key === 'HsCode')?.value).toBe('0802.12');
   });
 
@@ -176,7 +184,7 @@ describe('where did this value come from?', () => {
     expect(weight.transform).toContain('0.45359237');
     const hs = rows.find((row) => row.where === 'Line 1' && row.field === 'hsCode')!;
     expect(hs).toMatchObject({ value: '0802.12', source: 'derived', original: '0802.12.0000' });
-    const seal = rows.find((row) => row.where.startsWith('Container 3') && row.field === 'carrierSeal')!;
+    const seal = rows.find((row) => row.where.startsWith('Container 3') && row.field === 'shipperSeal')!;
     expect(seal).toMatchObject({ value: 'SL-9', source: 'deckhand' });
     const packageType = rows.find((row) => row.where.startsWith('Container 1') && row.field === 'packageType')!;
     expect(packageType).toMatchObject({ value: '', source: 'missing' });

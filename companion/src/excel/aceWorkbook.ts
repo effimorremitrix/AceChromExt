@@ -95,6 +95,7 @@ export function buildShipmentRows(shipment: CanonicalShipment, options: Workbook
       header(invoice.billToState),
       header(invoice.billToPostalCode),
       header(invoice.billToCountry),
+      header(invoice.originState),
       header(invoice.freightTerms),
       header(invoice.paymentTerms),
       header(invoice.paymentDueDate),

@@ -113,6 +113,7 @@ function handleMessage(message: ContentRequest): ContentResponse {
           settings: message.settings ?? settings,
           ...(message.dryRun ? { dryRun: true } : {}),
           ...(message.overwrite ? { overwrite: true } : {}),
+          ...(message.operator ? { operator: message.operator } : {}),
           overrides,
         },
         document,

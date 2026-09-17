@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { extractShipment, formatContainerColumn, formatContainerSealTsv, formatSealColumn, shipperSealsOmitted } from '../../deckhand/src/index.js';
+import { extractShipment, formatContainerColumn, formatContainerSealTsv, formatSealColumn, carrierSealsOmitted } from '../../deckhand/src/index.js';
 import { describeTables, readHtmlClipboard, tableRows, toTsv } from '../../src/ui/htmlTable.js';
 
 const HEAD = ['GALCO', 'Container #', 'LOT#:', 'SEAL#', 'BOOKING#', 'VERITY'];
@@ -51,7 +51,7 @@ const extracted = (text: string) => {
   const shipment = extractShipment({ kind: 'text', text, name: 'pasted text' });
   return {
     containers: shipment.containers.map((c) => c.containerNumber.normalized ?? c.containerNumber.raw),
-    seals: shipment.containers.map((c) => c.carrierSeal?.raw ?? ''),
+    seals: shipment.containers.map((c) => c.shipperSeal?.raw ?? ''),
     shipment,
   };
 };
@@ -138,10 +138,10 @@ describe('the two columns the container template wants', () => {
     expect(formatSealColumn(shipment).split('\r\n')).toEqual(SEALS);
   });
 
-  it('never promotes a shipper seal into an empty carrier seal cell, and counts the rows it left empty', () => {
-    const both = extracted(['Container No\tCarrier Seal\tShipper Seal', 'MSNU7007075\t\tSH-1'].join('\n')).shipment;
+  it('never promotes a carrier seal into an empty shipper seal cell, and counts the rows it left empty', () => {
+    const both = extracted(['Container No\tCarrier Seal\tShipper Seal', 'MSNU7007075\tSL-1\t'].join('\n')).shipment;
     expect(formatContainerSealTsv(both)).toBe('MSNU7007075\t');
-    expect(shipperSealsOmitted(both)).toBe(1);
-    expect(shipperSealsOmitted(shipment)).toBe(0);
+    expect(carrierSealsOmitted(both)).toBe(1);
+    expect(carrierSealsOmitted(shipment)).toBe(0);
   });
 });

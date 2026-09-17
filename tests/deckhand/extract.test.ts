@@ -62,11 +62,14 @@ describe('header fields', () => {
 });
 
 describe('containers and seals', () => {
+  // 01-aligned's table heads its seal column "Seal" with no owner named, so
+  // the seals land on the shipper side (see sealKindOf). The document is a
+  // carrier's email, which is the known cost of that default.
   it('pairs a container with the seal on the same table row', () => {
     const x = extractWithRules(fixture('01-aligned.txt'));
     expect(x.containers).toHaveLength(2);
-    expect(x.containers[0]).toMatchObject({ containerNumber: { normalized: C1, status: 'valid' }, carrierSeal: { raw: 'SL-44821' }, evidence: 'same_row' });
-    expect(x.containers[1]).toMatchObject({ containerNumber: { normalized: C2 }, carrierSeal: { raw: 'SL-44822' } });
+    expect(x.containers[0]).toMatchObject({ containerNumber: { normalized: C1, status: 'valid' }, shipperSeal: { raw: 'SL-44821' }, evidence: 'same_row' });
+    expect(x.containers[1]).toMatchObject({ containerNumber: { normalized: C2 }, shipperSeal: { raw: 'SL-44822' } });
     expect(x.unassignedSeals).toEqual([]);
   });
 
@@ -77,7 +80,7 @@ describe('containers and seals', () => {
     const x = extractWithRules(fixture('02-unaligned.txt'));
     expect(x.containers.map((container) => container.containerNumber.normalized)).toEqual([C1, C2]);
     for (const container of x.containers) {
-      expect(container.carrierSeal).toBeNull();
+      expect(container.shipperSeal).toBeNull();
       expect(container.evidence).toBeNull();
       expect(container.containerNumber.confidence).toBe('low');
     }
@@ -98,12 +101,12 @@ describe('containers and seals', () => {
   it('pairs a container with the seal on the very next line as one labelled block', () => {
     const x = extractWithRules(fixture('04-booking-confirmation.txt'));
     const third = x.containers.find((container) => container.containerNumber.normalized === C2);
-    expect(third).toMatchObject({ carrierSeal: { raw: 'SL-9' }, evidence: 'same_block' });
+    expect(third).toMatchObject({ shipperSeal: { raw: 'SL-9' }, evidence: 'same_block' });
   });
 
   it('does not treat a seal two lines away as the same block', () => {
     const x = extractWithRules(`Container: ${C1}\n\nUnrelated line\nSeal: SL-1`);
-    expect(x.containers[0]?.carrierSeal).toBeNull();
+    expect(x.containers[0]?.shipperSeal).toBeNull();
     expect(x.unassignedSeals.map((seal) => seal.raw)).toEqual(['SL-1']);
   });
 
@@ -120,7 +123,8 @@ describe('containers and seals', () => {
     const x = extractWithRules(fixture('04-booking-confirmation.txt'));
     expect(x.unassignedSeals.map((seal) => seal.raw)).toEqual(['SL-99001', 'SL-99002']);
     for (const container of x.containers) {
-      expect(container.carrierSeal?.raw).not.toMatch(/SL-9900/);
+      expect(container.carrierSeal?.raw ?? '').not.toMatch(/SL-9900/);
+      expect(container.shipperSeal?.raw ?? '').not.toMatch(/SL-9900/);
     }
   });
 
@@ -128,26 +132,26 @@ describe('containers and seals', () => {
     const x = extractWithRules(`${C1} | Seal No: SL-1\nNote: ${C1} seal: SL-2`);
     expect(x.containers).toHaveLength(1);
     expect(x.containers[0]?.sealConflict).toBe(true);
-    expect(x.containers[0]?.carrierSeal).toBeNull();
+    expect(x.containers[0]?.shipperSeal).toBeNull();
     expect(x.uncertainties.some((item) => item.code === 'seal-conflict' && item.severity === 'error')).toBe(true);
   });
 
   it('is not a conflict when the same seal is stated twice', () => {
     const x = extractWithRules(`${C1} | Seal No: SL-1\nNote: ${C1} seal: SL-1`);
     expect(x.containers[0]?.sealConflict).toBe(false);
-    expect(x.containers[0]?.carrierSeal?.raw).toBe('SL-1');
+    expect(x.containers[0]?.shipperSeal?.raw).toBe('SL-1');
   });
 
   it('flags a container with no seal in the document', () => {
     const x = extractWithRules(`Container: ${C1} Seal: SL-1\nContainer: ${C2}`);
-    expect(x.containers[1]?.carrierSeal).toBeNull();
+    expect(x.containers[1]?.shipperSeal).toBeNull();
     expect(x.uncertainties.some((item) => item.code === 'seal-missing' && item.container === C2)).toBe(true);
   });
 
   it('flags a failed check digit loudly and never corrects it', () => {
     const x = extractWithRules(fixture('03-bad-check-digit.txt'));
     expect(x.containers[0]?.containerNumber).toMatchObject({ raw: 'TGHU7654321', normalized: 'TGHU7654321', status: 'invalid' });
-    expect(x.containers[0]?.carrierSeal?.raw).toBe('SL-1');
+    expect(x.containers[0]?.shipperSeal?.raw).toBe('SL-1');
     const flag = x.uncertainties.find((item) => item.code === 'check-digit');
     expect(flag?.severity).toBe('error');
     expect(flag?.message).toContain('TGHU7654321');
@@ -196,7 +200,7 @@ describe('inputs', () => {
     expect(read.text).not.toContain('<html>');
     const x = extractShipment({ kind: 'file', name: 'booking.eml', mediaType: '', bytes });
     expect(x.containers).toHaveLength(2);
-    expect(x.containers[0]?.carrierSeal?.raw).toBe('SL-44821');
+    expect(x.containers[0]?.shipperSeal?.raw).toBe('SL-44821');
     expect(x.source).toMatchObject({ kind: 'file', name: 'booking.eml', extractor: 'rules-1' });
   });
 

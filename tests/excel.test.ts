@@ -6,6 +6,7 @@ import { ExcelReadError, readWorkbookBytes, sheetByName } from '../src/excel/exc
 import { detectHeaderRow, mapSheetToCanonical, MappingError } from '../src/excel/canonicalMapper.js';
 import { validateShipment } from '../src/excel/validator.js';
 import { specForHeader, TEMPLATE_COLUMNS } from '../src/excel/columnAliases.js';
+import { normalizeUsState } from '../src/ace/transformers/codes.js';
 import type { RawCell } from '../src/excel/excelReader.js';
 
 /** Build an .xlsx in memory so the tests exercise the real parser. */
@@ -302,5 +303,36 @@ describe('validation', () => {
     const { shipment } = importRows([headers, row]);
     const result = validateShipment(shipment);
     expect(result.issues.some((issue) => issue.field === 'containerNumber')).toBe(true);
+  });
+});
+
+describe('Origin State', () => {
+  it('converts a state name to the code ACE wants', () => {
+    expect(normalizeUsState('California').value).toBe('CA');
+    expect(normalizeUsState('texas').value).toBe('TX');
+    expect(normalizeUsState('New York').value).toBe('NY');
+    expect(normalizeUsState('  Washington D.C. ').value).toBe('DC');
+  });
+
+  it('passes a code straight through', () => {
+    expect(normalizeUsState('ca')).toMatchObject({ value: 'CA', transform: null, note: null });
+  });
+
+  it('keeps a two-letter value that is not a state, and says so', () => {
+    const result = normalizeUsState('ZZ');
+    expect(result.value).toBe('ZZ');
+    expect(result.note).toContain('not a US state code');
+  });
+
+  it('does not invent a state from an unknown name', () => {
+    expect(normalizeUsState('Catalonia').note).toContain('not in the local state table');
+  });
+
+  it('is a different column from the consignee state', () => {
+    // BillToState is the consignee address; OriginState is where the goods
+    // come from. The alias tables must not collide.
+    expect(specForHeader('State')?.column).toBe('BillToState');
+    expect(specForHeader('Origin State')?.column).toBe('OriginState');
+    expect(specForHeader('State of Origin')?.column).toBe('OriginState');
   });
 });

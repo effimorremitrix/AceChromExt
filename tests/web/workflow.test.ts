@@ -114,7 +114,8 @@ describe('the whole chain: fixture -> dashboard -> package -> file -> dashboard'
     expect(fillGate(record.pkg!).ok).toBe(true);
     expect(record.pkg?.header.bookingReference).toMatchObject({ value: 'EBKG18531408', source: 'deckhand', confirmedBy: 'quickbooks' });
     expect(record.pkg?.containers.map((container) => container.containerNumber.value)).toEqual(['MSCU1234566', 'MSDU7654322', 'TGHU7654320']);
-    expect(record.pkg?.containers.map((container) => container.carrierSeal.value)).toEqual(['SL-4471209', 'SL-4471210', 'SL-9']);
+    expect(record.pkg?.containers.map((container) => container.carrierSeal.value)).toEqual(['SL-4471209', 'SL-4471210', '']);
+    expect(record.pkg?.containers.map((container) => container.shipperSeal.value)).toEqual(['SH-001', '', 'SL-9']);
 
     const json = packageText(record)!;
     expect(packageFileName(record)).toBe('filing-package-CN-1042_EBKG18531408.json');
