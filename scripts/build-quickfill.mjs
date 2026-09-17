@@ -2,6 +2,14 @@
  * Builds the Quickfill Helper into dist-quickfill/.
  *
  *   npm run build:quickfill
+ *   npm run build:quickfill:playground   (--playground: dist-quickfill-playground/)
+ *
+ * The playground build is the same bundles under a manifest that matches
+ * pages opened from disk and from localhost only, never a portal, with the
+ * four mock AESDirect steps and the example workbook written beside it
+ * (scripts/playground.mjs). It is how an operator practises a fill without
+ * a portal, and it can never be mistaken for the real build: a different
+ * name on the card, no host permission at all.
  *
  * A third, separate unpacked extension. It is deliberately not a mode inside
  * either of the other two: it is the only one of the three that asks for both
@@ -16,6 +24,7 @@
 
 import { build, context } from 'esbuild';
 import { buildVersionName } from './buildStamp.mjs';
+import { PLAYGROUND_MATCHES, writePlayground } from './playground.mjs';
 import { cpSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,8 +32,9 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const source = join(root, 'quickfill-extension');
-const dist = join(root, 'dist-quickfill');
 const watch = process.argv.includes('--watch');
+const playground = process.argv.includes('--playground');
+const dist = join(root, playground ? 'dist-quickfill-playground' : 'dist-quickfill');
 
 const CLASSIC_ENTRIES = {
   quickfillContent: 'quickfill-extension/src/content/quickfillContent.ts',
@@ -49,7 +59,18 @@ function copyStatic() {
   manifest.version = pkg.version;
   // ...and stamp the build (git commit + time) so a loaded build can be told apart.
   manifest.version_name = buildVersionName(pkg.version, root);
+  if (playground) {
+    manifest.name = 'Quickfill Helper (playground)';
+    manifest.action.default_title = 'Quickfill Helper (playground)';
+    manifest.description = 'Practice build: runs only on pages opened from disk or from localhost, never on ACE or INTTRA. Paste the example rows and fill the four mock steps in playground/.';
+    delete manifest.host_permissions;
+    for (const script of manifest.content_scripts) script.matches = [...PLAYGROUND_MATCHES];
+  }
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  if (playground) {
+    const files = writePlayground(join(dist, 'playground'), { fixtures: join(root, 'tests', 'fixtures'), stamp: manifest.version_name });
+    console.log(`  playground/: ${files.join(', ')}`);
+  }
 }
 
 function optionsFor(entries, format) {
@@ -84,6 +105,11 @@ async function run() {
   for (const name of [...Object.keys(CLASSIC_ENTRIES), ...Object.keys(MODULE_ENTRIES)]) {
     const size = statSync(join(dist, `${name}.js`)).size;
     console.log(`  ${name}.js  ${(size / 1024).toFixed(1)} kB`);
+  }
+  if (playground) {
+    console.log(`\nQuickfill playground ready: ${dist}`);
+    console.log('Load it with chrome://extensions -> Developer mode -> Load unpacked, allow access to file URLs on its card, then open playground/step1-shipment.html.');
+    return;
   }
   console.log(`\nUnpacked Quickfill Helper ready: ${dist}`);
   console.log('Load it with chrome://extensions -> Developer mode -> Load unpacked.');

@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import { ExcelReadError, readWorkbookBytes, sheetByName } from '../src/excel/excelReader.js';
@@ -8,6 +6,7 @@ import { validateShipment } from '../src/excel/validator.js';
 import { specForHeader, TEMPLATE_COLUMNS } from '../src/excel/columnAliases.js';
 import { normalizeUsState } from '../src/ace/transformers/codes.js';
 import type { RawCell } from '../src/excel/excelReader.js';
+import { COLUMNS as GENERATED_COLUMNS, EXAMPLE_ROWS } from '../scripts/templateData.mjs';
 
 /** Build an .xlsx in memory so the tests exercise the real parser. */
 function workbookBytes(rows: unknown[][], sheetName = 'Shipment'): Uint8Array {
@@ -94,12 +93,11 @@ describe('column aliases', () => {
   });
 
   it('keeps the template generator on the same column list', () => {
-    // scripts/generate-template.mjs cannot import TypeScript, so it carries
-    // its own copy of the column list. This is what stops the two drifting.
-    const script = readFileSync(join(__dirname, '..', 'scripts', 'generate-template.mjs'), 'utf8');
-    const match = /const COLUMNS = \[([^\]]+)\]/.exec(script);
-    const generated = (match?.[1] ?? '').match(/'([A-Za-z0-9]+)'/g)?.map((name) => name.replace(/'/g, '')) ?? [];
-    expect(generated).toEqual([...TEMPLATE_COLUMNS]);
+    // scripts/templateData.mjs cannot import TypeScript, so it carries its
+    // own copy of the column list, read by the template generator and by the
+    // Quickfill playground. This is what stops the copies drifting.
+    expect(GENERATED_COLUMNS).toEqual([...TEMPLATE_COLUMNS]);
+    for (const row of EXAMPLE_ROWS) expect(Object.keys(row)).toEqual([...TEMPLATE_COLUMNS]);
   });
 
   it('accepts the split consignee address columns and the live ACE wordings', () => {

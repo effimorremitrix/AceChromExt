@@ -31,6 +31,7 @@ tab and no per-field report. Paste, click, look at the form, submit.
 3. [What it drops, and what that costs](#3-what-it-drops-and-what-that-costs)
 4. [How it shares code with the other two](#4-how-it-shares-code-with-the-other-two)
 5. [Build, check, install](#5-build-check-install)
+5a. [Practising without the portal: the playground](#5a-practising-without-the-portal-the-playground)
 6. [What is not verified](#6-what-is-not-verified)
 7. [The dashboard, and why nothing was added to it](#7-the-dashboard-and-why-nothing-was-added-to-it)
 
@@ -177,6 +178,7 @@ versa.
 | --- | --- |
 | `npm run build:quickfill` | build `dist-quickfill/` |
 | `npm run build:quickfill:watch` | rebuild on change |
+| `npm run build:quickfill:playground` | build `dist-quickfill-playground/`, the practice build (section 5a) |
 | `npm run check:bundle:quickfill` | supply-chain check on the built bundle, allowing only `cbp.dhs.gov`, `inttra.com`, `e2open.com` |
 | `npm run icons:quickfill` | regenerate the committed icons (amber, "Q") |
 | `npm test -- tests/quickfill.test.ts tests/quickfillPopup.test.ts tests/quickfillInvariants.test.ts` | its own tests: the four paste shapes and both fills against real fixtures, the popup in jsdom, the invariants |
@@ -186,6 +188,44 @@ Install: `chrome://extensions` → Developer mode → **Load unpacked** →
 `dist-quickfill/`. It can be installed beside the other two; the three are
 independent extensions with independent storage, and the amber "Q" tells them
 apart in the toolbar.
+
+## 5a. Practising without the portal: the playground
+
+`npm run build:quickfill:playground` (in CI, the `quickfill-playground-unpacked`
+artifact) writes `dist-quickfill-playground/`: the same three bundles under a
+manifest that matches **pages opened from disk and from localhost only**, with
+no host permission at all, and beside them a `playground/` folder holding the
+four AESDirect steps as pages, the example workbook and a README. The card in
+`chrome://extensions` reads "Quickfill Helper (playground)", so it cannot be
+mistaken for the real build, and it cannot open a portal page, so nothing can
+be filed from it.
+
+The four pages are `tests/fixtures/ace-*.html` wrapped at build time
+(`scripts/playground.mjs`): the real labels and the six ids captured from the
+live portal, tabs that link the four files, and mock buttons (Save shows a note,
+Add New Line empties the line so "Fill line" can be practised for line 2).
+There is no second copy of a screen to drift from the one the tests run
+against. The workbook is the template's worked example
+(`scripts/templateData.mjs`, shared with `npm run template`): one sheet, the
+header row and two lines, so select-all and copy is exactly the paste.
+
+To practise: load the folder unpacked, turn on **Allow access to file URLs**
+on its card (without it the helper cannot see a page opened from disk), open
+`playground/step1-shipment.html`, paste the workbook rows into the box (`Read
+as: spreadsheet rows · 2 lines`), and press **Fill this page**; then the other
+three steps through the tabs, and on Step 3 **Fill line**, **Add New Line**,
+**Fill line** again for line 2. The popup recognises a step by its content
+(the step tabs, the headings), which is what lets it work on a file: on the
+live portals nothing changes, because no INTTRA screen carries ACE's "Step N:"
+tabs.
+
+What it proves: the paste is read, the mapping tables find the fields by the
+captured labels and ids, and the values are transformed on the way (the date
+to MM/DD/YYYY, pounds to whole kilograms, codes upper-cased). What it does
+not: the live dropdowns are Select2 widgets and the playground's are plain
+selects; twenty of the twenty-six fields still match by label wording only;
+ACE's own validation is absent. A fill that works here is the mechanics
+working, not the portal.
 
 ## 6. What is not verified
 
