@@ -27,7 +27,7 @@ import { DEFAULT_SETTINGS } from '../../../src/core/settings.js';
 import type { FillReport } from '../../../src/models/AceField.js';
 import { detectInttraPage } from '../../../inttra-extension/src/content/pageDetector.js';
 import { fillInttraFields } from '../../../inttra-extension/src/content/filler.js';
-import { fillContainerGrid } from '../../../inttra-extension/src/content/gridWriter.js';
+import { detectGrid, fillContainerGrid } from '../../../inttra-extension/src/content/gridWriter.js';
 import type { InttraFillReport } from '../../../inttra-extension/src/models/InttraField.js';
 import type { FillCount, QuickfillContentRequest, QuickfillContentResponse, Where } from '../core/messages.js';
 
@@ -46,6 +46,23 @@ function where(): Where {
     }
     return { portal: 'ace', label: page.label, hasLines: page.page === 'commodities', isGrid: false };
   }
+
+  // The container grid is evidence, and it outranks the step strip.
+  //
+  // Copy Container Details is a MODAL over whichever step the operator was on
+  // (observed on the live portal on 2026-09-17 at
+  // ship.inttra.e2open.com/siact/siworkspace#/create/<id>). The step strip
+  // behind the overlay still reports that underlying step, so asking the strip
+  // "which screen is this?" answers about the page the operator is no longer
+  // looking at - on the first live run it said "B/L Documents" while a
+  // container grid filled the screen. Detecting the grid itself cannot make
+  // that mistake: if a container grid is on the page, the grid is what there is
+  // to fill.
+  const grid = detectGrid(document);
+  if (grid.found) {
+    return { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true };
+  }
+
   const screen = detectInttraPage(document);
   if (screen.page === 'unknown' || screen.confidence === 'none') {
     return { portal: 'none', label: 'This INTTRA page is not one of the Shipping Instructions screens.', hasLines: false, isGrid: false };
@@ -117,6 +134,9 @@ function handleMessage(message: QuickfillContentRequest): QuickfillContentRespon
     }
 
     case 'content/fillGrid': {
+      if (!detectGrid(document).found) {
+        return { ok: false, error: 'No container grid is on this screen, so nothing was filled. Open Copy Container Details.' };
+      }
       const report = fillContainerGrid(message.package, {
         doc: document,
         overwrite: true,

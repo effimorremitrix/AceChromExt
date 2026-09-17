@@ -90,6 +90,31 @@ async function paste(box: HTMLTextAreaElement, value: string): Promise<void> {
   await settle();
 }
 
+describe('where(): the grid outranks the step strip', () => {
+  // Reproduces the live portal on 2026-09-17: Copy Container Details is a
+  // MODAL over another step, so the step strip behind it still reports that
+  // step. On the first live run the popup said "B/L Documents" while a
+  // container grid filled the screen.
+  const MODAL_OVER_ANOTHER_STEP = [
+    '<nav><a class="nav-link active">B/L Documents</a></nav>',
+    '<div role="dialog"><h2>Copy Container Details</h2>',
+    '<table><tr><th>Container Number</th><th>Carrier Seal #</th><th>Shipper Seal #</th><th>HS Code</th></tr>',
+    '<tr><td><input name="r0.container" /></td><td><input name="r0.carrier" /></td><td><input name="r0.shipper" /></td><td><input name="r0.hs" /></td></tr>',
+    '</table></div>',
+  ].join('');
+
+  it('reports the grid, not the step behind the modal', async () => {
+    const { detectInttraPage } = await import('../inttra-extension/src/content/pageDetector.js');
+    const { detectGrid } = await import('../inttra-extension/src/content/gridWriter.js');
+    document.body.innerHTML = MODAL_OVER_ANOTHER_STEP;
+
+    // The step strip is wrong, and that is exactly why it cannot be trusted.
+    expect(detectInttraPage(document).page).not.toBe('copyContainerDetails');
+    // The grid is present, and that is what there is to fill.
+    expect(detectGrid(document).found).toBe(true);
+  });
+});
+
 describe('the popup', () => {
   it('renders one box and nothing to click until something is pasted', async () => {
     const box = await mount();

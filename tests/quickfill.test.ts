@@ -157,6 +157,76 @@ describe('what Quickfill drops, on purpose', () => {
   });
 });
 
+describe('the first live paste, 2026-09-17', () => {
+  // The container manifest the office actually works from, as pasted into
+  // Quickfill on the live INTTRA portal. It is tabular, so the ladder sent it
+  // to the invoice reader, which correctly reported no commodity rows - and
+  // the paste was thrown away. Deckhand reads this exact shape.
+  const MANIFEST = [
+    ['GALCO', 'Container #', 'LOT#:', 'SEAL#', 'BOOKING#', 'VARIETY', 'CONSIGNEE'],
+    ['3994', 'TLLU7564971', 'PK00181', 'UL-8546727', 'EBKG18531463', 'CA STD 5%', 'Aydin Kuruyemis'],
+    ['4000', 'TGBU7182073', 'PK00183', 'UL-8546730', 'EBKG18531463', 'CT18/20 SSR', 'Aydin Kuruyemis'],
+    ['4000.01', 'MSDU7542282', 'PK00190', 'UL-8546728', 'EBKG18531463', 'CT18/20 SSR', 'Aydin Kuruyemis'],
+    ['3999', 'UETU7528305', 'PK00182', 'UL-8546729', 'EBKG18592770', 'CT18/20HS #1', 'Aydin Kuruyemis'],
+  ].map((row) => row.join('\t')).join('\n');
+
+  it('reads a container manifest that is not an invoice', () => {
+    const result = parsed(MANIFEST);
+    expect(result.kind).toBe('containers');
+    expect(result.pkg.containers.map((container) => container.containerNumber.value)).toEqual([
+      'TLLU7564971',
+      'TGBU7182073',
+      'MSDU7542282',
+      'UETU7528305',
+    ]);
+  });
+
+  it('keeps each seal with its own container', () => {
+    // The whole reason Deckhand exists. The SEAL# column is unattributed, so
+    // it is the shipper's, which is the column the INTTRA grid wants.
+    const result = parsed(MANIFEST);
+    expect(result.pkg.containers.map((container) => container.shipperSeal.value)).toEqual([
+      'UL-8546727',
+      'UL-8546730',
+      'UL-8546728',
+      'UL-8546729',
+    ]);
+    expect(result.pkg.containers.every((container) => container.status === 'valid')).toBe(true);
+  });
+
+  it('says what it read, in one line', () => {
+    expect(parsed(MANIFEST).summary).toBe('container table \u00b7 4 containers');
+  });
+
+  it('claims no booking when the table spans two of them', () => {
+    // This manifest carries EBKG18531463 on three rows and EBKG18592770 on the
+    // fourth. A shipping instruction is per booking, so picking one would be a
+    // guess about which containers belong to this filing - and not guessing is
+    // the one thing Quickfill kept. The operator sees "4 containers" with no
+    // booking and splits the paste themselves.
+    expect(parsed(MANIFEST).pkg.header.bookingReference.value).toBe('');
+  });
+
+  it('fills the container grid from it', () => {
+    document.body.innerHTML = html('inttra-container-grid-aria');
+    const report = fillContainerGrid(parsed(MANIFEST).pkg, { doc: document, overwrite: true });
+    expect(report.rowsNeeded).toBe(4);
+    expect(report.failed).toBe(0);
+    expect(report.containersFilled).toBeGreaterThan(0);
+  });
+
+  it('still prefers the invoice reader when the rows really are an invoice', () => {
+    // The fallthrough must not swallow the rows branch.
+    expect(parsed(ROWS).kind).toBe('rows');
+  });
+
+  it('reports the invoice reader\u2019s message when neither can read the paste', () => {
+    const nonsense = ['alpha\tbeta\tgamma', 'one\ttwo\tthree'].join('\n');
+    const result = parsePaste(nonsense, NOW);
+    expect(isFailure(result)).toBe(true);
+  });
+});
+
 describe('one paste fills ACE', () => {
   it('fills the Transportation step from the email alone', () => {
     document.body.innerHTML = html('ace-transportation');
