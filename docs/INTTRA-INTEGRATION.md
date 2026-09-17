@@ -215,9 +215,27 @@ tables are on the page, and whether it is a modal or a step. Ties go to the
 innermost candidate so a grid nested in a layout table is not beaten by its
 wrapper. Both extensions get this, because they share `gridWriter.ts`.
 
-Still not captured, and still placeholders: every field selector, the grid root
-selector, and the cell elements. Section 6 remains the procedure - heading
-matching makes the grid findable, not the individual cells certain.
+**A third run settled the cells: they cannot be typed into.** With the grid
+found, `Fill container grid` reported `Filled 0 of 9`, every cell unresolved -
+`resolveInttraControl` found no writable control in any of them. The grid holds
+no input until a cell is clicked; it opens an editor then. No selector fixes
+that, because until the click there is nothing in the DOM to select.
+
+The way in is the one the screen is named after. **Copy Container Details
+exists to have a block of rows pasted into it**, and `gridRowsAsTsv` already
+produces exactly that block - now in the grid's own column order, because the
+grid is detected. So Quickfill offers **Copy rows** beside Fill container grid,
+and says to use it when every cell comes back unresolved. The INTTRA Helper has
+had the same button since before any of this; Quickfill was the one missing it.
+
+This is the screen used as intended rather than a workaround, and it keeps the
+policy intact: the helper puts rows on the clipboard, the operator clicks the
+cell and presses paste. Nothing is pressed on their behalf.
+
+Still not captured, and still placeholders: every field selector on the other
+screens, and the grid's cell editors. Section 6 remains the procedure. Capturing
+a cell *while it is being edited* is what would make typing into the grid
+possible; until then, pasting is not a fallback but the route.
 
 ## 6. The live procedure: capturing the real selectors
 
