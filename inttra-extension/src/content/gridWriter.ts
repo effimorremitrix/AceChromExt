@@ -96,8 +96,56 @@ function describeCandidate(index: number): string {
   return candidate?.selector ?? `candidate ${index}`;
 }
 
-/** Find the grid root: the first candidate that resolves to exactly one visible element. */
-export function findGridRoot(doc: ParentNode): { root: Element | null; matchedWith: string | null; attempts: GridDetection['attempts'] } {
+/** Anything on the page that could structurally be a grid. */
+const GRID_SHAPED = 'table, [role="grid"], [role="treegrid"]';
+
+/**
+ * The grid, identified by its own column headings.
+ *
+ * This is the fallback that matters on the real portal. The selector ladder
+ * above asks "is there exactly one element matching this guess?", and on
+ * ship.inttra.e2open.com the answer is no for every rung: the ids and
+ * attributes are not the guessed ones, and the last-resort `table` matches
+ * several, because the Copy Container Details grid is a modal drawn over a
+ * workspace that has tables of its own. Requiring exactly one match then
+ * rejects the page's only real grid (observed 2026-09-17: the popup offered
+ * "Fill this screen" for the step behind the modal because no grid was found).
+ *
+ * Headings do not have that problem. A container grid is the thing whose
+ * header row says Container Number, and GRID_COLUMNS already carries the
+ * aliases for every column we fill. So every grid-shaped element is scored by
+ * how many of those columns its header row identifies, and the best-scoring
+ * one wins - provided it has a Container Number column, which is what makes it
+ * a container grid rather than some other table.
+ *
+ * Ties go to the innermost candidate, because a grid nested inside a layout
+ * table would otherwise be beaten by its own wrapper.
+ */
+export function findGridByHeadings(
+  doc: ParentNode,
+  columns: GridColumnSpec[] = GRID_COLUMNS,
+): { root: Element | null; score: number } {
+  const candidates = safeQueryAll(doc, GRID_SHAPED).filter((element) => isInttraVisible(element));
+  let best: { root: Element; score: number; depth: number } | null = null;
+
+  for (const root of candidates) {
+    const headers = identifyHeaders(readGridShape(root).headerCells, columns);
+    const identified = headers.map((header) => header.column).filter((key): key is string => key !== null);
+    if (!identified.includes('ContainerNumber')) continue;
+    const depth = safeQueryAll(root, GRID_SHAPED).length;
+    const better = !best || identified.length > best.score || (identified.length === best.score && depth < best.depth);
+    if (better) best = { root, score: identified.length, depth };
+  }
+
+  return best ? { root: best.root, score: best.score } : { root: null, score: 0 };
+}
+
+/**
+ * Find the grid root: the first candidate that resolves to exactly one visible
+ * element, and failing that the grid-shaped element whose headings say it is a
+ * container grid.
+ */
+export function findGridRoot(doc: ParentNode, columns: GridColumnSpec[] = GRID_COLUMNS): { root: Element | null; matchedWith: string | null; attempts: GridDetection['attempts'] } {
   const attempts: GridDetection['attempts'] = [];
   for (let index = 0; index < GRID_ROOT_CANDIDATES.length; index += 1) {
     const candidate = GRID_ROOT_CANDIDATES[index];
@@ -106,6 +154,13 @@ export function findGridRoot(doc: ParentNode): { root: Element | null; matchedWi
     attempts.push({ query: candidate.selector, matches: matches.length });
     if (matches.length === 1) return { root: matches[0] as Element, matchedWith: describeCandidate(index), attempts };
   }
+
+  const byHeadings = findGridByHeadings(doc, columns);
+  attempts.push({ query: `${GRID_SHAPED} with a Container Number heading`, matches: byHeadings.root ? 1 : 0 });
+  if (byHeadings.root) {
+    return { root: byHeadings.root, matchedWith: `headings: ${byHeadings.score} of ${columns.length} columns identified`, attempts };
+  }
+
   return { root: null, matchedWith: null, attempts };
 }
 
@@ -170,7 +225,7 @@ function identifyHeaders(headerCells: Element[], columns: GridColumnSpec[]): Gri
 }
 
 export function detectGrid(doc: ParentNode, columns: GridColumnSpec[] = GRID_COLUMNS): GridDetection & { root: Element | null; shape: GridShape | null } {
-  const { root, matchedWith, attempts } = findGridRoot(doc);
+  const { root, matchedWith, attempts } = findGridRoot(doc, columns);
   if (!root) {
     return { found: false, matchedWith: null, kind: 'unknown', headers: [], missingColumns: columns.map((spec) => spec.key), rowCount: 0, attempts, root: null, shape: null };
   }

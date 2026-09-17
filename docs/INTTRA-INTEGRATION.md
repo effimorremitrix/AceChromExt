@@ -199,8 +199,25 @@ and lets the presence of a grid settle the matter. `detectInttraPage` is
 unchanged and still wrong about this screen; a capture per section 6 is what
 would fix it there.
 
-Still not captured, and still placeholders: every field selector, the grid root,
-and the cell elements. Section 6 remains the procedure.
+**A second run, same day, found the next layer.** With the paste fixed, the
+popup still offered "Fill this screen" for the step behind the modal: the grid
+was never found. `GRID_ROOT_CANDIDATES` asks "is there exactly one element
+matching this guess?", and on this workspace every rung fails - the guessed ids
+and attributes are not there, and the last-resort `table` matches several,
+because the modal is drawn over a workspace that has tables of its own.
+Requiring exactly one match therefore rejected the page's only real grid.
+
+`findGridByHeadings` is the fallback: every grid-shaped element on the page is
+scored by how many `GRID_COLUMNS` its header row identifies, and the best one
+wins provided it has a Container Number column. A container grid is the thing
+whose headings say so, which is true whatever the ids are, however many other
+tables are on the page, and whether it is a modal or a step. Ties go to the
+innermost candidate so a grid nested in a layout table is not beaten by its
+wrapper. Both extensions get this, because they share `gridWriter.ts`.
+
+Still not captured, and still placeholders: every field selector, the grid root
+selector, and the cell elements. Section 6 remains the procedure - heading
+matching makes the grid findable, not the individual cells certain.
 
 ## 6. The live procedure: capturing the real selectors
 
