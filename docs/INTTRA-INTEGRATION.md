@@ -110,9 +110,19 @@ grid's own order, so one paste fills them ("The paste block", below).
 
 `fillContainerGrid(package)`:
 
-- finds the grid root through `GRID_ROOT_CANDIDATES` (placeholders, then
-  structural fallbacks: any ARIA grid, a table that calls itself a grid, the
-  only table on the page);
+- finds the grid root through `GRID_ROOT_CANDIDATES` (the two captured ids,
+  then placeholders and structural fallbacks: any ARIA grid, a table that
+  calls itself a grid, the only table on the page); failing every rung, the
+  grid-shaped element whose headings say it is a container grid
+  (`findGridByHeadings`); and failing that, the header row found by its
+  **wording alone**, whatever it is built from (`findHeaderRowByText`): from
+  the words "Container Number" wherever they appear as visible text, climbing
+  to the smallest row of cells that identifies that column and at least one
+  more. The live grid is neither a table nor an ARIA grid (section 5a, fifth
+  run), so that last rung is the one that finds it. A grid found that way is
+  read as a `divGrid`: its rows are the visible elements under the header
+  row's ancestors with exactly as many cells as the header has. Open shadow
+  roots are searched; a form row of labels over inputs never counts;
 - reads the **header row** and identifies each column by its heading text
   against the aliases in `GRID_COLUMNS`. A heading that is a dropdown (the
   two seal headings on the live portal are `<select>`s of seal types) is read
@@ -228,7 +238,7 @@ marked `verified(...)`. What it settles:
 | Hostname | unconfirmed | **`ship.inttra.e2open.com`** - already covered by the manifest's `https://*.e2open.com/*`, which is why the content script loaded at all |
 | URL shape | unknown | `/siact/siworkspace#/create/<numeric id>`. Note it carries **no screen name**, so `urlHints` can contribute nothing on this portal |
 | Copy Container Details | assumed to be a step | a **MODAL** over whichever step the operator was on |
-| Its grid headings | guessed | `Container Number`, `Carrier Seal #`, `Shipper Seal #`, ..., `HS Code`, read off the screen and matched by `GRID_COLUMNS` header aliases. The two seal headings are **dropdowns** of seal types (confirmed by the operator on the fourth run, below); their outerHTML is still uncaptured |
+| Its grid headings | guessed | `Container Number`, `Carrier Seal #`, `Shipper Seal #`, ..., `HS Code`, read off the screen and matched by `GRID_COLUMNS` header aliases. The two seal headings are **dropdowns** of seal types (confirmed by the operator on the fourth run, below); their outerHTML is still uncaptured. The grid itself is **neither a `<table>` nor an ARIA grid** (fifth run, below), so it is found by the wording of its header row |
 | Its buttons | unknown | `Create Containers`, `Reset`, `Cancel`. The helper presses none of them |
 
 **The consequence, and the fix already made.** Because the grid is a modal, the
@@ -356,6 +366,60 @@ grid's cell editors. Section 6 remains the procedure. Capturing a cell *while
 it is being edited* is what would make typing into the grid possible; until
 then, pasting is not a fallback but the route.
 
+**A fifth run, same day, with the fourth run's fix in the build** (`build
+0.1.0+bd7334c`, confirmed in the header). Modal open, rows added, grid empty.
+The INTTRA Helper's pill read "INTTRA screen not identified"; its Copy rows
+fell back to the default column order and said so; the paste still lined up,
+because the default order (Container Number, Carrier Seal #, Shipper Seal #)
+is the live grid's first three columns. Quickfill, on the same screen, read
+the paste and then offered **nothing**: "This INTTRA page is not one of the
+Shipping Instructions screens." The difference between the two helpers was
+the fallback, not the detection: neither had found the grid.
+
+Diagnostics said why, rung by rung: every selector rung 0, `table` **2**,
+"with a Container Number heading" **0**. Two tables were visible to the
+helper and neither was the grid, and neither captured id held a table. The
+merged bundle was then run in a real Chromium against three mocks of the
+modal (a plain table with the seal dropdowns; an `editableGrid`-style header
+with a table inside every heading cell; a header table over a body table): it
+found all three, so the code was not the cause, and neither was visibility
+(`checkVisibility` answered true). What remains is the markup: the grid the
+operator pastes into is **not a `<table>` and not an ARIA grid**, so nothing
+that looked for one ever looked at it. The third run's "grid found" was most
+likely another table, one this shipment does not have. Whether the captured
+ids hold the grid, or hold nothing on this modal, the screenshot could not
+say.
+
+Three changes:
+
+- the grid is found by the **wording of its header row**, whatever it is
+  built from (`findHeaderRowByText`, section 3): from the words "Container
+  Number" wherever they appear as visible text, the smallest row of cells
+  around them that identifies that column and at least one more is the
+  header row, and a grid found that way is read as a `divGrid`. Open shadow
+  roots are searched too. A form row of labels over inputs (the Container &
+  Cargo step) is never taken for one. The detector, both content scripts and
+  the grid writer go through `findContainerGrid`, so the pill, the buttons
+  and the paste block still agree;
+- Quickfill offers **Copy rows alone** on an INTTRA page it cannot name, in
+  the default column order, and its result line says so; the INTTRA Helper
+  already did. Nothing else is offered there, because nothing else can be
+  filled without a screen;
+- Diagnostics carries a **Page structure** block (`structureProbe.ts`): which
+  frame answered and the frames inside it, whether each captured id is
+  absent, hidden or visible, and for the words "Container Number" wherever
+  they appear as text, the chain of elements above them and the cells beside
+  them at each level, read as headings would be. Every grid rung now also
+  says how many elements it matched before the visibility filter. Together
+  these are the capture that section 6 asks for, without DevTools, which the
+  operator's browser refuses to paste into.
+
+If the wording rung takes on the live grid, both helpers name it Copy
+Container Details and paste in its order; if it does not, Copy rows still
+works in the default order, and the Page structure block says what the grid
+is made of, which is the next thing to read. The rung has run against mocks
+of that shape only.
+
 ## 6. The live procedure: capturing the real selectors
 
 Do this once, on the first attended session, with a Shipping Instruction open
@@ -377,8 +441,13 @@ Details, Print Instructions, B/L Documents, Notification Emails):
 
 **For Copy Container Details**, in this order:
 
-1. the grid root element (the outermost `<table>`, or the element with
-   `role="grid"`);
+1. the grid root element. It is not a `<table>` and not an element with
+   `role="grid"` (section 5a, fifth run): run **Diagnostics** first and read
+   its **Page structure** block, which names the chain of elements above the
+   words "Container Number" and the cells beside them at each level; the
+   level whose cells read Container Number, Carrier Seal #, Shipper Seal #
+   is the header row, and the element two levels above it is a good root to
+   copy. **Copy diagnostics** puts the whole block on the clipboard;
 2. the header row, with every column heading, including the two seal-type
    dropdowns: the whole `<select>` with all its `<option>`s and which one is
    selected;
@@ -431,12 +500,15 @@ the way that grid gets filled.
 - Every field selector on every screen.
 - Whether dropdowns are native `<select>`s or widgets; whether ports are
   type-ahead controls and what a typed value does to them.
-- The grid: its header row's outerHTML (the seal headings are dropdowns), its
-  cell editors, row addition, and paste behaviour beyond the one paste that
-  took. Also a trade-off in detection: any visible table headed Container
-  Number now reads as Copy Container Details, so a Container & Cargo screen
-  that listed containers in a table would too; nothing is lost while its field
-  selectors are placeholders, but it wants checking on the live screen.
+- The grid: what it is built from (not a table and not an ARIA grid, and the
+  wording rung that finds such a grid has run only against mocks), its header
+  row's outerHTML (the seal headings are dropdowns), its cell editors, row
+  addition, and paste behaviour beyond the one paste that took. Also a
+  trade-off in detection: any visible row of headings that says Container
+  Number beside another known column now reads as Copy Container Details,
+  table or not, so a Container & Cargo screen that listed containers that way
+  would too; nothing is lost while its field selectors are placeholders, but
+  it wants checking on the live screen.
 - Whether INTTRA's own validation accepts a value written through the native
   setter plus `input`/`change`, or wants a key event sequence; the writer
   dispatches `keyup` as well, and the read-back will say if a value was

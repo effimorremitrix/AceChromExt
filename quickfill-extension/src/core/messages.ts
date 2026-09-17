@@ -28,6 +28,15 @@ export interface Where {
    * button that should come first.
    */
   gridWritable: boolean;
+  /**
+   * True on an INTTRA page the detector could not identify. Nothing can be
+   * filled there, but Copy rows still puts the container block on the
+   * clipboard in the default column order, for the operator who is looking
+   * at Copy Container Details when the helper is not (fifth live run,
+   * 2026-09-17: the grid was neither a table nor an ARIA grid, and the popup
+   * offered nothing at all).
+   */
+  copyRowsOnly?: boolean;
 }
 
 export type QuickfillContentRequest =

@@ -96,7 +96,12 @@ Shipping Instructions screen, and on the container grid **Copy rows** and
 typed into (the live portal's cannot). After Copy rows the result line names
 the columns pasted, in the grid's own order, and any left blank because no
 package column matches the heading, so the operator can see the seal is in the
-block before pasting it.
+block before pasting it. On an INTTRA page the detector cannot name, **Copy
+rows** alone, in the default column order (Container Number, Carrier Seal #,
+Shipper Seal #, ...), and the result line says the order is the default one.
+The fifth live run (2026-09-17) is why: the grid was of a shape the detector
+had never been shown, and a popup that offered nothing there left the operator
+with the one helper that had the fallback.
 
 `quickfill-extension/src/paste.ts` is pure - no DOM, no `chrome.*` - so the
 whole input path is unit-testable without a browser, and
@@ -197,9 +202,12 @@ Quickfill inherits `README.md`'s caveats whole and resolves none of them.
 3. **INTTRA:** every FIELD selector in `inttra-extension/src/mappings/` is a
    placeholder. Captured live on 2026-09-17: the hostname
    `ship.inttra.e2open.com`, the Copy Container Details modal root and the
-   grid container, so that screen identifies itself and its grid is found.
-   Its cells are `editableGrid` ones that hold no control until clicked, so
-   there the route is **Copy rows** and paste, not Fill. On the live portal
+   grid container; on the fifth run that day neither held a table in the
+   document that answered, so the screen is identified by its grid, found by
+   the wording of its header row whatever it is built from, a rung that has
+   run against mocks only. Its cells are `editableGrid` ones that hold no
+   control until clicked, so there the route is **Copy rows** and paste, not
+   Fill. On the live portal
    Quickfill
    will currently fill **nothing** there. Building it now is still right - the
    mapping tables are the thing that needs capturing, and they are shared - but
@@ -217,7 +225,14 @@ Quickfill inherits `README.md`'s caveats whole and resolves none of them.
    the pasted row instead of pasted blank, so the seals were pasted nowhere.
    See `docs/INTTRA-INTEGRATION.md` section 5a. Every build now carries a
    stamp (`build <version>+<commit>.<time>` in the popup header), because that
-   run could not at first tell which build was loaded. The trade-offs in
+   run could not at first tell which build was loaded. A fifth run, with those
+   fixes loaded, found that neither helper found the grid at all: it is
+   neither a table nor an ARIA grid, and Quickfill offered nothing while the
+   INTTRA Helper fell back to the default column order. The grid is now found
+   by the wording of its header row, Quickfill offers Copy rows alone on an
+   INTTRA page it cannot name, and the INTTRA Helper's Diagnostics describes
+   the page's structure for the capture. None of that has run on the live
+   portal yet. The trade-offs in
    section 3 have still never been tested against an operator in a hurry,
    which is exactly the condition under which dropping the checks matters
    most.

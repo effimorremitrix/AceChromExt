@@ -115,8 +115,10 @@ plus a smoke test that drives a real Chromium with a mocked ACE host.
    identifies the screen (a later run that day showed the captured ids alone
    were not enough); its seal headings are dropdowns, read by the option they
    show, and the paste block carries one cell per grid column so it lines up.
-   The grid's header row is still to be captured. The mechanics are tested;
-   the field selectors are not.
+   The grid's header row is still to be captured, and a fifth run showed the
+   grid to be neither a table nor an ARIA grid; it is now found by the wording
+   of its header row, tested against mocks only. The mechanics are tested; the
+   field selectors are not.
    **[docs/INTTRA-INTEGRATION.md](docs/INTTRA-INTEGRATION.md) section 5a**
    **[docs/INTTRA-INTEGRATION.md](docs/INTTRA-INTEGRATION.md) section 6** is
    the capture procedure. Deckhand likewise has been shown fixtures, not a

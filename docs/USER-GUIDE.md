@@ -466,7 +466,9 @@ Quickfill alike.
    clipboard: how many rows, the columns in the grid's own order, and any
    column left blank because no package column matches its heading. If it
    says the default order was used, the grid was not found: open Copy
-   Container Details in INTTRA and copy again.
+   Container Details in INTTRA and copy again. If it still says so with the
+   modal open, check the default order against the grid's headings and paste
+   anyway; then see section 8.
 4. In INTTRA, click the **first Container Number cell of the first empty
    row** and press **Ctrl+V**. The block starts at Container Number and has
    one cell per column, so it lines up with the grid.
@@ -567,5 +569,6 @@ contains no credential, and an entry that looks like one is refused.
 | "Cannot approve" | a check digit fails, a seal is contradicted, or a list is unpaired. Fix the text and extract again, or match by hand in INTTRA. |
 | The Package tab says not ready | approve the extraction, or resolve the conflict it names. |
 | The header names another screen while Copy Container Details is open | press **refresh**. If it still does, the header shows which tab answered (keep the Shipping Instruction in one tab) and the `build ...` stamp: compare it with the build you last loaded, and rebuild and reload the extension if it is older. Then **Diagnostics**: its evidence list says whether the grid and the modal marker were seen. |
+| The pill says "INTTRA screen not identified" with Copy Container Details open, or Quickfill shows only **Copy rows** | Copy rows still works: the block is in the default order (Container Number, Carrier Seal #, Shipper Seal #, ...) and the status line says so; check that order against the grid's headings before pasting. Then **Diagnostics**, **Copy diagnostics**, and send it: its **Page structure** block says which frame answered, whether the captured ids are there, and what the grid is built from, which is what is needed to teach the helper its shape. |
 | Copy rows pasted the container numbers but not the seals | the status line after Copy rows names the columns and any left blank. If Shipper Seal # is not among the columns, run **Diagnostics** and send the header row (the seal headings are dropdowns; the block reads the option each one shows). |
 | Something is wrong and I need to show someone | **Diagnostics**, **Export diagnostics**: one text file with the shipment, the package, the mapping status, the session log and the detection snapshot. Uploaded nowhere. |

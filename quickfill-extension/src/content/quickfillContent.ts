@@ -58,9 +58,23 @@ function where(): Where {
   // container grid filled the screen. The shared detector now scores a visible
   // container grid above every wording hint combined, so asking it is asking
   // the grid, and the INTTRA Helper's panel and this popup cannot disagree.
+  //
+  // When the detector identifies nothing, the page is still INTTRA, and the
+  // operator may well be looking at the grid (the fifth live run: a grid the
+  // detector had never been shown the shape of). Copy rows needs no detection
+  // at all - the block is the package's containers in the default column order
+  // - so that button stays, alone, and its result line says the order is the
+  // default one. The INTTRA Helper's panel behaves the same.
   const screen = detectInttraPage(document);
   if (screen.page === 'unknown' || screen.confidence === 'none') {
-    return { portal: 'none', label: 'This INTTRA page is not one of the Shipping Instructions screens.', hasLines: false, isGrid: false, gridWritable: false };
+    return {
+      portal: 'inttra',
+      label: 'INTTRA screen not identified. Copy rows still copies the container block, in the default column order, for Copy Container Details.',
+      hasLines: false,
+      isGrid: false,
+      gridWritable: false,
+      copyRowsOnly: true,
+    };
   }
   const isGrid = screen.page === 'copyContainerDetails';
   return { portal: 'inttra', label: screen.label, hasLines: false, isGrid, gridWritable: isGrid && gridAcceptsTyping(document) };

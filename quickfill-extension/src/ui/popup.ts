@@ -195,6 +195,13 @@ function renderButtons(): void {
 
   if (place.portal === 'inttra') {
     const pkg = stored.package;
+    if (place.copyRowsOnly) {
+      // Nothing to fill on a screen the detector cannot name, but the block
+      // to paste needs no screen: it is the containers in the default order.
+      if (pkg.containers.length) buttons.append(fillButton('Copy rows', () => copyRows(pkg)));
+      else buttons.append(el('span', { className: 'where', text: 'The paste has no containers, so there is nothing to copy for the grid.' }));
+      return;
+    }
     if (place.isGrid) {
       const fill = fillButton('Fill container grid', () => run({ type: 'content/fillGrid', package: pkg }));
       const copy = fillButton('Copy rows', () => copyRows(pkg));

@@ -157,6 +157,31 @@ describe('INTTRA content script', () => {
     expect(response.payload.unresolved).toBeGreaterThan(0);
   });
 
+  it('carries, in Diagnostics, what the document is built from', () => {
+    const response = answer({ type: 'content/diagnostics' });
+    if (!response.ok || response.type !== 'content/diagnostics') throw new Error('unexpected');
+    const structure = response.payload.structure;
+    expect(structure.topFrame).toBe(true);
+    expect(structure.markers).toContainEqual({ selector: '#siCopyContainerWrapperDiv', state: 'visible' });
+    expect(structure.markers).toContainEqual({ selector: '#editableGridWrapper', state: 'visible' });
+    expect(structure.containerNumber[0]?.rows.some((row) => row.cells[0] === '*Container Number' && row.cells[2] === 'Shipper Seal #')).toBe(true);
+    expect(response.payload.grid.attempts.every((attempt) => typeof attempt.raw === 'number')).toBe(true);
+  });
+
+  it('finds the grid of the fifth run, which is not a table, and answers at once', () => {
+    document.body.innerHTML = readFileSync(join(__dirname, 'fixtures', 'inttra-div-grid.html'), 'utf8');
+    const sent = ask({ type: 'content/detectPage' });
+    expect(sent.kept).toBe(false);
+    const page = sent.get();
+    if (!page?.ok || page.type !== 'content/page') throw new Error('unexpected');
+    expect(page.payload.page).toBe('copyContainerDetails');
+    expect(page.grid).toEqual({ found: true, acceptsTyping: false });
+    const rows = answer({ type: 'content/gridRows', package: samplePackage() });
+    if (!rows.ok || rows.type !== 'content/rows') throw new Error('unexpected');
+    expect(rows.payload.fromGrid).toBe(true);
+    expect(rows.payload.columns.map((column) => column.heading)).toEqual(['Container Number', 'Carrier Seal #', 'Shipper Seal #']);
+  });
+
   it('returns the paste block in the grid’s own order, with the seal columns identified by their dropdowns', () => {
     const response = answer({ type: 'content/gridRows', package: samplePackage() });
     if (!response.ok || response.type !== 'content/rows') throw new Error('unexpected');

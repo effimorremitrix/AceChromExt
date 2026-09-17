@@ -25,6 +25,7 @@ import { inttraFieldsForPage, resolveInttraFields } from '../mappings/index.js';
 import { detectInttraPage, hasStructuralEvidence } from './pageDetector.js';
 import { fillInttraFields } from './filler.js';
 import { detectGrid, fillContainerGrid, gridAcceptsTyping, gridPasteBlock } from './gridWriter.js';
+import { probeStructure } from './structureProbe.js';
 
 const VERSION = '0.1.0';
 
@@ -59,6 +60,7 @@ function buildDiagnostics(): InttraDiagnosticsSnapshot {
   return {
     page,
     url: location.href,
+    structure: probeStructure(document, window),
     fields,
     grid: gridDetection,
     generatedAt: new Date().toISOString(),

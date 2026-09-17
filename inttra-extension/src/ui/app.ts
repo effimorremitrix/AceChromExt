@@ -803,9 +803,34 @@ function renderDetection(snapshot: InttraDiagnosticsSnapshot): HTMLElement {
       grid.matchedWith ? el('div', { className: 'small', text: `Root matched by ${grid.matchedWith}` }) : null,
       grid.headers.length ? el('ul', { className: 'small mono' }, grid.headers.map((header) => el('li', { text: `col ${header.index}: "${header.text}" -> ${header.column ?? '(not identified)'}${header.options ? ` (dropdown: ${header.options.join(' | ')})` : ''}` }))) : null,
       grid.missingColumns.length ? el('div', { className: 'small warn', text: `Columns not identified: ${grid.missingColumns.join(', ')}` }) : null,
-      el('ol', { className: 'small mono' }, grid.attempts.map((attempt) => el('li', { text: `${attempt.query} -> ${attempt.matches} match(es)` }))),
+      el('ol', { className: 'small mono' }, grid.attempts.map((attempt) => el('li', { text: `${attempt.query} -> ${attempt.matches} match(es)${attempt.raw !== undefined && attempt.raw !== attempt.matches ? ` (of ${attempt.raw} in the DOM)` : ''}` }))),
     ]),
   );
+  // What the document is built from, for the capture: which frame answered,
+  // which markers are there, and what surrounds the words "Container Number".
+  // An older content script answers without it.
+  const structure = snapshot.structure;
+  if (structure) {
+    container.append(
+      el('details', { className: 'diag-block' }, [
+        el('summary', { text: 'Page structure (for the capture)' }),
+        el('div', { className: 'small', text: `Answered by ${structure.topFrame ? 'the top frame' : 'a child frame'}; frames inside it: ${structure.frames.length ? structure.frames.join(', ') : 'none'}.` }),
+        el('ul', { className: 'small mono' }, structure.markers.map((marker) => el('li', { text: `${marker.selector}: ${marker.state}` }))),
+        structure.containerNumber.length
+          ? el(
+              'ol',
+              { className: 'small mono' },
+              structure.containerNumber.map((found) =>
+                el('li', {}, [
+                  el('div', { text: `"${found.text}"${found.visible ? '' : ' (hidden)'} in ${found.ancestors.join(' < ')}` }),
+                  ...found.rows.map((row) => el('div', { text: `row at level ${row.level}, ${row.row}: ${row.cells.map((cell) => `"${cell}"`).join(' | ')}` })),
+                ]),
+              ),
+            )
+          : el('div', { className: 'small warn', text: 'The words "Container Number" appear nowhere as text in this document.' }),
+      ]),
+    );
+  }
   const list = el('div', { className: 'diag-fields' });
   for (const field of snapshot.fields) {
     const detection = field.detection;
