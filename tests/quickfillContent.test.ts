@@ -1,9 +1,13 @@
+// @vitest-environment jsdom
+// @vitest-environment-options { "url": "https://ship.inttra.e2open.com/siact/siworkspace" }
+
 /**
  * The Quickfill content script's own wiring on an INTTRA tab: what it says
  * the page is, and what it offers when it cannot say.
  *
- * jsdom's hostname is not a CBP one, so every document here is an INTTRA
- * document to the script.
+ * The document is served from the live INTTRA hostname (the environment
+ * options above), so the script takes every page here for an INTTRA one; the
+ * playground's file-on-disk case is tests/quickfillPlayground.test.ts.
  */
 
 import { readFileSync } from 'node:fs';

@@ -32,52 +32,79 @@ import type { InttraFillReport } from '../../../inttra-extension/src/models/Intt
 import type { FillCount, QuickfillContentRequest, QuickfillContentResponse, Where } from '../core/messages.js';
 
 const CBP = /(^|\.)cbp\.dhs\.gov$/i;
+const INTTRA = /(^|\.)(inttra\.com|e2open\.com)$/i;
 
 function onCbpHost(): boolean {
   return CBP.test(location.hostname);
 }
 
-/** Which portal this tab is, and what can be filled on it. */
-function where(): Where {
-  if (onCbpHost()) {
-    const page = detectPage(document);
-    if (page.page === 'unknown' || page.confidence === 'none') {
-      return { portal: 'none', label: 'This CBP page is not one of the four AESDirect filing steps.', hasLines: false, isGrid: false, gridWritable: false };
-    }
-    return { portal: 'ace', label: page.label, hasLines: page.page === 'commodities', isGrid: false, gridWritable: false };
-  }
+function onInttraHost(): boolean {
+  return INTTRA.test(location.hostname);
+}
 
-  // The container grid is evidence, and it outranks the step strip.
-  //
-  // Copy Container Details is a MODAL over whichever step the operator was on
-  // (observed on the live portal on 2026-09-17 at
-  // ship.inttra.e2open.com/siact/siworkspace#/create/<id>). The step strip
-  // behind the overlay still reports that underlying step, so asking the strip
-  // "which screen is this?" answers about the page the operator is no longer
-  // looking at - on the first live run it said "B/L Documents" while a
-  // container grid filled the screen. The shared detector now scores a visible
-  // container grid above every wording hint combined, so asking it is asking
-  // the grid, and the INTTRA Helper's panel and this popup cannot disagree.
-  //
-  // When the detector identifies nothing, the page is still INTTRA, and the
-  // operator may well be looking at the grid (the fifth live run: a grid the
-  // detector had never been shown the shape of). Copy rows needs no detection
-  // at all - the block is the package's containers in the default column order
-  // - so that button stays, alone, and its result line says the order is the
-  // default one. The INTTRA Helper's panel behaves the same.
+/** An AESDirect step, recognised by its content alone (the step tabs, the headings, the URL), or null. */
+function aceAnswer(): Where | null {
+  const page = detectPage(document);
+  if (page.page === 'unknown' || page.confidence === 'none') return null;
+  return { portal: 'ace', label: page.label, hasLines: page.page === 'commodities', isGrid: false, gridWritable: false };
+}
+
+/**
+ * An INTTRA Shipping Instructions screen, or null.
+ *
+ * The container grid is evidence, and it outranks the step strip.
+ *
+ * Copy Container Details is a MODAL over whichever step the operator was on
+ * (observed on the live portal on 2026-09-17 at
+ * ship.inttra.e2open.com/siact/siworkspace#/create/<id>). The step strip
+ * behind the overlay still reports that underlying step, so asking the strip
+ * "which screen is this?" answers about the page the operator is no longer
+ * looking at - on the first live run it said "B/L Documents" while a
+ * container grid filled the screen. The shared detector scores a visible
+ * container grid above every wording hint combined, so asking it is asking
+ * the grid, and the INTTRA Helper's panel and this popup cannot disagree.
+ */
+function inttraAnswer(): Where | null {
   const screen = detectInttraPage(document);
-  if (screen.page === 'unknown' || screen.confidence === 'none') {
-    return {
-      portal: 'inttra',
-      label: 'INTTRA screen not identified. Copy rows still copies the container block, in the default column order, for Copy Container Details.',
-      hasLines: false,
-      isGrid: false,
-      gridWritable: false,
-      copyRowsOnly: true,
-    };
-  }
+  if (screen.page === 'unknown' || screen.confidence === 'none') return null;
   const isGrid = screen.page === 'copyContainerDetails';
   return { portal: 'inttra', label: screen.label, hasLines: false, isGrid, gridWritable: isGrid && gridAcceptsTyping(document) };
+}
+
+/**
+ * Which portal this tab is, and what can be filled on it.
+ *
+ * The host says which detector speaks first; the page's content gives the
+ * answer. On a CBP host only an AESDirect step counts. On an INTTRA host the
+ * INTTRA detector goes first, and when it identifies nothing the page is
+ * still INTTRA: the operator may well be looking at the grid (the fifth live
+ * run: a grid the detector had never been shown the shape of), and Copy rows
+ * needs no detection at all - the block is the package's containers in the
+ * default column order - so that button stays, alone, and its result line
+ * says the order is the default one. The INTTRA Helper's panel behaves the
+ * same. Off both portals (the playground build, which runs on pages opened
+ * from disk) an AESDirect step is looked for first: the INTTRA signatures are
+ * wording guesses that an ACE page can brush against - Step 2's "parties"
+ * reads as the B/L Documents screen's Parties heading - and a step named by
+ * its own tabs and headings is the better answer.
+ */
+function where(): Where {
+  if (onCbpHost()) {
+    return aceAnswer() ?? { portal: 'none', label: 'This CBP page is not one of the four AESDirect filing steps.', hasLines: false, isGrid: false, gridWritable: false };
+  }
+  const answer = onInttraHost() ? (inttraAnswer() ?? aceAnswer()) : (aceAnswer() ?? inttraAnswer());
+  if (answer) return answer;
+  if (!onInttraHost()) {
+    return { portal: 'none', label: 'This page is neither an AESDirect step nor an INTTRA screen.', hasLines: false, isGrid: false, gridWritable: false };
+  }
+  return {
+    portal: 'inttra',
+    label: 'INTTRA screen not identified. Copy rows still copies the container block, in the default column order, for Copy Container Details.',
+    hasLines: false,
+    isGrid: false,
+    gridWritable: false,
+    copyRowsOnly: true,
+  };
 }
 
 /**

@@ -99,6 +99,7 @@ repository outside the one history note in `docs/DECKHAND.md`. Keep it that way.
 | `npm run build` / `build:watch` | build `dist/` (the ACE Helper) |
 | `npm run build:inttra` | build `dist-inttra/` (the INTTRA Helper) |
 | `npm run build:quickfill` | build `dist-quickfill/` (the Quickfill Helper) |
+| `npm run build:quickfill:playground` | build `dist-quickfill-playground/`: the same bundles under a manifest that matches local files only, plus the four mock ACE steps and the example workbook (`docs/QUICKFILL.md` section 5a). `check:bundle:quickfill:playground` runs the bundle check on it |
 | `npm run build:companion` | build `dist-companion/` (the QuickBooks companion) |
 | `npm run qb -- --help` | run the companion |
 | `npm run build:web` / `dev:web` | build `dist-web/` (the operator dashboard); `dev:web` serves it on `127.0.0.1:8788` |
@@ -183,6 +184,7 @@ preview → ACE`.
 | a document reader (PDF, mailbox) | implement `DocumentReader` in `deckhand/src/readers/`, register in `deckhand/src/extractor.ts` |
 | a dashboard screen | a renderer in `web/src/views/` over `ShipmentRecord`; the rules stay in `src/`, `shared/`, `deckhand/`. A workflow step is a pure function in `web/src/workflow.ts` |
 | what Quickfill accepts in its one paste box | the detection ladder in `quickfill-extension/src/paste.ts`. Never add a format picker: one box is the product |
+| the Quickfill playground (the four mock ACE steps, the example workbook, its README) | `scripts/playground.mjs` wraps `tests/fixtures/ace-*.html` at build time, never a second copy of a screen; the example data is `scripts/templateData.mjs`, shared with `npm run template` |
 | how gated Quickfill is | `quickfill-extension/src/aceShipment.ts`. It is the local, ungated twin of `shared/src/aceView.ts`, and the one file where "fill it anyway" lives. Do not gate it, and do not ungate `aceView.ts` |
 | the dashboard's hosting | `web/wrangler.jsonc` (static assets only), `web/_headers`, `.github/workflows/deploy-web.yml` |
 | the guides in the dashboard's Help tab | `docs/USER-GUIDE.md` and `docs/SETUP-GUIDE.md` themselves; the page bundles them at build time (`?raw` import), never a second copy |
@@ -320,7 +322,10 @@ stay honestly described:
    containers that carry a seal (a count, not a check), and its Copy rows
    line names the pasted columns and any left blank. On an INTTRA page the
    detector cannot name it offers Copy rows alone, in the default column
-   order, and says so (the fifth live run). What is new about it is
+   order, and says so (the fifth live run). A playground build
+   (`dist-quickfill-playground/`, local files only, never a portal) fills the
+   four mock ACE steps from the example workbook; it proves the mechanics on
+   the captured labels and ids, not the live portal. What is new about it is
    what it takes away - the
    preview, the ten data quality checks, the ISO 6346 block, the Deckhand
    review and Approve click, the conflict screen, the fill gate, the

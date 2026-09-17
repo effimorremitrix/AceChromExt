@@ -1,7 +1,7 @@
 # CI for ACE Helper.
 #
 # Three jobs, deliberately separate so a red run says *what* broke:
-#   verify  - typecheck, unit tests, all five builds, generated files up to date (Node 20 and 22)
+#   verify  - typecheck, unit tests, all six builds, generated files up to date (Node 20 and 22)
 #   bundle  - supply-chain check on what actually ships in dist/, dist-inttra/,
 #             dist-quickfill/ and dist-web/
 #   smoke   - end-to-end in real Chrome against a mocked ACE host
@@ -68,6 +68,12 @@ jobs:
         # portals' hosts, which is why it is built and checked on its own.
         run: npm run build:quickfill
 
+      - name: Build the Quickfill playground
+        # The same bundles under a manifest that matches local files only,
+        # with the four mock AESDirect steps and the example workbook beside
+        # it (dist-quickfill-playground/): the practice build, never a portal.
+        run: npm run build:quickfill:playground
+
       - name: Build the QuickBooks companion
         # Separate output (dist-companion/), separate program: the bundle check
         # below is about dist/ only. Building it here catches a companion that
@@ -120,6 +126,14 @@ jobs:
           path: dist-quickfill/
           retention-days: 14
 
+      - name: Upload the Quickfill playground
+        if: matrix.node == '22'
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickfill-playground-unpacked
+          path: dist-quickfill-playground/
+          retention-days: 14
+
       - name: Upload the operator dashboard
         if: matrix.node == '22'
         uses: actions/upload-artifact@v4
@@ -156,6 +170,11 @@ jobs:
 
       - name: The same check on dist-quickfill/, against both portals' hosts
         run: npm run check:bundle:quickfill
+
+      - run: npm run build:quickfill:playground
+
+      - name: The same check on the playground build, whose scripts are the same bundles
+        run: npm run check:bundle:quickfill:playground
 
       - run: npm run build:web
 
