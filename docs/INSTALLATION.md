@@ -97,9 +97,11 @@ network permission of any kind. The extension page CSP pins `connect-src` to
 `'none'`, so the extension cannot make a network request even by accident.
 
 The INTTRA Helper asks for the same single `storage` permission and for
-`https://*.inttra.com/*` and `https://*.e2open.com/*` only. The exact hostname
-of the Shipping Instructions screens has not been confirmed yet; if it is
-under neither domain, see `docs/INTTRA-INTEGRATION.md` section 2.
+`https://*.inttra.com/*` and `https://*.e2open.com/*` only. The Shipping
+Instructions screens were confirmed on 2026-09-17 to be served from
+`ship.inttra.e2open.com`, which the second of those patterns covers; if your
+agency reaches them under some other domain, see
+`docs/INTTRA-INTEGRATION.md` section 2.
 
 If your agency reaches ACE through a different hostname, add it to both
 `host_permissions` and `content_scripts.matches` in `extension/manifest.json`,
