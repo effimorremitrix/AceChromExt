@@ -84,6 +84,41 @@ describe('finding the grid among other tables', () => {
     expect((document.querySelectorAll('table')[0] as HTMLElement).innerHTML).toBe(before);
   });
 
+  it('finds the grid by the captured wrapper id, among other tables', () => {
+    // The real modal, as captured from the live DOM on 2026-09-17:
+    //   <div id="siCopyContainerWrapperDiv" class="preLoaderWrapper">
+    //     <div class="preLoaderMask" ...><div class="preLoader" ...>
+    //     <div class="row"> ... bootstrap columns ...
+    //     <div id="editableGridWrapper" class="col-sm-12 pushdown10"> [grid]
+    //     <div class="modal-footer">
+    document.body.innerHTML = [
+      OTHER_TABLE,
+      '<div id="siCopyContainerWrapperDiv" class="preLoaderWrapper">',
+      '<div class="preLoaderMask" id="preLoaderMaskSiCopyContainer" style="display: none;"></div>',
+      '<div class="preLoader" id="preLoaderSiCopyContainer" style="display: none;"></div>',
+      '<div class="row"><div class="col-sm-7"><div class="row row-5-gutter">',
+      '<div class="col-sm-7 col-5-gutter"></div><div class="col-sm-5 col-5-gutter"></div>',
+      '</div></div>',
+      `<div id="editableGridWrapper" class="col-sm-12 pushdown10">${GRID}</div>`,
+      '<div class="modal-footer"></div>',
+      '</div>',
+    ].join('');
+    const detection = detectGrid(document);
+    expect(detection.found).toBe(true);
+    expect(detection.matchedWith).toContain('editableGridWrapper');
+    expect(detection.root?.closest('#editableGridWrapper')).not.toBeNull();
+  });
+
+  it('identifies the screen by the captured modal id, not the tab behind it', () => {
+    // The step strip still names the step the modal covers; the modal's own id
+    // is what says which screen this is.
+    document.body.innerHTML = [
+      '<nav><a class="nav-link active">B/L Documents</a></nav>',
+      '<div id="siCopyContainerWrapperDiv"></div>',
+    ].join('');
+    expect(detectInttraPage(document).page).toBe('copyContainerDetails');
+  });
+
   it('says a grid with inputs can be typed into', () => {
     document.body.innerHTML = `<div role="dialog">${GRID}</div>`;
     expect(gridAcceptsTyping(document)).toBe(true);

@@ -52,7 +52,11 @@ export const INTTRA_PAGE_SIGNATURES: InttraPageSignature[] = [
     tabText: ['copy container details', 'copy container', 'copy containers'],
     headingText: ['copy container details', 'copy container', 'paste container details'],
     urlHints: ['copycontainer', 'copy-container', 'containergrid'],
-    markerSelectors: ["[data-step='copyContainerDetails']", '#copyContainerDetails'],
+    // Captured from the live DOM on 2026-09-17: the modal wrapper and the grid
+    // container. These are what identify this screen; its tab wording cannot,
+    // because it is a modal over another step and the step strip behind it
+    // still names that step.
+    markerSelectors: ['#siCopyContainerWrapperDiv', '#editableGridWrapper', "[data-step='copyContainerDetails']", '#copyContainerDetails'],
     captureHint: 'Open Copy Container Details. Copy the outerHTML of the grid root, its header row, one empty row, one populated row, and a cell while it is being edited. See docs/INTTRA-INTEGRATION.md for the full list.',
   },
   {

@@ -9,9 +9,9 @@
  */
 
 import type { InttraFieldMapping, InttraSelectorCandidate } from '../models/InttraField.js';
-import { byFrameworkName, byIdSuffix, byLabel, byNearby, placeholder, statusFor } from '../../../src/ace/selectors/types.js';
+import { byFrameworkName, byIdSuffix, byLabel, byNearby, placeholder, statusFor, verified } from '../../../src/ace/selectors/types.js';
 
-export { byFrameworkName, byIdSuffix, byLabel, byNearby, placeholder };
+export { byFrameworkName, byIdSuffix, byLabel, byNearby, placeholder, verified };
 
 export type InttraFieldDefinition = Omit<InttraFieldMapping, 'verificationStatus'>;
 
