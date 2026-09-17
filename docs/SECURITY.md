@@ -1,17 +1,20 @@
 # Security and privacy
 
-This document covers four programs that ship from this repository:
+This document covers five programs that ship from this repository:
 
 - **the ACE Helper extension** (`src/` -> `dist/`), which runs in Chrome;
 - **the INTTRA Helper extension** (`inttra-extension/` -> `dist-inttra/`),
   which runs in Chrome, separately; see [INTTRA Helper](#the-inttra-helper);
+- **the Quickfill Helper extension** (`quickfill-extension/` ->
+  `dist-quickfill/`), which runs in Chrome and reaches both portals; see
+  [Quickfill Helper](#the-quickfill-helper);
 - **the QuickBooks companion** (`companion/` -> `dist-companion/`), which runs
   on the Windows PC beside QuickBooks Desktop;
 - **the operator dashboard** (`web/` -> `dist-web/`), a static page hosted on
   Cloudflare that runs in the operator's browser; see
   [The operator dashboard](#the-operator-dashboard).
 
-Two pure modules are bundled into all three and carry no capability of their
+Two pure modules are bundled into all of them and carry no capability of their
 own: `deckhand/` (email extraction) and `shared/` (the filing package). See
 [Deckhand and the filing package](#deckhand-and-the-filing-package).
 
@@ -245,6 +248,43 @@ each bundle is checked against its own host allowlist
 | The loaded package and Deckhand extraction | `chrome.storage.session` | until the browser closes, or Clear Data |
 | Settings and captured selectors | `chrome.storage.local` | until uninstall; no shipment data, no credential |
 | INTTRA credentials | never touched | - |
+
+## The Quickfill Helper
+
+A third extension, and the only one that reaches both portals. Its host list is
+the reason it is separate rather than a mode inside one of the other two: the
+ACE Helper keeps its CBP-only reach and the INTTRA Helper its INTTRA-only reach,
+and an operator who works one portal installs one helper. Its bundle is checked
+against its own combined allowlist (`npm run check:bundle:quickfill`).
+
+**Quickfill deliberately removes checks, and removes no guarantee.** It has no
+preview, no data quality checks, no ISO 6346 block, no Deckhand review or
+approval, no conflict screen and no fill gate; it overwrites without asking and
+resolves a source disagreement in the carrier email's favour without saying so.
+Every one of those is a data-accuracy decision that the operator now makes by
+reading the form, and each is listed with its cost in `docs/QUICKFILL.md`
+section 3. None of them is a security control, and none of the rows below moves.
+
+| Not done | Enforced by |
+| --- | --- |
+| `eval()`, `new Function`, a string timer, a dynamic `import()` | none in its source; MV3 CSP `script-src 'self'`; re-checked against the built bundle |
+| Network requests | no `fetch`/`XHR`/`WebSocket`/`EventSource`/`sendBeacon` and no http(s) URL at all in its source; no network permission; `connect-src 'none'` |
+| Pressing Save, Save Line, Add Line, Add Row, Continue, Submit or Certify | it fills through the other two extensions' fillers, whose `automationPolicy.ts` switches are frozen off; no `.click()`, `.submit()`, `MouseEvent` or `PointerEvent` in its content layer; it declares no policy file of its own, so there is no second place to turn one on |
+| Credential handling | never sees one; `tests/quickfillInvariants.test.ts` forbids the words `password` and `credential` and any `document.cookie` |
+| Persistence | no `localStorage`, `sessionStorage`, IndexedDB or `caches`; the pasted shipment lives in `chrome.storage.session` only |
+| Reaching outside the two portals | `host_permissions` and `content_scripts.matches` are exactly the three CBP patterns plus `https://*.inttra.com/*` and `https://*.e2open.com/*`; no `<all_urls>`; the manifest is pinned field by field |
+| A second selector table or a second write path | it declares no `mappings/` or `selectors/` folder and imports neither field writer directly, so every write still goes through `setAceFieldValue` / `setInttraFieldValue` with its read-back |
+| Guessing | several containers and one ACE container field leaves the field empty; a grid shorter than the container list is filled as far as it goes |
+
+| Data | Storage | Lifetime |
+| --- | --- | --- |
+| The pasted text and the package built from it | `chrome.storage.session` | until the browser closes, or Clear |
+| Settings | none; it has none | - |
+| Portal credentials | never touched | - |
+
+There is no session log and no diagnostics snapshot: Quickfill keeps no record
+of what it wrote. If an audit trail is wanted for a filing, use the ACE Helper,
+which writes one, or keep the `filing-package.json`.
 
 ## Deckhand and the filing package
 

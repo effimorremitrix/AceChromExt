@@ -1,17 +1,19 @@
 # CI for ACE Helper.
 #
 # Three jobs, deliberately separate so a red run says *what* broke:
-#   verify  - typecheck, unit tests, all four builds, generated files up to date (Node 20 and 22)
-#   bundle  - supply-chain check on what actually ships in dist/, dist-inttra/ and dist-web/
+#   verify  - typecheck, unit tests, all five builds, generated files up to date (Node 20 and 22)
+#   bundle  - supply-chain check on what actually ships in dist/, dist-inttra/,
+#             dist-quickfill/ and dist-web/
 #   smoke   - end-to-end in real Chrome against a mocked ACE host
 #
 # Deploying the operator dashboard is a separate, opt-in workflow
 # (deploy-web.yml); nothing here needs a hosting credential.
 #
-# The unit suite includes tests/invariants.test.ts, which asserts the safety
-# promises in docs/SECURITY.md against the source: no eval, no network calls,
-# no automatic ACE submission, no permission creep in the manifest. Those are
-# the tests that must never be allowed to go unrun on a pull request.
+# The unit suite includes tests/invariants.test.ts, tests/inttraInvariants.test.ts
+# and tests/quickfillInvariants.test.ts, which assert the safety promises in
+# docs/SECURITY.md against the source of each of the three extensions: no eval,
+# no network calls, no automatic submission, no permission creep in a manifest.
+# Those are the tests that must never be allowed to go unrun on a pull request.
 
 name: CI
 
@@ -61,6 +63,11 @@ jobs:
       - name: Build the INTTRA Helper
         run: npm run build:inttra
 
+      - name: Build the Quickfill Helper
+        # The third extension (dist-quickfill/): the only one that asks for both
+        # portals' hosts, which is why it is built and checked on its own.
+        run: npm run build:quickfill
+
       - name: Build the QuickBooks companion
         # Separate output (dist-companion/), separate program: the bundle check
         # below is about dist/ only. Building it here catches a companion that
@@ -83,8 +90,9 @@ jobs:
           npm run template
           npm run icons
           npm run icons:inttra
-          if ! git diff --exit-code -- templates extension/icons inttra-extension/icons; then
-            echo "::error::templates/, extension/icons/ or inttra-extension/icons/ is out of date. Run 'npm run template', 'npm run icons' and 'npm run icons:inttra', then commit the result."
+          npm run icons:quickfill
+          if ! git diff --exit-code -- templates extension/icons inttra-extension/icons quickfill-extension/icons; then
+            echo "::error::templates/ or one of the three icons/ folders is out of date. Run 'npm run template', 'npm run icons', 'npm run icons:inttra' and 'npm run icons:quickfill', then commit the result."
             exit 1
           fi
 
@@ -102,6 +110,14 @@ jobs:
         with:
           name: inttra-helper-unpacked
           path: dist-inttra/
+          retention-days: 14
+
+      - name: Upload the unpacked Quickfill Helper
+        if: matrix.node == '22'
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickfill-helper-unpacked
+          path: dist-quickfill/
           retention-days: 14
 
       - name: Upload the operator dashboard
@@ -135,6 +151,11 @@ jobs:
 
       - name: The same check on dist-inttra/, against the INTTRA host allowlist
         run: npm run check:bundle:inttra
+
+      - run: npm run build:quickfill
+
+      - name: The same check on dist-quickfill/, against both portals' hosts
+        run: npm run check:bundle:quickfill
 
       - run: npm run build:web
 

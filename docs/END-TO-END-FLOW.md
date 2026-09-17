@@ -33,6 +33,27 @@ These existed before the package and do not depend on it. Tests assert each.
 | **INTTRA** | `filing-package.json` -> INTTRA Helper Import -> Package (resolve conflicts) -> Fill Current Page |
 | **Containers** | the same package -> Copy Container Details -> Fill Container Grid, or Copy rows (TSV) and paste |
 | **ACE from the package** | `filing-package.json` -> ACE Helper Import -> the same preview, checks and fill, with booking, vessel, container and seal from the approved extraction |
+| **Quickfill** | paste anything of the four shapes into the Quickfill popup -> Fill this page / Fill this screen. No review, no approval, no gate |
+
+## The fast path, which skips all of it
+
+**Quickfill Helper** (`quickfill-extension/`) is a third extension that does the
+same two fills from one paste box, with the review, the approval, the conflict
+screen and the gate taken out. Paste the email, click, read the form, submit.
+
+```
+  paste box ──▶ detect (package | extraction | rows | email) ──▶ FilingPackage
+                                                                  ├──▶ ACE
+                                                                  └──▶ INTTRA
+```
+
+It resolves every conflict in the carrier email's favour without asking, fills a
+container number that fails its check digit, and overwrites a stale field
+without warning. It still never presses Save, Add Row, Continue, Submit or
+Certify, and it still refuses to pick one of several containers for ACE's single
+container field. Use it when the shipment is simple and you are checking the
+form anyway; use the path below when it is not.
+**[QUICKFILL.md](QUICKFILL.md)** lists every removal with its cost.
 
 ## Three ways to make the package
 
@@ -133,6 +154,10 @@ both show it.
 3. **The form**, after filling and before saving: every field, in ACE or
    INTTRA.
 4. **Submission**, always by the operator.
+
+Quickfill removes points 1 and 2 and keeps points 3 and 4. That is the whole
+difference, and it means point 3 is no longer the second look at a value but
+the **only** one. Choosing Quickfill is choosing to do that reading.
 
 ## The hosted UI
 

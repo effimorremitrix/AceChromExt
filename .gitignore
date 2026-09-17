@@ -6,6 +6,7 @@ dist/
 coverage/
 dist-companion/
 dist-inttra/
+dist-quickfill/
 dist-web/
 filing-package-*.json
 deckhand-*.json

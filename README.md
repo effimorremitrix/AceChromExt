@@ -1,8 +1,8 @@
-# ACE Helper, INTTRA Helper, Deckhand
+# ACE Helper, INTTRA Helper, Quickfill Helper, Deckhand
 
 [![CI](https://github.com/effimorremitrix/AceChromExt/actions/workflows/ci.yml/badge.svg)](https://github.com/effimorremitrix/AceChromExt/actions/workflows/ci.yml)
 
-Two Chrome (Manifest V3) extensions, two local programs and one hosted,
+Three Chrome (Manifest V3) extensions, two local programs and one hosted,
 browser-only dashboard that cut the manual typing out of preparing U.S.
 Customs **ACE / AES export filings** and **INTTRA shipping instructions**,
 fed by QuickBooks Desktop and by the emails the carrier and the producer send.
@@ -28,6 +28,12 @@ fed by QuickBooks Desktop and by the emails the carrier and the producer send.
 - **The filing package** composes the invoice and the extraction, records
   where every value came from, flags every disagreement, and is a plain JSON
   file both extensions read. **[docs/END-TO-END-FLOW.md](docs/END-TO-END-FLOW.md)**
+- **Quickfill Helper** is the same two fills with everything else taken out:
+  one popup, one paste box, two buttons. Paste the carrier email (or a package,
+  or spreadsheet rows), click, the fields fill. No preview, no checks, no
+  review, no approval, no conflict screen, no report - it assumes you read the
+  form. It still never saves, submits or certifies.
+  **[docs/QUICKFILL.md](docs/QUICKFILL.md)**
 - **The operator dashboard** is one web page for the whole preparation:
   import the workbook or a package, run Deckhand, approve, build the package,
   resolve conflicts, see ACE and INTTRA readiness and where every value came
@@ -106,6 +112,13 @@ plus a smoke test that drives a real Chromium with a mocked ACE host.
    the capture procedure. Deckhand likewise has been shown fixtures, not a
    real inbox.
 
+4. **The Quickfill Helper inherits all three caveats and improves none of
+   them.** It shares the ACE and INTTRA mapping tables, so it fills exactly
+   what the other two fill and no more - which on the live INTTRA portal is
+   currently nothing. It has also never been used on a real shipment, and the
+   checks it drops on purpose are listed with their cost in
+   **[docs/QUICKFILL.md](docs/QUICKFILL.md) section 3**.
+
 The dashboard (Phase 5) changes none of this: it prepares the same files the
 extensions already read, and it has not yet been deployed to a real account
 or used on a real shipment. **[docs/WEB-DASHBOARD.md](docs/WEB-DASHBOARD.md)
@@ -115,12 +128,14 @@ section 9** lists what it still needs.
 
 ```bash
 npm install
-npm run verify        # typecheck + tests + template + all builds + bundle checks -> dist/, dist-inttra/, dist-web/
+npm run verify        # typecheck + tests + template + all builds + bundle checks -> dist/, dist-inttra/, dist-quickfill/, dist-web/
 ```
 
 Then `chrome://extensions` -> Developer mode -> **Load unpacked** -> pick
-`dist/` (ACE Helper) and again for `dist-inttra/` (INTTRA Helper). Reload any
-ACE or INTTRA tab that was already open.
+`dist/` (ACE Helper), again for `dist-inttra/` (INTTRA Helper), and again for
+`dist-quickfill/` (Quickfill Helper) if you want the fast path. The three are
+independent; install only the ones you need. Reload any ACE or INTTRA tab that
+was already open.
 
 Full steps: **[docs/INSTALLATION.md](docs/INSTALLATION.md)**
 
@@ -222,6 +237,10 @@ comes from `node ace-export.mjs package CN-1042 --deckhand booking.eml`.
 ```
 extension/        ACE Helper manifest, HTML shells, CSS, icons   (static, copied to dist/)
 inttra-extension/ INTTRA Helper: manifest, HTML, icons, and src/ (pages, mappings, content, ui)
+quickfill-extension/
+                  Quickfill Helper: manifest, popup, icons, and src/ - paste.ts (the one
+                  input), aceShipment.ts (ungated package -> ACE model), one content script
+                  for both portals. No mappings of its own: it uses the two above
 deckhand/         email/document extraction: model, ISO 6346, rules extractor, readers, review
 shared/           the filing package: model, provenance, builder (merge + conflicts), JSON, ACE view
 src/
@@ -253,13 +272,13 @@ companion/        QuickBooks Desktop companion        (Node, not shipped in the 
   src/package/    ace-export package / deckhand: the filing package on disk
   powershell/     QbxmlRequest.ps1
 templates/        ACE_Import_Template.xlsx
-tests/            unit tests, security invariants for both extensions and the dashboard,
+tests/            unit tests, security invariants for all three extensions and the dashboard,
                   a Phase 1 regression suite, three end-to-end fixtures, a Chromium smoke
                   test, mock ACE + INTTRA screens, qbXML and sanitized email fixtures,
                   and an independence test (no dependency outside this repository)
 docs/             USER-GUIDE (start here) | SETUP-GUIDE | INSTALLATION |
                   ACE-MAPPING | ARCHITECTURE | SECURITY | QUICKBOOKS-INTEGRATION |
-                  DECKHAND | INTTRA-INTEGRATION | END-TO-END-FLOW | WEB-DASHBOARD
+                  DECKHAND | INTTRA-INTEGRATION | QUICKFILL | END-TO-END-FLOW | WEB-DASHBOARD
 .github/workflows CI: verify (Node 20 + 22), three bundle checks, e2e smoke;
                   deploy-web (opt-in, needs Cloudflare secrets)
 ```
@@ -281,24 +300,27 @@ More: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**,
 
 | Command | Does |
 | --- | --- |
-| `npm run verify` | typecheck + tests + template + both extension builds + both bundle checks + companion build + dashboard build + its bundle check |
+| `npm run verify` | typecheck + tests + template + all three extension builds + their three bundle checks + companion build + dashboard build + its bundle check |
 | `npm run build` / `build:watch` | build `dist/` (the ACE Helper) |
 | `npm run build:inttra` / `build:inttra:watch` | build `dist-inttra/` (the INTTRA Helper) |
+| `npm run build:quickfill` / `build:quickfill:watch` | build `dist-quickfill/` (the Quickfill Helper) |
 | `npm run build:companion` | build `dist-companion/` (the QuickBooks companion) |
 | `npm run build:web` / `dev:web` | build `dist-web/` (the operator dashboard); `dev:web` also serves it on `127.0.0.1:8788` |
 | `npm run qb` | run the companion: `npm run qb -- --help` |
-| `npm test` / `test:watch` | vitest (700 tests) |
+| `npm test` / `test:watch` | vitest |
 | `npm run smoke` | end-to-end test in real Chromium against a mocked ACE host (needs Chrome for Testing or a Playwright Chromium; see docs/INSTALLATION.md) |
 | `npm run check:bundle` | supply-chain check on `dist/`: no eval, no network APIs, no URL host but CBP |
 | `npm run check:bundle:inttra` | the same on `dist-inttra/`, allowing only INTTRA and e2open hosts |
+| `npm run check:bundle:quickfill` | the same on `dist-quickfill/`, allowing both portals' hosts |
 | `npm run check:bundle:web` | the same on `dist-web/`, allowing no host at all |
 | `npm run typecheck` | tsc, no emit |
 | `npm run template` | regenerate the import template |
-| `npm run icons` / `icons:inttra` | regenerate the PNG icons of either extension |
+| `npm run icons` / `icons:inttra` / `icons:quickfill` | regenerate the PNG icons of each extension |
 
 ## Compliance note
 
-ACE Helper, INTTRA Helper and the operator dashboard are data-entry aids.
+ACE Helper, INTTRA Helper, Quickfill Helper and the operator dashboard are
+data-entry aids.
 They do not validate a filing or a shipping instruction, do not give customs
 or shipping advice, and do not replace the filer's review. The accuracy of every AES filing and every
 shipping instruction remains the filer's legal responsibility.

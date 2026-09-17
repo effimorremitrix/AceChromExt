@@ -1,0 +1,40 @@
+/*
+ * Quickfill Helper: the few rules that differ from extension/styles/ui.css.
+ *
+ * Amber instead of navy, so the three extensions are told apart at a glance in
+ * the Chrome toolbar and in a screenshot, and a paste box big enough to hold a
+ * carrier email without scrolling it into a slit.
+ */
+
+body.quickfill { width: 420px; }
+
+body.quickfill .app-header { background: var(--amber); }
+body.quickfill .brand-mark { color: var(--amber); }
+
+:root { --amber: #92400e; }
+
+.paste-box {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.paste-box:focus { outline: 2px solid var(--blue); outline-offset: -1px; }
+
+/* The single line under the box: what the paste was read as. No colours, no marks. */
+.read-as { font-size: 12px; color: var(--ink-muted); min-height: 16px; }
+.read-as-error { color: var(--red); }
+
+/* The single line under the buttons: the count from the last fill. */
+.result { font-size: 12px; min-height: 16px; }
+.result-detail { color: var(--ink-muted); font-size: 11px; }
+
+.button-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.button-row .select { flex: 0 0 auto; width: auto; }
+
+.where { font-size: 11px; color: var(--ink-muted); }

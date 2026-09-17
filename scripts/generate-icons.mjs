@@ -6,6 +6,9 @@
  *
  * With --inttra: the INTTRA Helper's icons, a teal square with a white "I",
  * into inttra-extension/icons. Run: npm run icons:inttra
+ *
+ * With --quickfill: the Quickfill Helper's icons, an amber square with a white
+ * "Q", into quickfill-extension/icons. Run: npm run icons:quickfill
  */
 
 import { deflateSync } from 'node:zlib';
@@ -15,9 +18,14 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const inttra = process.argv.includes('--inttra');
-const outDir = inttra ? join(here, '..', 'inttra-extension', 'icons') : join(here, '..', 'extension', 'icons');
+const quickfill = process.argv.includes('--quickfill');
+const outDir = quickfill
+  ? join(here, '..', 'quickfill-extension', 'icons')
+  : inttra
+    ? join(here, '..', 'inttra-extension', 'icons')
+    : join(here, '..', 'extension', 'icons');
 
-const NAVY = inttra ? [15, 92, 99] : [18, 58, 92];
+const NAVY = quickfill ? [146, 64, 14] : inttra ? [15, 92, 99] : [18, 58, 92];
 const WHITE = [255, 255, 255];
 
 function crc32(buffer) {
@@ -68,8 +76,23 @@ function insideGlyphI(x, y, size) {
   return stem || topSerif || bottomSerif;
 }
 
+/** The "Q" glyph: a ring with a tail across its lower right, scaled to the icon size. */
+function insideGlyphQ(x, y, size) {
+  const unit = size / 16;
+  const centre = size / 2;
+  const radius = 4.2 * unit;
+  const stroke = Math.max(unit * 1.5, 1.4);
+  const dx = x - centre;
+  const dy = y - centre;
+  const ring = Math.abs(Math.hypot(dx, dy) - radius) <= stroke / 2;
+  // The tail: a short diagonal from the ring's lower right, outward.
+  const tail = dx >= 0.8 * unit && dy >= 0.8 * unit && Math.abs(dx - dy) <= stroke / 2 && Math.hypot(dx, dy) <= radius + 2.2 * unit;
+  return ring || tail;
+}
+
 /** The "A" glyph: two legs and a crossbar, scaled to the icon size. */
 function insideGlyph(x, y, size) {
+  if (quickfill) return insideGlyphQ(x, y, size);
   if (inttra) return insideGlyphI(x, y, size);
   const unit = size / 16;
   const top = 3.2 * unit;

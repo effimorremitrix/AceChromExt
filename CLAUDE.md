@@ -75,15 +75,16 @@ empty.
 
 ---
 
-# ACE Helper, INTTRA Helper, Deckhand, the operator dashboard
+# ACE Helper, INTTRA Helper, Quickfill Helper, Deckhand, the operator dashboard
 
-Two Chrome MV3 extensions (ACE Helper in `extension/` + `src/`, INTTRA Helper in
-`inttra-extension/`), a QuickBooks Desktop companion (`companion/`), an email
-extraction module (`deckhand/`), the filing package that ties them together
-(`shared/`), and a browser-only operator dashboard hosted as static files
-(`web/`). See `README.md` for what they do, `docs/ARCHITECTURE.md` for how
-they fit, `docs/END-TO-END-FLOW.md` for the whole chain, and
-`docs/WEB-DASHBOARD.md` for the dashboard.
+Three Chrome MV3 extensions (ACE Helper in `extension/` + `src/`, INTTRA Helper
+in `inttra-extension/`, Quickfill Helper in `quickfill-extension/`), a
+QuickBooks Desktop companion (`companion/`), an email extraction module
+(`deckhand/`), the filing package that ties them together (`shared/`), and a
+browser-only operator dashboard hosted as static files (`web/`). See
+`README.md` for what they do, `docs/ARCHITECTURE.md` for how they fit,
+`docs/END-TO-END-FLOW.md` for the whole chain, `docs/QUICKFILL.md` for the
+fast path, and `docs/WEB-DASHBOARD.md` for the dashboard.
 
 **This repository stands alone.** Deckhand was migrated in from a retired
 repository; `tests/independence.test.ts` fails on any import outside this
@@ -94,17 +95,18 @@ repository outside the one history note in `docs/DECKHAND.md`. Keep it that way.
 
 | Command | Use |
 | --- | --- |
-| `npm run verify` | typecheck + tests + template + both extension builds + both bundle checks + companion build + dashboard build + its bundle check. Run before every push. |
+| `npm run verify` | typecheck + tests + template + all three extension builds + their three bundle checks + companion build + dashboard build + its bundle check. Run before every push. |
 | `npm run build` / `build:watch` | build `dist/` (the ACE Helper) |
 | `npm run build:inttra` | build `dist-inttra/` (the INTTRA Helper) |
+| `npm run build:quickfill` | build `dist-quickfill/` (the Quickfill Helper) |
 | `npm run build:companion` | build `dist-companion/` (the QuickBooks companion) |
 | `npm run qb -- --help` | run the companion |
 | `npm run build:web` / `dev:web` | build `dist-web/` (the operator dashboard); `dev:web` serves it on `127.0.0.1:8788` |
 | `npm run check:bundle:web` | the supply-chain check on `dist-web/`, allowing no host at all |
 | `npm test` / `test:watch` | vitest |
 | `npm run smoke` | end-to-end in real Chrome against a mocked ACE host. Needs Chrome for Testing or a Playwright Chromium - **branded Chrome 137+ will not work** (see `docs/INSTALLATION.md`). |
-| `npm run check:bundle` / `check:bundle:inttra` | supply-chain check on `dist/` (CBP hosts only) and `dist-inttra/` (INTTRA/e2open hosts only) |
-| `npm run template` / `icons` / `icons:inttra` | regenerate the committed generated files |
+| `npm run check:bundle` / `check:bundle:inttra` / `check:bundle:quickfill` | supply-chain check on `dist/` (CBP hosts only), `dist-inttra/` (INTTRA/e2open only) and `dist-quickfill/` (both, and only Quickfill may name both) |
+| `npm run template` / `icons` / `icons:inttra` / `icons:quickfill` | regenerate the committed generated files |
 
 CI runs all of this on every pull request; `.github/workflows/ci.yml`.
 
@@ -126,6 +128,18 @@ of these, so do not work around them - fix the cause:
 - `innerHTML` is only ever assigned a string literal;
 - the manifest keeps `permissions: ["storage"]`, CBP-only hosts, and a CSP with
   `script-src 'self'` + `connect-src 'none'`.
+
+`tests/quickfillInvariants.test.ts` holds the Quickfill Helper's, and is the
+only place the *deliberate* removals are written down: it asserts no eval, no
+network, no credential, no browser storage outside `chrome.storage.session`, no
+`.click()`/`.submit()` in its content layer, exactly the five portal hosts and
+`permissions: ["storage"]` - and it deliberately does NOT assert a preview, a
+check or a gate, because Quickfill has none by design. It also asserts that
+`quickfill-extension/` declares no `mappings/` or `selectors/` folder of its own
+and imports neither field writer directly, so the code sharing cannot quietly
+stop. The three walkers are hardcoded to `src/`, `inttra-extension/` and
+`quickfill-extension/`, so a fourth top-level program needs its own file or it
+ships with no promises at all.
 
 `tests/inttraInvariants.test.ts` holds the same promises for the INTTRA Helper:
 INTTRA/e2open hosts only and never `<all_urls>`, no `.click()` anywhere in its
@@ -163,6 +177,8 @@ preview → ACE`.
 | a field in the filing package, or the merge policy | `shared/src/filingPackage.ts` + `shared/src/builder.ts` |
 | a document reader (PDF, mailbox) | implement `DocumentReader` in `deckhand/src/readers/`, register in `deckhand/src/extractor.ts` |
 | a dashboard screen | a renderer in `web/src/views/` over `ShipmentRecord`; the rules stay in `src/`, `shared/`, `deckhand/`. A workflow step is a pure function in `web/src/workflow.ts` |
+| what Quickfill accepts in its one paste box | the detection ladder in `quickfill-extension/src/paste.ts`. Never add a format picker: one box is the product |
+| how gated Quickfill is | `quickfill-extension/src/aceShipment.ts`. It is the local, ungated twin of `shared/src/aceView.ts`, and the one file where "fill it anyway" lives. Do not gate it, and do not ungate `aceView.ts` |
 | the dashboard's hosting | `web/wrangler.jsonc` (static assets only), `web/_headers`, `.github/workflows/deploy-web.yml` |
 | the guides in the dashboard's Help tab | `docs/USER-GUIDE.md` and `docs/SETUP-GUIDE.md` themselves; the page bundles them at build time (`?raw` import), never a second copy |
 | a transformation rule | `src/ace/transformers/` + register in `index.ts` |
@@ -188,7 +204,7 @@ transformation engine.
 
 ## Current state
 
-Five things are built but not verified against the real system, and all must
+Six things are built but not verified against the real system, and all must
 stay honestly described:
 
 1. The ACE selectors are **mostly verified by label wording, with six real
@@ -249,3 +265,17 @@ stay honestly described:
    nothing about items 1 to 4: it prepares the same files the extensions
    already read. Do not describe it as verified in production, and do not
    claim that hosting it resolves any of the caveats above.
+
+6. The Quickfill Helper has **never been used on a real shipment**, and it
+   improves nothing in items 1 to 4: it shares the same mapping tables, so it
+   fills exactly what the other two fill, which on the live INTTRA portal is
+   currently nothing. What is new about it is what it takes away - the
+   preview, the ten data quality checks, the ISO 6346 block, the Deckhand
+   review and Approve click, the conflict screen, the fill gate, the
+   overwrite warning and the reference counter. Every one of those removals
+   is listed with its cost in `docs/QUICKFILL.md` section 3; keep that table
+   true, and never describe Quickfill as "safer because it is simpler". It is
+   faster because it is simpler, and it is only safe because the operator
+   reads the form. Two things it still refuses: it never presses a portal
+   control, and it never guesses which of several containers goes in ACE's
+   single container field.
