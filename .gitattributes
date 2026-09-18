@@ -1,0 +1,17 @@
+# Text files check out with LF everywhere, including Windows, so that fixtures
+# and generated files are byte-identical on every platform. tests/qbBill.test.ts
+# matches fixture text across a line break, and `npm run verify` byte-compares
+# the committed template and icons against their generators.
+* text=auto eol=lf
+
+# Windows-hosted script; PowerShell is happiest with CRLF.
+*.ps1 text eol=crlf
+
+# A saved email is a byte-faithful artifact: RFC 5322 line endings are CRLF, and
+# tests/fixtures/deckhand/05-saved-email.eml is committed that way on purpose.
+# Leave its bytes exactly as they are, on every platform.
+*.eml -text
+
+# Never touch: regenerated and byte-compared by `npm run template` / `npm run icons`.
+*.xlsx binary
+*.png  binary
