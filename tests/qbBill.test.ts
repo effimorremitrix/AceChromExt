@@ -358,7 +358,7 @@ describe('the bill writer', () => {
     const missing = await new QuickBooksBillWriter(noVendor, config()).check(planFor());
     expect(missing.items[1]).toMatchObject({ ok: false, label: 'vendor "Blue Diamond Growers" is not in the company file' });
 
-    const inactive = new FileQbxmlTransport({ responses: { ...HAPPY, AccountQueryRq: fixture('account-query.xml').replace('<IsActive>true</IsActive>\n        <AccountType>Income', '<IsActive>false</IsActive>\n        <AccountType>Income') } });
+    const inactive = new FileQbxmlTransport({ responses: { ...HAPPY, AccountQueryRq: fixture('account-query.xml').replace(/<IsActive>true<\/IsActive>(\s*)<AccountType>Income/, '<IsActive>false</IsActive>$1<AccountType>Income') } });
     const flagged = await new QuickBooksBillWriter(inactive, config()).check(planFor());
     expect(flagged.ok).toBe(false);
     expect(flagged.items[3]).toMatchObject({ ok: false, label: 'account "Commissions Income" is inactive' });
