@@ -33,7 +33,7 @@ const box = el('textarea', {
 const readAs = el('p', { className: 'read-as' });
 const whereLine = el('p', { className: 'where' });
 const result = el('p', { className: 'result' });
-const buttons = el('div', { className: 'button-row' });
+const buttons = el('div', { className: 'button-row button-row-actions' });
 const lineSelect = el('select', { className: 'select' });
 
 async function toBackground(message: QuickfillBackgroundRequest): Promise<QuickfillBackgroundResponse> {
@@ -150,8 +150,8 @@ function renderLines(): void {
   }
 }
 
-function fillButton(label: string, run: () => Promise<void>): HTMLButtonElement {
-  const button = el('button', { className: 'button button-primary', text: label });
+function fillButton(label: string, run: () => Promise<void>, rank: 'primary' | 'secondary' = 'primary'): HTMLButtonElement {
+  const button = el('button', { className: rank === 'primary' ? 'button button-primary' : 'button', text: label });
   button.addEventListener('click', () => {
     button.disabled = true;
     void run().finally(() => {
@@ -203,15 +203,32 @@ function renderButtons(): void {
       return;
     }
     if (place.isGrid) {
-      const fill = fillButton('Fill container grid', () => run({ type: 'content/fillGrid', package: pkg }));
-      const copy = fillButton('Copy rows', () => copyRows(pkg));
       // On a click-to-edit grid Fill cannot write a single cell, so offering it
       // first means a dead-end click and a sentence to read before the button
       // that works. Ask the grid which it is and lead with the route that
       // exists. The other stays available: a grid that answers wrongly must
       // not become a grid the operator cannot fill.
+      //
+      // Order alone was not enough on the live portal (2026-09-17): two equal
+      // blue buttons read as two equal routes, so Fill was pressed, wrote
+      // nothing, and only then said why. So the one that cannot work is a
+      // plain button, and the reason is on the screen BEFORE the click.
+      const fill = fillButton(
+        'Fill container grid',
+        () => run({ type: 'content/fillGrid', package: pkg }),
+        place.gridWritable ? 'primary' : 'secondary',
+      );
+      const copy = fillButton('Copy rows', () => copyRows(pkg), place.gridWritable ? 'secondary' : 'primary');
       if (place.gridWritable) buttons.append(fill, copy);
-      else buttons.append(copy, fill);
+      else {
+        buttons.append(copy, fill);
+        buttons.append(
+          el('span', {
+            className: 'where grid-note',
+            text: 'This grid opens an editor when a cell is clicked, so Fill container grid has nothing to type into and will write 0 cells. Copy rows, click the first Container Number cell of the first empty row, and paste.',
+          }),
+        );
+      }
       return;
     }
     buttons.append(fillButton('Fill this screen', () => run({ type: 'content/fillInttra', package: pkg, scope: 'shipment' })));

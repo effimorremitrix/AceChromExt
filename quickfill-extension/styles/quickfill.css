@@ -38,3 +38,10 @@ body.quickfill .brand-mark { color: var(--amber); }
 .button-row .select { flex: 0 0 auto; width: auto; }
 
 .where { font-size: 11px; color: var(--ink-muted); }
+
+/*
+ * The note under the two grid buttons. It sits inside the button row so it
+ * stays with them, and takes a whole line of its own so the buttons keep
+ * theirs.
+ */
+.button-row .grid-note { flex: 1 0 100%; margin: 0; }

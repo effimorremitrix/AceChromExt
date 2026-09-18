@@ -94,7 +94,12 @@ The buttons shown depend on the page in the tab: the ACE pair on a CBP host
 that resolves to one of the four AESDirect steps, the INTTRA pair on a
 Shipping Instructions screen, and on the container grid **Copy rows** and
 **Fill container grid**, Copy rows first when the grid's cells cannot be
-typed into (the live portal's cannot). After Copy rows the result line names
+typed into (the live portal's cannot). On such a grid Copy rows is the only
+blue button, Fill container grid is a plain one, and a line under the pair
+says, before either is pressed, that the grid opens an editor when a cell is
+clicked so Fill would write 0 cells. Fill stays available anyway: a grid that
+answers the question wrongly must not become a grid the operator cannot fill.
+After Copy rows the result line names
 the columns pasted, in the grid's own order, and any left blank because no
 package column matches the heading, so the operator can see the seal is in the
 block before pasting it. On an INTTRA page the detector cannot name, **Copy
