@@ -302,6 +302,15 @@ method mentions qbXML, `TxnID` or `DataExt`. The QuickBooks types stop at
 customer's ERP - implements four methods and inherits the preview, the
 validation, the workbook and both user interfaces.
 
+The one write the companion makes, the vendor Bill (`ace-export bill`), is
+deliberately **not** on that interface. `BillWriter` in
+`companion/src/adapter/BillWriter.ts` is a separate, write-shaped seam with
+two methods, `check` and `write`, and `write` runs `check` itself before
+building the single `BillAddRq`. Keeping it apart means a second invoice
+source never inherits a write it did not ask for, and `tests/invariants.test.ts`
+can pin the write to one request type built in one file and reached from one
+place.
+
 `FieldOrigin` is the other half of that contract. An ACE filing is a legal
 declaration, so "QuickBooks reported this", "this was computed from it",
 "this came from a custom field" and "a person typed this" must not look alike

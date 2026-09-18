@@ -23,6 +23,7 @@ These existed before the package and do not depend on it. Tests assert each.
 | **ACE from Excel** | template `.xlsx` -> ACE Helper Import -> Preview -> Fill Current Page / Fill Current Commodity Line |
 | **ACE calculator** | F2 beside a numeric ACE field -> expression -> Enter -> only the result is inserted |
 | **ACE from QuickBooks** | `ace-export export CN-1042` -> `ACE_Invoice_CN-1042.xlsx` -> ACE Helper Import -> Fill |
+| **Vendor bill from QuickBooks** | `ace-export bill CN-1042` -> preview + checks -> `--write` adds the supplier's Bill (goods, terms, negative commission line) to QuickBooks; `--excel` writes `Bill_CN-1042.xlsx` with the arithmetic. The companion's one write; unverified live ([QUICKBOOKS-INTEGRATION.md](QUICKBOOKS-INTEGRATION.md) section 6b) |
 
 ## The workflows the package adds
 

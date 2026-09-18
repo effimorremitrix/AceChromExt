@@ -13,20 +13,31 @@ import { describe, expect, it } from 'vitest';
 
 import { childrenNamed, escapeXml, parseXml, textAt, XmlParseError } from '../companion/src/qbxml/xml.js';
 import {
+  BILL_REF_NUMBER_MAX,
+  buildAccountQueryBody,
+  buildBillAdd,
+  buildBillAddBody,
+  buildBillQueryBody,
   buildCustomerQuery,
   buildEnvelope,
   buildHostQuery,
   buildInvoiceQuery,
   buildInvoiceQueryBody,
+  buildVendorQueryBody,
   DEFAULT_QBXML_VERSION,
+  formatAmount,
   QbxmlRequestError,
 } from '../companion/src/qbxml/requests.js';
 import {
   customFieldNames,
   customFieldValue,
+  parseAccountQueryResponse,
+  parseBillAddResponse,
+  parseBillQueryResponse,
   parseHostQueryResponse,
   parseInvoiceQueryResponse,
   parseInvoiceQuerySummaries,
+  parseVendorQueryResponse,
   QbxmlResponseError,
   STATUS_NO_MATCH,
 } from '../companion/src/qbxml/parse.js';
@@ -284,5 +295,131 @@ describe('qbXML response parsing', () => {
     expect(host.productName).toBe('QuickBooks Desktop Pro Plus 2024');
     expect(host.country).toBe('US');
     expect(host.supportedQbxmlVersions).toContain('16.0');
+  });
+});
+
+describe('the bill requests', () => {
+  const lines = [
+    { accountFullName: 'Cost of Goods Sold:Almonds', amount: 651217.6, memo: 'goods & more' },
+    { accountFullName: 'Commissions Income', amount: -13024.35, memo: 'Commission 2%' },
+  ];
+
+  it('looks a bill up by number, headers only, and refuses TxnID with RefNumber', () => {
+    const body = buildBillQueryBody({ refNumber: 'CN-1042' });
+    expect(body).toContain('<BillQueryRq requestID="1">');
+    expect(body).toContain('<RefNumber>CN-1042</RefNumber>');
+    expect(body).toContain('<IncludeLineItems>false</IncludeLineItems>');
+    expect(() => buildBillQueryBody({ txnId: '1-1', refNumber: 'x' })).toThrow(QbxmlRequestError);
+  });
+
+  it('looks vendors and accounts up by full name, several at a time', () => {
+    const vendor = buildVendorQueryBody({ fullName: 'Blue Diamond Growers' });
+    expect(vendor).toContain('<VendorQueryRq requestID="1">');
+    expect(vendor).toContain('<FullName>Blue Diamond Growers</FullName>');
+    expect(vendor).toContain('<IncludeRetElement>IsActive</IncludeRetElement>');
+    const accounts = buildAccountQueryBody({ fullName: ['Cost of Goods Sold:Almonds', 'Commissions Income'] });
+    expect(accounts.match(/<FullName>/g)).toHaveLength(2);
+    expect(accounts).toContain('<IncludeRetElement>AccountType</IncludeRetElement>');
+    expect(() => buildAccountQueryBody({ fullName: [] })).toThrow(/at least one/);
+  });
+
+  it('emits BillAdd in schema order with two-decimal amounts', () => {
+    const body = buildBillAddBody({
+      vendorFullName: 'Blue Diamond Growers',
+      txnDate: '2026-09-21',
+      dueDate: '2027-01-19',
+      refNumber: 'CN-1042',
+      termsFullName: 'Net 120',
+      memo: 'header',
+      expenseLines: [{ ...lines[0]!, customerFullName: 'Aydin', billableStatus: 'NotBillable' }, lines[1]!],
+    });
+    const order = (body.match(/<(\w+)>/g) ?? []).map((tag) => tag.slice(1, -1));
+    expect(order).toEqual([
+      'BillAdd',
+      'VendorRef', 'FullName',
+      'TxnDate', 'DueDate', 'RefNumber',
+      'TermsRef', 'FullName',
+      'Memo',
+      'ExpenseLineAdd', 'AccountRef', 'FullName', 'Amount', 'Memo', 'CustomerRef', 'FullName', 'BillableStatus',
+      'ExpenseLineAdd', 'AccountRef', 'FullName', 'Amount', 'Memo',
+    ]);
+    expect(body).toContain('<Amount>651217.60</Amount>');
+    expect(body).toContain('<Amount>-13024.35</Amount>');
+    expect(body).toContain('goods &amp; more');
+    expect(buildBillAdd({ vendorFullName: 'V', refNumber: 'R', expenseLines: lines })).toContain('<QBXMLMsgsRq onError="stopOnError">');
+  });
+
+  it('leaves out what it was not given rather than emitting it empty', () => {
+    const body = buildBillAddBody({ vendorFullName: 'V', refNumber: 'R', expenseLines: [lines[0]!] });
+    expect(body).not.toContain('<TxnDate>');
+    expect(body).not.toContain('<DueDate>');
+    expect(body).not.toContain('<TermsRef>');
+    expect(body).not.toContain('<CustomerRef>');
+    expect(body).not.toContain('<BillableStatus>');
+    expect(body.match(/<Memo>/g) ?? []).toHaveLength(1);
+  });
+
+  it('refuses a bill it could not honestly send', () => {
+    const base = { vendorFullName: 'V', refNumber: 'R', expenseLines: lines };
+    expect(() => buildBillAddBody({ ...base, expenseLines: [] })).toThrow(/at least one expense line/);
+    expect(() => buildBillAddBody({ ...base, vendorFullName: ' ' })).toThrow(/needs a vendor/);
+    expect(() => buildBillAddBody({ ...base, refNumber: '' })).toThrow(/RefNumber/);
+    expect(() => buildBillAddBody({ ...base, refNumber: 'X'.repeat(BILL_REF_NUMBER_MAX + 1) })).toThrow(/at most 20/);
+    expect(() => buildBillAddBody({ ...base, txnDate: '21/09/2026' })).toThrow(/YYYY-MM-DD/);
+    expect(() => buildBillAddBody({ ...base, expenseLines: [{ accountFullName: 'A', amount: Number.NaN }] })).toThrow(/finite/);
+    expect(() => buildBillAddBody({ ...base, expenseLines: [{ accountFullName: '', amount: 1 }] })).toThrow(/needs an account/);
+  });
+
+  it('formats money with two decimals and no negative zero', () => {
+    expect(formatAmount(1)).toBe('1.00');
+    expect(formatAmount(-6424.176)).toBe('-6424.18');
+    expect(formatAmount(-0.001)).toBe('0.00');
+  });
+});
+
+describe('the bill responses', () => {
+  it('reads an empty bill query as "none", and a match as the bill it found', () => {
+    const none = parseBillQueryResponse(fixture('bill-query-no-match.xml'));
+    expect(none.status.code).toBe(STATUS_NO_MATCH);
+    expect(none.results).toEqual([]);
+    const found = parseBillQueryResponse(fixture('bill-query-match.xml'));
+    expect(found.results).toHaveLength(1);
+    expect(found.results[0]).toMatchObject({
+      txnId: '3C1E-1758500000',
+      refNumber: 'CN-1042',
+      txnDate: '2026-09-21',
+      vendor: { fullName: 'Blue Diamond Growers' },
+      amountDue: 638193.25,
+    });
+  });
+
+  it('reads the bill QuickBooks says it added, with its lines', () => {
+    const bill = parseBillAddResponse(fixture('bill-add-ok.xml'));
+    expect(bill.txnId).toBe('3C1E-1758500000');
+    expect(bill.editSequence).toBe('1758500000');
+    expect(bill.terms.fullName).toBe('Net 120');
+    expect(bill.lines).toHaveLength(2);
+    expect(bill.lines[1]).toMatchObject({ account: { fullName: 'Commissions Income' }, amount: -13024.35 });
+  });
+
+  it("reports QuickBooks' own message when the add was rejected", () => {
+    expect(() => parseBillAddResponse(fixture('bill-add-error.xml'))).toThrow(QbxmlResponseError);
+    expect(() => parseBillAddResponse(fixture('bill-add-error.xml'))).toThrow(/Commissions Incom/);
+  });
+
+  it('does not mistake "nothing was added" for success', () => {
+    const shrug = '<QBXML><QBXMLMsgsRs><BillAddRs statusCode="1" statusSeverity="Warn" statusMessage="nothing" /></QBXMLMsgsRs></QBXML>';
+    expect(() => parseBillAddResponse(shrug)).toThrow(/status 1/);
+    const empty = '<QBXML><QBXMLMsgsRs><BillAddRs statusCode="0" statusSeverity="Info" statusMessage="ok" /></QBXMLMsgsRs></QBXML>';
+    expect(() => parseBillAddResponse(empty)).toThrow(/no BillRet/);
+  });
+
+  it('reads vendors and accounts with their active flag', () => {
+    expect(parseVendorQueryResponse(fixture('vendor-query.xml')).results).toEqual([
+      { listId: '80000021-1613512500', fullName: 'Blue Diamond Growers', isActive: true },
+    ]);
+    const accounts = parseAccountQueryResponse(fixture('account-query.xml')).results;
+    expect(accounts.map((account) => account.fullName)).toEqual(['Cost of Goods Sold:Almonds', 'Commissions Income']);
+    expect(accounts[1]?.accountType).toBe('Income');
   });
 });

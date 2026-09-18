@@ -1,0 +1,6 @@
+<?xml version="1.0" ?>
+<QBXML>
+  <QBXMLMsgsRs>
+    <BillQueryRs requestID="1" statusCode="1" statusSeverity="Warn" statusMessage="A query request did not find a matching object in QuickBooks" />
+  </QBXMLMsgsRs>
+</QBXML>

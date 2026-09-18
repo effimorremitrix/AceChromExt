@@ -100,6 +100,9 @@ plus a smoke test that drives a real Chromium with a mocked ACE host.
    Everything from the qbXML response onwards is tested against saved
    responses, and the request builders are tested against the documented
    schema, but the hop through `QBXMLRP2.RequestProcessor` itself is untested.
+   That includes the companion's one write, `bill --write`: whether QuickBooks
+   accepts the negative commission line through the SDK is a schema
+   assumption until section 11 step f has been run.
    **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md) section 11**
    says exactly what to run on the QuickBooks PC and what you should see.
 
@@ -191,6 +194,14 @@ Wrote ACE_Invoice_CN-1042.xlsx
 
 Then import that file into the panel exactly as above. `node ace-export.mjs gui`
 does the same through a small local window instead of the command line.
+
+`node ace-export.mjs bill CN-1042` builds the supplier's Bill that mirrors the
+invoice (same goods, the invoice's terms and number, a negative commission
+line) and previews it with its checks; `--write` adds it to QuickBooks, and
+`--excel` writes the calculation as a workbook. It is the companion's one
+write, and it has not run against a real QuickBooks yet:
+[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md) sections 6b
+and 10c.
 
 What QuickBooks holds - invoice number, date, customer, PO, FOB terms, payment
 terms, carrier, line description, quantity and amount - is read directly. Vessel,
@@ -298,7 +309,9 @@ docs/             USER-GUIDE (start here) | SETUP-GUIDE | INSTALLATION |
 Data flows one way: `QuickBooks -> canonical model -> Excel -> canonical model
 -> preview -> ACE`. The canonical model is the same object in both halves, so
 QuickBooks is simply a second producer of it and reuses the whole preview,
-validation and fill pipeline unchanged. Inside the extension that seam is
+validation and fill pipeline unchanged. The single exception to "one way" is
+the companion's `bill --write`, which sends one `BillAddRq` back into
+QuickBooks after a duplicate check; everything else only reads. Inside the extension that seam is
 `InvoiceDataSource`: `ExcelSource` is the Phase 1 path and the fallback,
 `QuickBooksExportSource` recognises a companion-written workbook and labels it,
 and both parse it with identical code. Every ACE write goes through the single

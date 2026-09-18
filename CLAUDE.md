@@ -165,7 +165,11 @@ section 10.
 ## Where things live
 
 Data flows one way: `QuickBooks → canonical model → Excel → canonical model →
-preview → ACE`.
+preview → ACE`. The one exception is `ace-export bill --write`, which sends a
+single `BillAddRq` back into QuickBooks after a duplicate, vendor and account
+check; `tests/invariants.test.ts` pins it to that request type, built in
+`companion/src/qbxml/requests.ts` and reached only from
+`QuickBooksBillWriter.write`. Never add a `Mod`, a `Del` or another `Add`.
 
 | Change | File |
 | --- | --- |
@@ -195,6 +199,8 @@ preview → ACE`.
 | a qbXML element to read | `builtInCandidates` in `companion/src/mapping/qbToCanonical.ts` |
 | a QuickBooks custom field | `customFields` in the user's `ace-export.config.json`, no code |
 | another invoice source | implement `InvoiceSourceAdapter` in `companion/src/adapter/` |
+| a bill rule (which vendor and account an item belongs to, a vendor's commission, the memo wording) | the `bill` block of the user's `ace-export.config.json`, resolved by `billRuleForItem` in `companion/src/config.ts`; the arithmetic and every refusal in `companion/src/bill/billPlan.ts` (pure); the checks and the one write in `companion/src/adapter/BillWriter.ts`; the calculation workbook in `companion/src/excel/billWorkbook.ts` |
+| the one qbXML write | `buildBillAdd` in `companion/src/qbxml/requests.ts`, imported by `BillWriter.ts` alone. Do not widen `InvoiceSourceAdapter` with it, and do not let `write()` skip `check()` |
 
 ## The companion is a separate program
 
@@ -250,7 +256,13 @@ stay honestly described:
    no Windows machine with QuickBooks Desktop in this toolchain. Everything
    above the transport is tested against saved qbXML fixtures. Do not describe
    the live integration as working; `docs/QUICKBOOKS-INTEGRATION.md` section 11
-   is the procedure for verifying it on the QuickBooks PC.
+   is the procedure for verifying it on the QuickBooks PC. The companion's one
+   write, `bill --write` (a vendor Bill mirroring an invoice, with a negative
+   commission line), has likewise never run; section 11 step f verifies it,
+   and until then the negative line and the `BillAdd` element order are
+   schema assumptions, not facts. The bill fixtures in `tests/fixtures/qbxml/`
+   (`bill-*.xml`, `vendor-query.xml`, `account-query.xml`) are hand-written to
+   the documented schema, not captured.
 
 3. The INTTRA Helper has **two captured selectors and no captured field
    selector**. Every FIELD selector in `inttra-extension/src/mappings/` is

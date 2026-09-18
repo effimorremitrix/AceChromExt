@@ -1,0 +1,19 @@
+<?xml version="1.0" ?>
+<QBXML>
+  <QBXMLMsgsRs>
+    <AccountQueryRs requestID="1" statusCode="0" statusSeverity="Info" statusMessage="Status OK">
+      <AccountRet>
+        <ListID>80000030-1613512500</ListID>
+        <FullName>Cost of Goods Sold:Almonds</FullName>
+        <IsActive>true</IsActive>
+        <AccountType>CostOfGoodsSold</AccountType>
+      </AccountRet>
+      <AccountRet>
+        <ListID>80000031-1613512500</ListID>
+        <FullName>Commissions Income</FullName>
+        <IsActive>true</IsActive>
+        <AccountType>Income</AccountType>
+      </AccountRet>
+    </AccountQueryRs>
+  </QBXMLMsgsRs>
+</QBXML>

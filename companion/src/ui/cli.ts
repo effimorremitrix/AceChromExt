@@ -21,6 +21,10 @@ import {
 } from '../config.js';
 import { QuickBooksDesktopAdapter } from '../adapter/QuickBooksDesktopAdapter.js';
 import { AdapterError } from '../adapter/InvoiceSourceAdapter.js';
+import { QuickBooksBillWriter, type BillChecks, type BillWriteResult } from '../adapter/BillWriter.js';
+import { buildBillPlan, formatMoney } from '../bill/billPlan.js';
+import { renderBillPreview, renderBillRefusals } from '../bill/billPreview.js';
+import { writeBillWorkbook } from '../excel/billWorkbook.js';
 import { customFieldNames } from '../qbxml/parse.js';
 import { ComQbxmlTransport } from '../transport/ComTransport.js';
 import { FileQbxmlTransport } from '../transport/FileTransport.js';
@@ -61,6 +65,10 @@ export interface ResolvedOptions {
   port: number | null;
   /** An email or document on disk to extract with Deckhand, for `package`. Optional so older callers need not name it. */
   deckhandFile?: string | null;
+  /** `bill --write`: send the BillAddRq. Without it the command previews. Optional so older callers need not name it. */
+  write?: boolean;
+  /** `bill --excel`: also write the calculation workbook. */
+  excel?: boolean;
 }
 
 export interface ParsedArgs {
@@ -70,7 +78,7 @@ export interface ParsedArgs {
   booleans: Set<string>;
 }
 
-const BOOLEAN_FLAGS = new Set(['ascii', 'force', 'dry-run', 'launch', 'help', 'version']);
+const BOOLEAN_FLAGS = new Set(['ascii', 'force', 'dry-run', 'launch', 'help', 'version', 'write', 'excel']);
 
 const VALUE_FLAGS = new Set([
   'config',
@@ -219,6 +227,8 @@ export function resolveOptions(args: ParsedArgs): ResolvedOptions {
     dateTo: single(args, 'to'),
     port: integer(args, 'port'),
     deckhandFile: single(args, 'deckhand'),
+    write: args.booleans.has('write'),
+    excel: args.booleans.has('excel'),
   };
 }
 
@@ -249,6 +259,8 @@ Usage
                                             ACE Helper and the INTTRA Helper
   ace-export deckhand <file> [options]      read an email (.eml/.txt) with Deckhand and
                                             print the review block
+  ace-export bill <invoice> [--write]       preview the vendor Bill built from the
+                                            invoice; --write adds it to QuickBooks
   ace-export gui [--port N]                 the local ACE Export Helper form
   ace-export init [--config path]           write a starter configuration file
 
@@ -283,6 +295,14 @@ Package options (in addition to the export options above)
                         The extension shows the review and you press Approve
                         there, in front of the form.
 
+Bill options
+  --write               add the bill to QuickBooks. Without it, "bill" previews
+                        the bill and runs the checks (no duplicate, vendor and
+                        accounts exist) and writes nothing.
+  --excel               also write Bill_<number>.xlsx: the invoice, the bill
+                        breakdown and the commission arithmetic as live formulas
+  --out DIR / --force   as for export, for that workbook
+
 Everywhere
   --config PATH         configuration file (default: ./ace-export.config.json)
   --from-file PATH      replay a saved qbXML response instead of calling QuickBooks
@@ -294,7 +314,8 @@ Everywhere
   --help                this text
 
 Nothing is uploaded. Every request goes to the QuickBooks running on this
-machine, and the workbook is written to this machine.`;
+machine, and the workbook is written to this machine. The one thing that
+changes QuickBooks is "bill --write", which adds a Bill and nothing else.`;
 
 async function commandProbe(options: ResolvedOptions, io: CliIo): Promise<number> {
   const adapter = buildAdapter(options, io);
@@ -491,6 +512,65 @@ async function commandExport(invoiceId: string, options: ResolvedOptions, io: Cl
   }
 }
 
+async function commandBill(invoiceId: string, options: ResolvedOptions, io: CliIo): Promise<number> {
+  // One transport for the read and the write, so a test can see both.
+  const transport = (io.makeTransport ?? makeTransport)(options);
+  const adapter = new QuickBooksDesktopAdapter(transport, options.config);
+  const bills = new QuickBooksBillWriter(transport, options.config);
+  const style = { ascii: options.ascii };
+  try {
+    const invoice = await adapter.getInvoice(invoiceId);
+    const built = buildBillPlan(invoice.raw, options.config);
+    if (!built.ok) {
+      io.out(renderBillRefusals(built.refusals, style));
+      return 1;
+    }
+    const plan = built.plan;
+
+    if (options.write && options.fromFile) {
+      io.out(renderBillPreview(plan, null, style));
+      io.err('--write needs QuickBooks; --from-file replays a saved response. Run without --write to preview.');
+      return 1;
+    }
+
+    let checks: BillChecks;
+    let written: BillWriteResult | null = null;
+    if (options.write) {
+      const outcome = await bills.write(plan);
+      checks = outcome.checks;
+      written = outcome.written;
+    } else {
+      checks = await bills.check(plan);
+    }
+
+    io.out(renderBillPreview(plan, checks, style));
+    io.out('');
+    if (written) {
+      io.out(`Added bill: TxnID ${written.txnId}, ${written.vendor}, ref ${written.refNumber}, total ${formatMoney(written.amountDue ?? plan.total)}.`);
+      io.out('Open it in QuickBooks (Vendors > Vendor Center) and read it before it is paid.');
+    } else {
+      io.out(
+        checks.ok
+          ? 'Preview only: nothing was written to QuickBooks. Re-run with --write to add this bill.'
+          : 'Preview only: nothing was written to QuickBooks, and a check failed, so --write would refuse.',
+      );
+    }
+
+    if (options.excel) {
+      const result = writeBillWorkbook(plan, invoice.raw, { checks, written }, {
+        directory: options.outputDirectory ?? options.config.output.directory,
+        fileNameOrPattern: options.fileName ?? options.config.bill.excelFileNamePattern,
+        failIfExists: !options.force,
+        generatedBy: adapter.label,
+      });
+      io.out(`Calculation: ${result.path} (${(result.bytes / 1024).toFixed(1)} kB)`);
+    }
+    return written || checks.ok ? 0 : 1;
+  } finally {
+    await adapter.close();
+  }
+}
+
 function commandInit(options: ResolvedOptions, io: CliIo): number {
   const path = options.configPath ?? resolve(DEFAULT_CONFIG_FILE);
   if (existsSync(path) && !options.force) {
@@ -503,6 +583,7 @@ function commandInit(options: ResolvedOptions, io: CliIo): number {
   io.out('Edit it to match your company file:');
   io.out('  customFields  - the QuickBooks custom fields that carry vessel, booking, container, seal');
   io.out('  items         - the Schedule B number, origin and licence code for each item you export');
+  io.out('  bill          - the vendor, expense account and commission rules "ace-export bill" uses');
   io.out('');
   io.out('Run "ace-export fields <invoice>" to see the custom-field names QuickBooks actually returns.');
   return 0;
@@ -546,6 +627,9 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       case 'deckhand':
         if (!first) throw new CliError('Which file? e.g. "ace-export deckhand booking.eml".');
         return await commandDeckhand(first, options, io);
+      case 'bill':
+        if (!first) throw new CliError('Which invoice? e.g. "ace-export bill CN-1042".');
+        return await commandBill(first, options, io);
       case 'init':
         return commandInit(options, io);
       case 'gui':

@@ -1,0 +1,50 @@
+<?xml version="1.0" ?>
+<QBXML>
+  <QBXMLMsgsRs>
+    <BillAddRs requestID="1" statusCode="0" statusSeverity="Info" statusMessage="Status OK">
+      <BillRet>
+        <TxnID>3C1E-1758500000</TxnID>
+        <TimeCreated>2026-09-22T10:02:11-07:00</TimeCreated>
+        <TimeModified>2026-09-22T10:02:11-07:00</TimeModified>
+        <EditSequence>1758500000</EditSequence>
+        <TxnNumber>8850</TxnNumber>
+        <VendorRef>
+          <ListID>80000021-1613512500</ListID>
+          <FullName>Blue Diamond Growers</FullName>
+        </VendorRef>
+        <APAccountRef>
+          <ListID>80000010-1481000400</ListID>
+          <FullName>Accounts Payable</FullName>
+        </APAccountRef>
+        <TxnDate>2026-09-21</TxnDate>
+        <DueDate>2027-01-19</DueDate>
+        <AmountDue>638193.25</AmountDue>
+        <RefNumber>CN-1042</RefNumber>
+        <TermsRef>
+          <ListID>80000007-1481000400</ListID>
+          <FullName>Net 120</FullName>
+        </TermsRef>
+        <IsPaid>false</IsPaid>
+        <ExpenseLineRet>
+          <TxnLineID>3C1F-1758500000</TxnLineID>
+          <AccountRef>
+            <ListID>80000030-1613512500</ListID>
+            <FullName>Cost of Goods Sold:Almonds</FullName>
+          </AccountRef>
+          <Amount>651217.60</Amount>
+          <Memo>176000 lb Almond Kernels, Monterey SSR 23/25, new crop, 50 lb cartons to Aydin</Memo>
+          <BillableStatus>NotBillable</BillableStatus>
+        </ExpenseLineRet>
+        <ExpenseLineRet>
+          <TxnLineID>3C20-1758500000</TxnLineID>
+          <AccountRef>
+            <ListID>80000031-1613512500</ListID>
+            <FullName>Commissions Income</FullName>
+          </AccountRef>
+          <Amount>-13024.35</Amount>
+          <Memo>Commission 2% on invoice CN-1042</Memo>
+        </ExpenseLineRet>
+      </BillRet>
+    </BillAddRs>
+  </QBXMLMsgsRs>
+</QBXML>

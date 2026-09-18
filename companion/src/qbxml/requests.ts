@@ -9,7 +9,15 @@
  * filters - they are alternatives in an `xs:choice`).
  *
  * Reference: QuickBooks Desktop SDK, `qbxmlops<version>.xml` / the OSR
- * (Onscreen Reference) entries for InvoiceQueryRq, CustomerQueryRq, HostQueryRq.
+ * (Onscreen Reference) entries for InvoiceQueryRq, CustomerQueryRq, HostQueryRq,
+ * BillQueryRq, VendorQueryRq, AccountQueryRq and BillAddRq.
+ *
+ * `BillAddRq` is the one request in this file that changes the company file.
+ * `tests/invariants.test.ts` pins that list: every other element built here
+ * is a query, and no Mod, Del or other Add request exists anywhere in the
+ * companion. The builder is reachable from exactly one place,
+ * `QuickBooksBillWriter.write` in `adapter/BillWriter.ts`, which runs the
+ * duplicate, vendor and account checks first.
  */
 
 import { escapeXml } from './xml.js';
@@ -287,4 +295,184 @@ export function buildCustomerQuery(spec: CustomerQuerySpec = {}, options: Envelo
  */
 export function buildHostQuery(options: EnvelopeOptions = {}): string {
   return buildEnvelope(['    <HostQueryRq requestID="1" />'], options);
+}
+
+// ---------------------------------------------------------------------------
+// Bills: the checks a write needs, and the one write.
+// ---------------------------------------------------------------------------
+
+export interface BillQuerySpec {
+  /** Exact transaction ID. Mutually exclusive with `refNumber`. */
+  txnId?: string | string[];
+  /** Exact bill number (the "Ref. No." box). Mutually exclusive with `txnId`. */
+  refNumber?: string | string[];
+  /** Default false: the duplicate check needs headers only. */
+  includeLineItems?: boolean;
+  requestId?: string;
+}
+
+export interface NameQuerySpec {
+  /** One or more list-object full names to look up. */
+  fullName: string | string[];
+  requestId?: string;
+}
+
+export interface BillExpenseLineSpec {
+  accountFullName: string;
+  /** Dollars; serialised to two decimals. Negative is allowed (a commission line). */
+  amount: number;
+  memo?: string;
+  customerFullName?: string;
+  billableStatus?: 'Billable' | 'NotBillable' | 'HasBeenBilled';
+}
+
+export interface BillAddSpec {
+  vendorFullName: string;
+  /** YYYY-MM-DD. */
+  txnDate?: string;
+  /** YYYY-MM-DD. Left out, QuickBooks derives it from the terms. */
+  dueDate?: string;
+  refNumber: string;
+  termsFullName?: string;
+  memo?: string;
+  expenseLines: BillExpenseLineSpec[];
+  requestId?: string;
+}
+
+/** QuickBooks caps a bill's Ref. No. at 20 characters. */
+export const BILL_REF_NUMBER_MAX = 20;
+
+/** Money is written with exactly two decimals, never through `String(number)`. */
+export function formatAmount(amount: number): string {
+  if (!Number.isFinite(amount)) throw new QbxmlRequestError(`An amount must be a finite number; got ${amount}.`);
+  const fixed = amount.toFixed(2);
+  return fixed === '-0.00' ? '0.00' : fixed;
+}
+
+/**
+ * `BillQueryRq`, used before every write to find a bill that already carries
+ * this number for this vendor. The vendor filter is applied by the caller on
+ * the response: an `EntityFilter` cannot be combined with a RefNumber lookup
+ * (the same `xs:choice` as the invoice query).
+ */
+export function buildBillQueryBody(spec: BillQuerySpec = {}): string {
+  const indent = '      ';
+  const outer = '    ';
+  const requestId = spec.requestId ?? '1';
+  const txnIds = asList(spec.txnId);
+  const refNumbers = asList(spec.refNumber);
+
+  if (txnIds.length && refNumbers.length) {
+    throw new QbxmlRequestError('Query a bill by TxnID or by RefNumber, not both: qbXML treats them as alternatives.');
+  }
+
+  const body: string[] = [];
+  for (const id of txnIds) body.push(tag('TxnID', id, indent));
+  for (const ref of refNumbers) body.push(tag('RefNumber', ref, indent));
+  body.push(tag('IncludeLineItems', spec.includeLineItems === true ? 'true' : 'false', indent));
+
+  return [`${outer}<BillQueryRq requestID="${escapeXml(requestId)}">`, ...body, `${outer}</BillQueryRq>`].join('\n');
+}
+
+export function buildBillQuery(spec: BillQuerySpec = {}, options: EnvelopeOptions = {}): string {
+  return buildEnvelope([buildBillQueryBody(spec)], options);
+}
+
+function buildNameQueryBody(element: string, spec: NameQuerySpec, retElements: string[]): string {
+  const indent = '      ';
+  const outer = '    ';
+  const requestId = spec.requestId ?? '1';
+  const names = asList(spec.fullName);
+  if (!names.length) throw new QbxmlRequestError(`${element} needs at least one FullName to look up.`);
+
+  const body: string[] = [];
+  for (const name of names) body.push(tag('FullName', name, indent));
+  for (const ret of retElements) body.push(tag('IncludeRetElement', ret, indent));
+
+  return [`${outer}<${element} requestID="${escapeXml(requestId)}">`, ...body, `${outer}</${element}>`].join('\n');
+}
+
+/** `VendorQueryRq` by full name: does this vendor exist, and is it active? */
+export function buildVendorQueryBody(spec: NameQuerySpec): string {
+  return buildNameQueryBody('VendorQueryRq', spec, ['ListID', 'FullName', 'IsActive']);
+}
+
+export function buildVendorQuery(spec: NameQuerySpec, options: EnvelopeOptions = {}): string {
+  return buildEnvelope([buildVendorQueryBody(spec)], options);
+}
+
+/** `AccountQueryRq` by full name(s): do these accounts exist, and are they active? */
+export function buildAccountQueryBody(spec: NameQuerySpec): string {
+  return buildNameQueryBody('AccountQueryRq', spec, ['ListID', 'FullName', 'IsActive', 'AccountType']);
+}
+
+export function buildAccountQuery(spec: NameQuerySpec, options: EnvelopeOptions = {}): string {
+  return buildEnvelope([buildAccountQueryBody(spec)], options);
+}
+
+/**
+ * `BillAddRq`: the one request that changes the company file.
+ *
+ * Element order follows the OSR sequence for BillAdd: VendorRef, TxnDate,
+ * DueDate, RefNumber, TermsRef, Memo, then the expense lines (AccountRef,
+ * Amount, Memo, CustomerRef, BillableStatus). Elements this helper never
+ * writes (VendorAddress, APAccountRef, sales tax, item lines) are omitted
+ * rather than emitted empty. Two facts about the schema have not been
+ * confirmed against a live QuickBooks yet, and docs/QUICKBOOKS-INTEGRATION.md
+ * section 11 step f is where they get confirmed: that a negative Amount on an
+ * expense line is accepted through the SDK as it is in the Enter Bills window,
+ * and the exact position of Memo relative to TermsRef.
+ */
+export function buildBillAddBody(spec: BillAddSpec): string {
+  const indent = '        ';
+  const line = '          ';
+  const outer = '    ';
+  const requestId = spec.requestId ?? '1';
+
+  const vendor = spec.vendorFullName.trim();
+  if (vendor === '') throw new QbxmlRequestError('A bill needs a vendor.');
+  const refNumber = spec.refNumber.trim();
+  if (refNumber === '') throw new QbxmlRequestError('A bill needs a RefNumber, or it cannot be recognised as a duplicate later.');
+  if (refNumber.length > BILL_REF_NUMBER_MAX) {
+    throw new QbxmlRequestError(`A bill RefNumber may be at most ${BILL_REF_NUMBER_MAX} characters; "${refNumber}" is ${refNumber.length}.`);
+  }
+  if (!spec.expenseLines.length) throw new QbxmlRequestError('A bill needs at least one expense line.');
+  assertDate(spec.txnDate, 'txnDate');
+  assertDate(spec.dueDate, 'dueDate');
+
+  const body: string[] = [];
+  body.push(...block('VendorRef', [tag('FullName', vendor, `${indent}  `)], indent));
+  if (spec.txnDate) body.push(tag('TxnDate', spec.txnDate, indent));
+  if (spec.dueDate) body.push(tag('DueDate', spec.dueDate, indent));
+  body.push(tag('RefNumber', refNumber, indent));
+  if (spec.termsFullName && spec.termsFullName.trim() !== '') {
+    body.push(...block('TermsRef', [tag('FullName', spec.termsFullName.trim(), `${indent}  `)], indent));
+  }
+  if (spec.memo && spec.memo !== '') body.push(tag('Memo', spec.memo, indent));
+
+  for (const expense of spec.expenseLines) {
+    const account = expense.accountFullName.trim();
+    if (account === '') throw new QbxmlRequestError('Every expense line needs an account.');
+    const inner: string[] = [];
+    inner.push(...block('AccountRef', [tag('FullName', account, `${line}  `)], line));
+    inner.push(tag('Amount', formatAmount(expense.amount), line));
+    if (expense.memo && expense.memo !== '') inner.push(tag('Memo', expense.memo, line));
+    if (expense.customerFullName && expense.customerFullName.trim() !== '') {
+      inner.push(...block('CustomerRef', [tag('FullName', expense.customerFullName.trim(), `${line}  `)], line));
+    }
+    if (expense.billableStatus) inner.push(tag('BillableStatus', expense.billableStatus, line));
+    body.push(...block('ExpenseLineAdd', inner, `${indent}`));
+  }
+
+  return [
+    `${outer}<BillAddRq requestID="${escapeXml(requestId)}">`,
+    `${outer}  <BillAdd>`,
+    ...body,
+    `${outer}  </BillAdd>`,
+    `${outer}</BillAddRq>`,
+  ].join('\n');
+}
+
+export function buildBillAdd(spec: BillAddSpec, options: EnvelopeOptions = {}): string {
+  return buildEnvelope([buildBillAddBody(spec)], options);
 }

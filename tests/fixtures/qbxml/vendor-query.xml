@@ -1,0 +1,12 @@
+<?xml version="1.0" ?>
+<QBXML>
+  <QBXMLMsgsRs>
+    <VendorQueryRs requestID="1" statusCode="0" statusSeverity="Info" statusMessage="Status OK">
+      <VendorRet>
+        <ListID>80000021-1613512500</ListID>
+        <FullName>Blue Diamond Growers</FullName>
+        <IsActive>true</IsActive>
+      </VendorRet>
+    </VendorQueryRs>
+  </QBXMLMsgsRs>
+</QBXML>

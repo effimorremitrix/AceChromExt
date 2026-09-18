@@ -172,7 +172,7 @@ export function checkRows(validation: ValidationResult): Cell[][] {
   return rows;
 }
 
-function widthsFor(rows: Cell[][], max = 40): XLSX.ColInfo[] {
+export function widthsFor(rows: Array<Array<string | number>>, max = 40): XLSX.ColInfo[] {
   const widths: number[] = [];
   for (const row of rows) {
     row.forEach((cell, index) => {

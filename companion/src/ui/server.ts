@@ -26,10 +26,15 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomBytes } from 'node:crypto';
 import { validateShipment, type ValidationResult } from '../../../src/excel/validator.js';
 import type { InvoiceSourceAdapter } from '../adapter/InvoiceSourceAdapter.js';
+import { BillRefusedError, QuickBooksBillWriter, type BillChecks, type BillWriter, type BillWriteResult } from '../adapter/BillWriter.js';
+import { QuickBooksDesktopAdapter } from '../adapter/QuickBooksDesktopAdapter.js';
+import { buildBillPlan } from '../bill/billPlan.js';
+import { renderBillPreview } from '../bill/billPreview.js';
+import { writeBillWorkbook } from '../excel/billWorkbook.js';
 import type { QbInvoice } from '../qbxml/types.js';
 import type { CanonicalMapping } from '../mapping/types.js';
 import { aceReadiness, renderChecklist, renderPreview } from './preview.js';
-import { buildAdapter, type CliIo, type ResolvedOptions } from './cli.js';
+import { makeTransport, type CliIo, type ResolvedOptions } from './cli.js';
 import { PAGE_CSS, PAGE_HTML, PAGE_JS } from './page.js';
 
 export interface HttpReply {
@@ -40,6 +45,8 @@ export interface HttpReply {
 
 export interface RequestContext {
   adapter: InvoiceSourceAdapter<QbInvoice>;
+  /** The one write. Optional so a context built for reading alone has none. */
+  bills?: BillWriter;
   token: string;
   options: ResolvedOptions;
 }
@@ -135,6 +142,67 @@ export async function handleRequest(
       return json(200, summaryPayload(mapping, validation, context.options.ascii));
     }
 
+    if (method === 'POST' && path === '/api/bill') {
+      const request = parseJsonBody(body);
+      const id = typeof request['id'] === 'string' ? request['id'] : '';
+      if (id.trim() === '') return json(400, { error: 'Which invoice?' });
+      const write = request['write'] === true;
+      const excel = request['excel'] === true;
+      if (!context.bills) return json(400, { error: 'This window was opened without a bill writer.' });
+      if (write && context.options.fromFile) {
+        return json(400, { error: '--from-file replays a saved response; a bill can only be written to a running QuickBooks.' });
+      }
+
+      const invoice = await context.adapter.getInvoice(id);
+      const built = buildBillPlan(invoice.raw, context.options.config);
+      if (!built.ok) return json(200, { ok: false, refusals: built.refusals, plan: null, checks: [], preview: '', written: null, excel: null });
+      const plan = built.plan;
+
+      let checks: BillChecks;
+      let written: BillWriteResult | null = null;
+      if (write) {
+        // write() runs the checks itself and refuses before sending anything.
+        try {
+          const outcome = await context.bills.write(plan);
+          checks = outcome.checks;
+          written = outcome.written;
+        } catch (error) {
+          if (!(error instanceof BillRefusedError)) throw error;
+          return json(409, {
+            error: error.message,
+            ok: false,
+            refusals: error.checks.items.filter((item) => !item.ok).map((item) => `${item.label}${item.detail ? `: ${item.detail}` : ''}`),
+            plan,
+            checks: error.checks.items,
+            preview: renderBillPreview(plan, error.checks, { ascii: context.options.ascii }),
+            written: null,
+            excel: null,
+          });
+        }
+      } else {
+        checks = await context.bills.check(plan);
+      }
+
+      let excelResult = null;
+      if (excel) {
+        excelResult = writeBillWorkbook(plan, invoice.raw, { checks, written }, {
+          directory: context.options.outputDirectory ?? context.options.config.output.directory,
+          fileNameOrPattern: context.options.config.bill.excelFileNamePattern,
+          failIfExists: !context.options.force,
+          generatedBy: context.adapter.label,
+        });
+      }
+      return json(200, {
+        ok: checks.ok,
+        refusals: [],
+        plan,
+        checks: checks.items,
+        preview: renderBillPreview(plan, checks, { ascii: context.options.ascii }),
+        written,
+        excel: excelResult,
+      });
+    }
+
     if (method === 'POST' && path === '/api/export') {
       const request = parseJsonBody(body);
       const id = typeof request['id'] === 'string' ? request['id'] : '';
@@ -224,9 +292,12 @@ async function readBody(request: IncomingMessage, limit = 256 * 1024): Promise<s
 
 /** Start the local window and block until the process is stopped. */
 export async function runGui(options: ResolvedOptions, io: CliIo): Promise<number> {
-  const adapter = buildAdapter(options, io);
+  // One transport for the reads and the one write, as the CLI does.
+  const transport = (io.makeTransport ?? makeTransport)(options);
+  const adapter = new QuickBooksDesktopAdapter(transport, options.config);
+  const bills = new QuickBooksBillWriter(transport, options.config);
   const token = randomBytes(16).toString('hex');
-  const context: RequestContext = { adapter, token, options };
+  const context: RequestContext = { adapter, bills, token, options };
 
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
     void (async () => {

@@ -29,7 +29,10 @@ QuickBooks Desktop Pro Plus 2024  (Windows, company file open)
         |  32-bit Windows PowerShell  (companion/powershell/QbxmlRequest.ps1)
         |
    ace-export  (Node, this repository)
-        |  InvoiceQueryRq / HostQueryRq            companion/src/qbxml/
+        |  InvoiceQueryRq / HostQueryRq  (reads)   companion/src/qbxml/
+        |
+        |  ^  BillQueryRq -> BillAddRq  (the one write, "bill --write" only;
+        |  |  section 6b)                          companion/src/bill/
         v
    QbInvoice                                       companion/src/qbxml/types.ts
         |  adapter + configuration                 companion/src/mapping/
@@ -171,6 +174,75 @@ date-range search does not drag every line of every invoice back.
 
 `HostQueryRq` (`ace-export probe`) touches no company data, which makes it the
 safe way to test the connection.
+
+## 6b. How a bill is written
+
+`ace-export bill <invoice>` builds the supplier's **Bill** that mirrors a
+customer invoice: same goods amount, the invoice's terms and dates, the
+invoice number as the bill's Ref. No., and a negative **commission** line so
+the bill total is what is actually owed to the vendor. It is the one place the
+companion changes the company file, and it is gated three ways: nothing is
+sent without `--write`; every write is preceded by three reads that refuse a
+duplicate, an unknown vendor or an unknown account; and the request type is
+pinned by `tests/invariants.test.ts` so no `Mod`, `Del` or other `Add` can be
+added quietly.
+
+The requests, in order, one PowerShell spawn each:
+
+| Step | Request | What it settles |
+| --- | --- | --- |
+| 1 | `InvoiceQueryRq` | the invoice, with lines |
+| 2 | `BillQueryRq` by `RefNumber` | is there already a bill with this number for this vendor? (a refusal). The same number under another vendor is only noted |
+| 3 | `VendorQueryRq` by `FullName` | the vendor exists and is active |
+| 4 | `AccountQueryRq` by `FullName` | every account on the bill exists and is active |
+| 5 | `BillAddRq` | only with `--write`, only when 2 to 4 passed |
+
+The bill is built from the invoice and the `bill` block of the configuration
+(section 9) by `companion/src/bill/billPlan.ts`, which is pure and refuses
+rather than guesses: an item with no vendor rule, lines that name two vendors,
+a pending invoice, an invoice with no number or no terms, lines that do not
+add up to the invoice subtotal, all stop it before step 2. The request looks
+like this:
+
+```xml
+<BillAddRq requestID="1">
+  <BillAdd>
+    <VendorRef><FullName>Blue Diamond Growers</FullName></VendorRef>
+    <TxnDate>2026-09-21</TxnDate>
+    <DueDate>2027-01-19</DueDate>
+    <RefNumber>CN-1042</RefNumber>
+    <TermsRef><FullName>Net 120</FullName></TermsRef>
+    <ExpenseLineAdd>
+      <AccountRef><FullName>Cost of Goods Sold:Almonds</FullName></AccountRef>
+      <Amount>651217.60</Amount>
+      <Memo>176000 Almond Kernels, Monterey SSR 23/25, new crop, 50 lb cartons to Aydin</Memo>
+    </ExpenseLineAdd>
+    <ExpenseLineAdd>
+      <AccountRef><FullName>Commissions Income</FullName></AccountRef>
+      <Amount>-13024.35</Amount>
+      <Memo>Commission 2% on invoice CN-1042</Memo>
+    </ExpenseLineAdd>
+  </BillAdd>
+</BillAddRq>
+```
+
+**The commission is rounded once, on the goods subtotal**, in integer cents,
+exactly as a person with a calculator does it: 651,217.60 x 2% = 13,024.352
+-> 13,024.35, posted as -13,024.35, bill total 638,193.25. The rate is fixed
+at six decimals so the product is an exact integer and `Math.round` never
+sees a 0.4999... (`commissionCents` in `billPlan.ts`).
+
+**Two schema facts are not yet confirmed on a live QuickBooks** and are what
+section 11 step f exists to confirm: that the SDK accepts a negative `Amount`
+on an `ExpenseLineAdd` as the Enter Bills window does, and the exact position
+of `Memo` in the `BillAdd` sequence. If QuickBooks rejects the negative line,
+record its status and message there and stop: the sign of the commission is a
+decision to revisit, not something to patch around.
+
+`DueDate` is copied from the invoice when it has one; left out, QuickBooks
+derives it from the terms. With `tagLinesWithCustomer` the goods lines also
+carry the invoice's customer as `CustomerRef` (`NotBillable`), which is how
+QuickBooks' job reports tie the purchase to the sale.
 
 ## 7. Fields supported
 
@@ -336,12 +408,40 @@ If a value cannot be reached at all, supply it per export:
     "fileNamePattern": "ACE_Invoice_{refNumber}.xlsx",  // {refNumber} {txnId} {date} {customer}
     "weightUom": "kg",               // "kg" writes the converted weight, "lb" the QuickBooks pounds
     "includeAuditSheet": true
+  },
+
+  "bill": {                                        // for "ace-export bill", section 6b / 10c
+    "items": {                                     // item FullName -> who it is bought from, where it posts
+      "Shelled Almonds": { "vendor": "Blue Diamond Growers", "account": "Cost of Goods Sold:Almonds" },
+      "Dried Fruit": { "vendor": "Blue Diamond Growers" },          // vendor for every child...
+      "Dried Fruit:Dried Prunes": { "account": "Cost of Goods Sold:Prunes" }  // ...account per child
+    },
+    "vendors": {
+      "Blue Diamond Growers": {
+        "commission": { "account": "Commissions Income", "rate": 0.02 }   // 0.02 = 2%, posted negative
+      }
+    },
+    "customers": { "Aydin Kuruyemis San Ve Tic A.S": { "shortName": "Aydin" } },  // for memos
+    "memoTemplate": "{quantity} {description} to {customerShortName}",   // each goods line
+    "commissionMemoTemplate": "Commission {ratePercent}% on invoice {refNumber}",
+    "billMemoTemplate": "",                        // bill header memo; empty writes none
+    "tagLinesWithCustomer": false,                 // CustomerRef (NotBillable) on each goods line
+    "excelFileNamePattern": "Bill_{refNumber}.xlsx" // "bill --excel"
   }
 }
 ```
 
 Item names are hierarchical, and so are profiles: a profile on `Dried Fruit`
 applies to `Dried Fruit:Dried Prunes` unless the child has its own.
+
+The `bill.items` rules are hierarchical too, but **per field**: the vendor
+may sit on `Dried Fruit` and the account on `Dried Fruit:Dried Prunes`, and
+each resolves to the nearest name that sets it (`billRuleForItem`). A vendor
+with no `commission` gets a bill of goods lines only, and the preview says
+so. Memo placeholders: `{quantity}`, `{description}`, `{item}`,
+`{unitOfMeasure}`, `{customerName}`, `{customerShortName}`, `{refNumber}`,
+`{rate}`, `{ratePercent}`; an unknown one is a configuration error, not a
+memo that reads "{custmer}".
 
 **Precedence**, highest first: `--set` / the form, then `manual`, then a custom
 field, then `Other`, then the built-in qbXML field, then `invoiceDefaults`.
@@ -448,6 +548,58 @@ narrower reason: Quantity 1 and UOM 1 are derived together from the weight, so
 changing the unit alone would make ACE report 79,832 *pounds*. The unit belongs
 in the item profile's `aceUom1`, where the quantity is derived to match it.
 
+## 10c. Creating the vendor bill
+
+```
+> node ace-export.mjs bill CN-1042
+Bill from invoice CN-1042 (TxnID 2AB4-1758412800)
+  Vendor      Blue Diamond Growers            [bill.items."Shelled Almonds".vendor]
+  Date        2026-09-21                      [invoice date]
+  Due         2027-01-19                      [invoice due date]
+  Terms       Net 120                         [invoice terms]
+  Ref number  CN-1042                         [invoice number]
+  Customer    Aydin Kuruyemis San Ve Tic A.S (Aydin)  [invoice customer]
+
+  #  Account                     Amount      Memo
+  1  Cost of Goods Sold:Almonds  651,217.60  176000 Almond Kernels, Monterey SSR 23/25, new crop, 50 lb cartons to Aydin
+  C  Commissions Income          -13,024.35  Commission 2% on invoice CN-1042
+     Goods subtotal              651,217.60
+     Commission 2%               -13,024.35  [bill.vendors."Blue Diamond Growers".commission]
+     Bill total                  638,193.25
+
+Checks
+  v no bill numbered CN-1042 for Blue Diamond Growers
+  v vendor "Blue Diamond Growers" is in the company file
+  v account "Cost of Goods Sold:Almonds" exists: (CostOfGoodsSold)
+  v account "Commissions Income" exists: (Income)
+
+Preview only: nothing was written to QuickBooks. Re-run with --write to add this bill.
+```
+
+`--write` sends the `BillAddRq` after the same checks and prints the TxnID
+QuickBooks assigned. `--excel` also writes `Bill_CN-1042.xlsx`: an **Invoice**
+sheet (the lines and totals as QuickBooks returned them), a **Bill** sheet
+where the goods subtotal, the commission (`=-ROUND(subtotal*rate,2)`) and the
+bill total are live formulas beside the values the companion computed, plus a
+tie-out row (`goods = invoice subtotal`), and a **Checks** sheet. Run with
+`--write --excel` the file also records the TxnID. The local window has the
+same three buttons: **Preview bill**, **Write bill to QuickBooks** (enabled
+only after a preview whose checks passed, and it asks first), **Save
+calculation (.xlsx)**.
+
+Exit codes: `0` previewed with every check passing, or written; `1` a rule
+refused the bill, a check failed, or `--write` was combined with
+`--from-file` (a saved response cannot answer four request types, so a replay
+stops at the duplicate check with "no `<BillQueryRs>`"; that is expected).
+
+What stops it, and the fix: no `bill.items` rule for an item (add one, on the
+item or a parent); lines that resolve to two vendors (split the invoice);
+a pending invoice, or one with no number or no terms (fix the invoice); lines
+that do not add up to the invoice subtotal (a discount or subtotal line the
+rules do not cover); a bill already numbered like this for the vendor (it
+was done); a vendor or account QuickBooks does not have, or has made inactive
+(spelling, including the parent account).
+
 ## 11. What still needs testing on the QuickBooks PC
 
 Everything from `QbInvoice` onwards is covered by tests against saved qbXML
@@ -490,6 +642,33 @@ the machine.
 check the preview shows the same numbers. (Filling ACE itself is still blocked
 by Phase 1's placeholder selectors - [docs/ACE-MAPPING.md](ACE-MAPPING.md).)
 
+**f. The bill write.** This is the companion's only write, and it has never
+run against a real QuickBooks either. In order, on a **backup or a copy of the
+company file** first (File > Back Up Company):
+
+1. `probe`, as in step a.
+2. `bill <number>` for an invoice whose item has a `bill.items` rule: every
+   check must show a tick. If the vendor or account check fails, fix the
+   spelling in the configuration until it passes; nothing has been sent.
+3. `bill <number> --write --excel`. Expect `Added bill: TxnID ...` and a
+   `Bill_<number>.xlsx` beside it.
+4. In QuickBooks, Vendors > Vendor Center > the vendor > the bill. Confirm the
+   vendor, date, terms, Ref. No., every expense line and memo, **that the
+   negative commission line was accepted**, and that the Amount Due equals the
+   preview's bill total. If QuickBooks rejected the negative line (the
+   companion prints its status and message), record them here, in section
+   6b, and stop: the sign rule is a decision to revisit.
+5. `bill <number> --write` again: it must refuse as a duplicate, sending no
+   `BillAddRq`. The `Bill_<number>.xlsx` from step 3 is the record of what was
+   posted.
+6. Misspell one account in the configuration and run `bill <number>` without
+   `--write`: the account check must fail before anything is sent.
+7. Save the `BillAddRs` and a `BillQueryRs` as fixtures (strip customer data)
+   and replace the hand-written ones in `tests/fixtures/qbxml/`.
+
+Until step 4 has been done, the negative commission line is a schema
+assumption, and CLAUDE.md's "Current state" says so.
+
 ## 12. Troubleshooting
 
 | Symptom | Cause and fix |
@@ -507,6 +686,12 @@ by Phase 1's placeholder selectors - [docs/ACE-MAPPING.md](ACE-MAPPING.md).)
 | Schedule B / origin / licence blank | They are not in QuickBooks. Put them in `items`, once per item. |
 | `Destination "DERINCE" is not a two-letter ISO country code` | The custom field holds a port, not a country. ACE wants the country of ultimate destination: `--set destination=TR`, or point `destination` at `ShipAddress/Country`. |
 | `"..." already exists` | A workbook for that invoice is already there. `--force` replaces it. |
+| `No bill was built from this invoice: ... No vendor for item "..."` | Add `bill.items."<item>".vendor` (and `.account`), on the item or a parent - section 9. |
+| `Lines name 2 vendors (...)` | One bill has one vendor. Split the invoice, or fix the item rules. |
+| `a bill numbered CN-1042 already exists for ...` | It was done. `bill` never writes the same number twice for one vendor; find it in Vendor Center. |
+| `vendor "..." is not in the company file` / `account "..." is not in the chart of accounts` | Spelling, including the parent account (`Cost of Goods Sold:Almonds`). Nothing was sent. |
+| `QuickBooks did not accept the bill (status 3140 ...)` | QuickBooks rejected the `BillAddRq` after the checks passed; its message names the element. Section 11 step f, especially for a negative amount. |
+| `--write needs QuickBooks; --from-file replays a saved response` | A bill can only be written to a running QuickBooks. Drop one flag or the other. |
 | The window will not open | `--port` may be taken; omit it and one is chosen. The URL must include the `?t=` token the command printed. |
 
 ## 13. Security
@@ -521,3 +706,7 @@ Restating what [docs/SECURITY.md](SECURITY.md) says, for this component:
 - **Nothing lingers.** Request and response travel through a private temporary
   directory created per request and deleted in a `finally`.
 - **Nothing is invented.** Missing customs data stays missing, and is flagged.
+- **One write, gated.** `bill --write` sends a single `BillAddRq`, after three
+  reads that refuse a duplicate, an unknown vendor or an unknown account, and
+  never without the flag. No `Mod`, `Del` or other `Add` exists in the code;
+  `tests/invariants.test.ts` pins the list.

@@ -26,13 +26,17 @@ import {
 import {
   emptyAddress,
   emptyRef,
+  type QbAccount,
   type QbAddress,
+  type QbBillRet,
+  type QbBillSummary,
   type QbDataExt,
   type QbInvoice,
   type QbInvoiceLine,
   type QbInvoiceSummary,
   type QbRef,
   type QbStatus,
+  type QbVendor,
 } from './types.js';
 
 export class QbxmlResponseError extends Error {
@@ -228,6 +232,22 @@ function assertUsableStatus(element: XmlElement, what: string): QbStatus {
   return status;
 }
 
+/**
+ * The strict form, for a response to a write. A statusCode of 1 on a
+ * `BillAddRs` does not mean "no match"; it means nothing was added, and a
+ * caller that shrugged at it would report a bill that does not exist.
+ */
+function assertOkStatus(element: XmlElement, what: string): QbStatus {
+  const status = readStatus(element);
+  if (status.code !== 0) {
+    throw new QbxmlResponseError(
+      `QuickBooks did not accept the ${what} (status ${status.code}, ${status.severity}): ${status.message}`,
+      status,
+    );
+  }
+  return status;
+}
+
 /** Parse an `InvoiceQueryRs` document into full invoices. */
 export function parseInvoiceQueryResponse(xml: string): QbResponse<QbInvoice> {
   const element = responseElement(xml, 'InvoiceQueryRs');
@@ -323,6 +343,76 @@ export function customFieldValue(fields: QbDataExt[], name: string): string {
   const wanted = name.trim().toLowerCase();
   const found = fields.find((field) => field.name.trim().toLowerCase() === wanted);
   return found?.value ?? '';
+}
+
+function parseBillSummary(node: XmlElement): QbBillSummary {
+  return {
+    txnId: textAt(node, 'TxnID'),
+    refNumber: textAt(node, 'RefNumber'),
+    txnDate: textAt(node, 'TxnDate'),
+    vendor: parseRef(node, 'VendorRef'),
+    amountDue: parseNumber(textAt(node, 'AmountDue')),
+  };
+}
+
+function parseBillRet(node: XmlElement): QbBillRet {
+  return {
+    ...parseBillSummary(node),
+    timeCreated: textAt(node, 'TimeCreated'),
+    editSequence: textAt(node, 'EditSequence'),
+    dueDate: textAt(node, 'DueDate'),
+    terms: parseRef(node, 'TermsRef'),
+    memo: textAt(node, 'Memo'),
+    lines: childrenNamed(node, 'ExpenseLineRet').map((line) => ({
+      txnLineId: textAt(line, 'TxnLineID'),
+      account: parseRef(line, 'AccountRef'),
+      amount: parseNumber(textAt(line, 'Amount')),
+      memo: textAt(line, 'Memo'),
+    })),
+  };
+}
+
+/** `BillQueryRs`, as the duplicate check reads it. "No match" is a normal answer. */
+export function parseBillQueryResponse(xml: string): QbResponse<QbBillSummary> {
+  const element = responseElement(xml, 'BillQueryRs');
+  const status = assertUsableStatus(element, 'bill query');
+  return { status, results: childrenNamed(element, 'BillRet').map(parseBillSummary) };
+}
+
+/**
+ * `BillAddRs`: the bill QuickBooks created. Strict on status, and strict on
+ * the presence of a `BillRet`, because "QuickBooks said OK but returned no
+ * bill" is not an outcome the caller can report honestly.
+ */
+export function parseBillAddResponse(xml: string): QbBillRet {
+  const element = responseElement(xml, 'BillAddRs');
+  assertOkStatus(element, 'bill');
+  const ret = childNamed(element, 'BillRet');
+  if (!ret) throw new QbxmlResponseError('QuickBooks reported success but returned no BillRet.');
+  return parseBillRet(ret);
+}
+
+export function parseVendorQueryResponse(xml: string): QbResponse<QbVendor> {
+  const element = responseElement(xml, 'VendorQueryRs');
+  const status = assertUsableStatus(element, 'vendor query');
+  const results = childrenNamed(element, 'VendorRet').map((node) => ({
+    listId: textAt(node, 'ListID'),
+    fullName: textAt(node, 'FullName'),
+    isActive: parseBoolean(textAt(node, 'IsActive')),
+  }));
+  return { status, results };
+}
+
+export function parseAccountQueryResponse(xml: string): QbResponse<QbAccount> {
+  const element = responseElement(xml, 'AccountQueryRs');
+  const status = assertUsableStatus(element, 'account query');
+  const results = childrenNamed(element, 'AccountRet').map((node) => ({
+    listId: textAt(node, 'ListID'),
+    fullName: textAt(node, 'FullName'),
+    accountType: textAt(node, 'AccountType'),
+    isActive: parseBoolean(textAt(node, 'IsActive')),
+  }));
+  return { status, results };
 }
 
 /** Convenience for tests and the transport layer. */
