@@ -242,13 +242,49 @@ column only when all of this holds:
 
 | Guard | Why |
 | --- | --- |
-| at least two lines | one stray line cannot make a column |
+| at least two lines | one stray line cannot make a column (one exception: the lone row below) |
 | every line is exactly one container and one other token | a third value means it is some other list |
 | the container is on the same side throughout | a block may not change its mind halfway |
 | every other token carries a digit | rejects `Container MSDU7776110`, `MSDU7776110 Shanghai` |
 | no token is itself a container number | two containers on a line is still no evidence |
 | no token is a size-type code or a weight | rejects a `40HC` or `24000KG` column |
 | the tokens are not all the same | a seal belongs to one container; a repeated value is a booking number or a box type |
+
+### The lone row at the top of a reply chain
+
+Reported on 2026-09-18 from a real producer email: fifteen containers, and the
+seal on the first one missing. A quoted reply chain cuts one list into blocks,
+newest first, and the newest block is very often a single row - the one
+container that came in after the rest:
+
+```
+On Wed, Jan 28, 2026 at 11:54 AM Ariana Carrillo wrote:
+
+BEAU5677331    5580622
+
+On Wed, Jan 28, 2026 at 10:49 AM Ariana Carrillo wrote:
+
+MSMU5020644    5580618
+CAAU7105810    5580619
+...
+```
+
+One line is not a column, so that row's seal was the only one of the fifteen
+lost. It is not a stray line, though: it is the first row of a column the same
+text already makes, four lines further down. So a row on its own joins that
+column when, and only when, the rest of the text agrees:
+
+| Guard | Why |
+| --- | --- |
+| at least one real block (two lines or more) was read | a text with no column in it still makes none |
+| every real block puts the container on the same side | a text that cannot agree with itself proves nothing |
+| the lone row puts it on that side too | the column decides the orientation, not the row |
+| the row's seal is one no other row carries | a repeated value is a booking number, and the same row quoted twice is not two seals |
+
+Every other guard in the table above applies to the row unchanged, so a lone
+`MSDU7776110 40HC` still joins nothing. The seal reads `low` like the rest of
+the column, and its label says the row stood alone, so the review screen shows
+where it came from.
 
 The seals it finds are marked `low`, never `high`. The review screen shows them
 with **?** and "read, but not certain", because a column that named itself is
