@@ -193,3 +193,85 @@ describe("a shipper's own loading list", () => {
     expect(shipment.containers.every((c) => c.evidence === 'same_row')).toBe(true);
   });
 });
+
+/**
+ * The lone row at the top of a quoted reply chain.
+ *
+ * Reported on 2026-09-18 from a real producer email: fifteen containers, and
+ * the seal on the first one missing. A reply chain cuts one list into blocks,
+ * newest first, and the newest block is very often a single row - the one
+ * container that came in after the rest. One line was not a column, so that
+ * row's seal was the only one lost.
+ *
+ * The row joins the column the rest of the text already made. The refusals
+ * below are the price of that: it joins only when the text agrees.
+ */
+describe('one row on its own, above a column the same text makes', () => {
+  const chain = (rows: string[][]) =>
+    [
+      'Thank you',
+      '',
+      'On Wed, Jan 28, 2026 at 11:54 AM Ariana C. wrote:',
+      '',
+      ...(rows[0] as string[]),
+      '',
+      'On Wed, Jan 28, 2026 at 10:49 AM Ariana C. wrote:',
+      '',
+      ...(rows[1] as string[]),
+    ].join('\n');
+
+  const LONE = `${PAIRS[0]![0]}    ${PAIRS[0]![1]}`;
+  const BLOCK = PAIRS.slice(1).map(([c, s]) => `${c}    ${s}`);
+
+  it('reads the lone row as part of the column below it', () => {
+    expect(read(chain([[LONE], BLOCK]))).toEqual(PAIRS.map(([c, s]) => [c, s]));
+  });
+
+  it('says on the record that the row stood alone', () => {
+    const shipment = extractShipment({ kind: 'text', text: chain([[LONE], BLOCK]), name: 't' });
+    expect(shipment.containers[0]?.shipperSeal?.label).toContain('row on its own');
+    expect(shipment.containers[0]?.shipperSeal?.confidence).toBe('low');
+    expect(shipment.containers[1]?.shipperSeal?.label).not.toContain('row on its own');
+  });
+
+  it('still refuses a lone row when the text makes no column at all', () => {
+    const text = ['On Wed, Jan 28, 2026 at 11:54 AM Ariana C. wrote:', '', LONE].join('\n');
+    expect(read(text)).toEqual([[PAIRS[0]![0], '']]);
+  });
+
+  it('refuses a lone row that puts the container on the other side', () => {
+    const flipped = `${PAIRS[0]![1]}    ${PAIRS[0]![0]}`;
+    expect(read(chain([[flipped], BLOCK]))).toEqual([[PAIRS[0]![0], ''], ...PAIRS.slice(1).map(([c, s]) => [c, s])]);
+  });
+
+  it('refuses a lone row whose seal the column already carries', () => {
+    // The same row quoted twice is not two seals, and a repeated value in a
+    // seal column is a booking number, not a seal.
+    const repeat = `${PAIRS[0]![0]}    ${PAIRS[1]![1]}`;
+    expect(read(chain([[repeat], BLOCK]))).toEqual([[PAIRS[0]![0], ''], ...PAIRS.slice(1).map(([c, s]) => [c, s])]);
+  });
+
+  it('refuses a lone row whose second value is a size-type code or a weight', () => {
+    for (const token of ['40HC', '24000KG']) {
+      expect(read(chain([[`${PAIRS[0]![0]}    ${token}`], BLOCK])), token).toEqual([
+        [PAIRS[0]![0], ''],
+        ...PAIRS.slice(1).map(([c, s]) => [c, s]),
+      ]);
+    }
+  });
+
+  it('refuses every lone row when the blocks disagree on which side the container is on', () => {
+    const text = [
+      LONE,
+      '',
+      'On Wed wrote:',
+      '',
+      ...PAIRS.slice(1, 4).map(([c, s]) => `${c}  ${s}`),
+      '',
+      'On Tue wrote:',
+      '',
+      ...PAIRS.slice(4).map(([c, s]) => `${s}  ${c}`),
+    ].join('\n');
+    expect(read(text)[0]).toEqual([PAIRS[0]![0], '']);
+  });
+});

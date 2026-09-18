@@ -177,6 +177,15 @@ function findSeals(line: string): SealMention[] {
  *   - the tokens are not all the same, because a seal is unique to a container
  *     and a column repeating one value is a booking number or a box type.
  *
+ * One row on its own is the exception, and only inside a text whose other
+ * lines already made the column: a quoted reply chain splits one list into
+ * blocks, and the block at the top is routinely the single container that
+ * arrived last ("BEAU5677331 5580622" above four more of the same shape).
+ * Such a row joins the column when at least one real block was read, every
+ * real block put the container on the same side, the row puts it there too,
+ * and its seal is one no other row already carries. Nothing in a text with no
+ * column in it is read this way, so a stray line still makes no column.
+ *
  * The seals it finds are marked `low`, never `high`: the review screen shows
  * them with "?" and the words "read, but not certain", because a column that
  * named itself is weaker evidence than a column with a heading over it. They
@@ -188,6 +197,8 @@ interface ColumnLine {
   seal: string;
   /** Which side the container was on, so a block cannot change its mind halfway. */
   containerFirst: boolean;
+  /** True when the row stood alone and joined a column the rest of the text established. */
+  lone?: boolean;
 }
 
 function looksLikeSeal(token: string): boolean {
@@ -231,6 +242,7 @@ export function twoColumnLine(line: string): ColumnLine | null {
  */
 export function detectSealColumn(lines: string[]): Map<number, ColumnLine> {
   const found = new Map<number, ColumnLine>();
+  const blocks: Array<Array<{ at: number; parsed: ColumnLine }>> = [];
   let index = 0;
 
   while (index < lines.length) {
@@ -256,16 +268,45 @@ export function detectSealColumn(lines: string[]): Map<number, ColumnLine> {
       at += 1;
     }
 
-    if (block.length >= 2) {
-      const seals = block.map((item) => item.parsed.seal.toUpperCase());
-      // A column that repeats one value is a booking number or a box type, not
-      // a set of seals: a seal belongs to exactly one container.
-      if (new Set(seals).size === seals.length) {
-        for (const item of block) found.set(item.at, item.parsed);
-      }
-    }
-
+    if (block.length) blocks.push(block);
     index = at > index ? at : index + 1;
+  }
+
+  const seals = new Set<string>();
+  let orientation: boolean | null = null;
+  let mixed = false;
+  for (const block of blocks) {
+    if (block.length < 2) continue;
+    const values = block.map((item) => item.parsed.seal.toUpperCase());
+    // A column that repeats one value is a booking number or a box type, not
+    // a set of seals: a seal belongs to exactly one container.
+    if (new Set(values).size !== values.length) continue;
+    for (const item of block) {
+      found.set(item.at, item.parsed);
+      seals.add(item.parsed.seal.toUpperCase());
+    }
+    const first = (block[0] as { parsed: ColumnLine }).parsed.containerFirst;
+    if (orientation === null) orientation = first;
+    else if (orientation !== first) mixed = true;
+  }
+
+  // The lone row. A quoted reply chain breaks one list into blocks, and the
+  // block at the top is very often a single row - the one container that came
+  // in after the rest. It is the same two columns as the list below it, in the
+  // same text, so it is not a stray line; it is the first row of a column
+  // already established. It joins only when the rest of the text agrees:
+  // at least one real block was read, every such block put the container on
+  // the same side, this row puts it there too, and its seal is one no other
+  // row already carries.
+  if (orientation !== null && !mixed) {
+    for (const block of blocks) {
+      if (block.length !== 1) continue;
+      const item = block[0] as { at: number; parsed: ColumnLine };
+      if (item.parsed.containerFirst !== orientation) continue;
+      if (seals.has(item.parsed.seal.toUpperCase())) continue;
+      found.set(item.at, { ...item.parsed, lone: true });
+      seals.add(item.parsed.seal.toUpperCase());
+    }
   }
 
   return found;
@@ -385,7 +426,13 @@ export function scanLines(lines: string[]): LineScan {
       containers.push({
         number: toContainerNumber(column.container),
         carrierSeal: null,
-        shipperSeal: { raw: column.seal, confidence: 'low', label: `Second column, no heading (${ASSUMED_SHIPPER})` },
+        shipperSeal: {
+          raw: column.seal,
+          confidence: 'low',
+          label: column.lone
+            ? `Second column, no heading, row on its own (${ASSUMED_SHIPPER})`
+            : `Second column, no heading (${ASSUMED_SHIPPER})`,
+        },
         evidence: 'same_line',
         line: lineNumber,
       });
