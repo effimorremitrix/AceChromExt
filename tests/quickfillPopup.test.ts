@@ -36,7 +36,14 @@ function text(selector: string): string {
 }
 
 function buttonLabels(): string[] {
-  return Array.from(document.querySelectorAll('.button-row .button-primary')).map((node) => node.textContent ?? '');
+  return Array.from(document.querySelectorAll('.button-row-actions .button')).map((node) => node.textContent ?? '');
+}
+
+/** The one button carrying this label, whatever its rank. */
+function press(label: string): void {
+  const button = Array.from(document.querySelectorAll('.button-row-actions .button')).find((node) => node.textContent === label);
+  if (!button) throw new Error(`No button labelled ${label}. Buttons: ${buttonLabels().join(', ')}`);
+  (button as HTMLButtonElement).click();
 }
 
 beforeEach(async () => {
@@ -170,11 +177,27 @@ describe('the popup', () => {
     expect(buttonLabels()).toEqual(['Copy rows', 'Fill container grid']);
   });
 
+  it('says before the click why Fill cannot write this grid, and does not dress it as the route', async () => {
+    // The live portal, 2026-09-17: two equal blue buttons read as two equal
+    // routes. Fill was pressed, wrote nothing, and only then said why. So the
+    // reason is on the screen first, and only Copy rows is blue.
+    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: false };
+    const box = await mount();
+    await paste(box, email);
+    expect(text('.grid-note')).toContain('opens an editor when a cell is clicked');
+    expect(text('.grid-note')).toContain('write 0 cells');
+    const primary = Array.from(document.querySelectorAll('.button-row-actions .button-primary')).map((node) => node.textContent);
+    expect(primary).toEqual(['Copy rows']);
+  });
+
   it('leads with Fill on a grid that can be typed into', async () => {
     place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: true };
     const box = await mount();
     await paste(box, email);
     expect(buttonLabels()).toEqual(['Fill container grid', 'Copy rows']);
+    const primary = Array.from(document.querySelectorAll('.button-row-actions .button-primary')).map((node) => node.textContent);
+    expect(primary).toEqual(['Fill container grid']);
+    expect(document.querySelector('.grid-note')).toBeNull();
   });
 
   it('names the paste route when the grid holds no writable control', async () => {
@@ -184,8 +207,7 @@ describe('the popup', () => {
     reply = { ok: true, type: 'content/count', payload: { filled: 0, total: 9, missed: ['9 grid cells'], useCopyRows: true } };
     const box = await mount();
     await paste(box, email);
-    // Fill is the second button on a grid that cannot be typed into.
-    (document.querySelectorAll('.button-primary')[1] as HTMLButtonElement).click();
+    press('Fill container grid');
     await settle();
     expect(text('.result')).toContain('Filled 0 of 9.');
     expect(text('.result')).toContain('Use Copy rows, click the first cell, and paste.');
@@ -216,7 +238,7 @@ describe('the popup', () => {
     const box = await mount();
     await paste(box, email);
     // Copy rows leads on this grid.
-    (document.querySelectorAll('.button-primary')[0] as HTMLButtonElement).click();
+    press('Copy rows');
     await settle();
     expect(sent.some((message) => message.type === 'content/gridRows')).toBe(true);
     expect(written).toEqual(['MSCU1234566\tSL-4471209']);
@@ -246,7 +268,7 @@ describe('the popup', () => {
     };
     const box = await mount();
     await paste(box, email);
-    (document.querySelectorAll('.button-primary')[0] as HTMLButtonElement).click();
+    press('Copy rows');
     await settle();
     expect(text('.result')).toContain('3 row(s) copied as Container Number, Seal Type, Shipper Seal #. Blank: Seal Type.');
   });
