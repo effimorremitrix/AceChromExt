@@ -11,6 +11,9 @@
  *   items          the customs facts about an item - Schedule B, origin,
  *                  licence code - which no accounting system stores.
  *   manual         a one-off override for a single export.
+ *   bill           the rules `ace-export bill` uses to build the vendor bill
+ *                  from an invoice: which vendor and expense account an item
+ *                  belongs to, each vendor's commission, the memo wording.
  *
  * Nothing here invents a customs value. An item with no Schedule B produces a
  * blank Schedule B and a validation error, never a guess.
@@ -18,6 +21,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { COMMODITY_FIELDS, INVOICE_FIELDS, type CommodityField, type InvoiceField } from '../../src/models/CanonicalInvoice.js';
+import { assertMemoTemplate, MemoTemplateError } from './bill/memo.js';
 
 export class ConfigError extends Error {
   constructor(message: string) {
@@ -65,6 +69,46 @@ export interface OutputConfig {
   includeAuditSheet: boolean;
 }
 
+/** What `ace-export bill` knows about one QuickBooks item (or its parent). */
+export interface BillItemRule {
+  /** Vendor full name the goods are bought from. */
+  vendor?: string;
+  /** Expense account the goods line posts to, e.g. "Purchase:Almonds". */
+  account?: string;
+}
+
+export interface BillCommissionRule {
+  /** Account the commission line posts to, e.g. "Commissions Income". */
+  account: string;
+  /** Fraction of the goods subtotal, 0 <= rate < 1. 0.02 is two percent. */
+  rate: number;
+  /** Overrides `bill.commissionMemoTemplate` for this vendor. */
+  memoTemplate?: string;
+}
+
+export interface BillVendorRule {
+  commission?: BillCommissionRule;
+}
+
+export interface BillConfig {
+  /** QuickBooks item FullName -> its vendor and account. Hierarchical, per field. */
+  items: Record<string, BillItemRule>;
+  /** QuickBooks vendor FullName -> its commission rule. */
+  vendors: Record<string, BillVendorRule>;
+  /** QuickBooks customer FullName -> the short name used in memos. */
+  customers: Record<string, { shortName: string }>;
+  /** Memo on each goods line. */
+  memoTemplate: string;
+  /** Memo on the commission line. */
+  commissionMemoTemplate: string;
+  /** Memo on the bill header; empty writes none. */
+  billMemoTemplate: string;
+  /** Tag each goods line with the invoice's customer (CustomerRef, not billable). */
+  tagLinesWithCustomer: boolean;
+  /** File name of the calculation workbook `bill --excel` writes. */
+  excelFileNamePattern: string;
+}
+
 export interface AceExportConfig {
   qbxmlVersion: string;
   /**
@@ -95,6 +139,7 @@ export interface AceExportConfig {
   /** Overrides applied last, after every QuickBooks value. */
   manual: Partial<Record<InvoiceField, string>>;
   output: OutputConfig;
+  bill: BillConfig;
 }
 
 export const DEFAULT_CONFIG: AceExportConfig = {
@@ -126,6 +171,16 @@ export const DEFAULT_CONFIG: AceExportConfig = {
     fileNamePattern: 'ACE_Invoice_{refNumber}.xlsx',
     weightUom: 'kg',
     includeAuditSheet: true,
+  },
+  bill: {
+    items: {},
+    vendors: {},
+    customers: {},
+    memoTemplate: '{quantity} {description} to {customerShortName}',
+    commissionMemoTemplate: 'Commission {ratePercent}% on invoice {refNumber}',
+    billMemoTemplate: '',
+    tagLinesWithCustomer: false,
+    excelFileNamePattern: 'Bill_{refNumber}.xlsx',
   },
 };
 
@@ -276,6 +331,110 @@ function readOutput(value: unknown): OutputConfig {
   return output;
 }
 
+function readTemplate(value: unknown, where: string, fallback: string): string {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'string') throw new ConfigError(`${where} must be a string.`);
+  try {
+    assertMemoTemplate(value, where);
+  } catch (error) {
+    if (error instanceof MemoTemplateError) throw new ConfigError(error.message);
+    throw error;
+  }
+  return value;
+}
+
+function readBillItems(value: unknown): Record<string, BillItemRule> {
+  if (value === undefined) return {};
+  if (!isPlainObject(value)) throw new ConfigError('bill.items must be an object keyed by QuickBooks item full name.');
+  const out: Record<string, BillItemRule> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (key === '__proto__') continue;
+    const where = `bill.items."${key}"`;
+    if (!isPlainObject(raw)) throw new ConfigError(`${where} must be an object.`);
+    const rule: BillItemRule = {};
+    for (const field of ['vendor', 'account'] as const) {
+      const item = raw[field];
+      if (item === undefined) continue;
+      if (typeof item !== 'string' || item.trim() === '') throw new ConfigError(`${where}.${field} must be a non-empty string.`);
+      rule[field] = item;
+    }
+    out[key] = rule;
+  }
+  return out;
+}
+
+function readBillVendors(value: unknown): Record<string, BillVendorRule> {
+  if (value === undefined) return {};
+  if (!isPlainObject(value)) throw new ConfigError('bill.vendors must be an object keyed by QuickBooks vendor full name.');
+  const out: Record<string, BillVendorRule> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (key === '__proto__') continue;
+    const where = `bill.vendors."${key}"`;
+    if (!isPlainObject(raw)) throw new ConfigError(`${where} must be an object.`);
+    const rule: BillVendorRule = {};
+    if (raw['commission'] !== undefined) {
+      const commission = raw['commission'];
+      if (!isPlainObject(commission)) throw new ConfigError(`${where}.commission must be an object with account and rate.`);
+      const account = commission['account'];
+      if (typeof account !== 'string' || account.trim() === '') {
+        throw new ConfigError(`${where}.commission.account must be a non-empty string.`);
+      }
+      const rate = commission['rate'];
+      if (typeof rate !== 'number' || !Number.isFinite(rate) || rate < 0 || rate >= 1) {
+        throw new ConfigError(`${where}.commission.rate must be a number from 0 up to but not including 1 (0.02 is two percent).`);
+      }
+      rule.commission = { account, rate };
+      if (commission['memoTemplate'] !== undefined) {
+        rule.commission.memoTemplate = readTemplate(commission['memoTemplate'], `${where}.commission.memoTemplate`, '');
+      }
+    }
+    out[key] = rule;
+  }
+  return out;
+}
+
+function readBillCustomers(value: unknown): Record<string, { shortName: string }> {
+  if (value === undefined) return {};
+  if (!isPlainObject(value)) throw new ConfigError('bill.customers must be an object keyed by QuickBooks customer full name.');
+  const out: Record<string, { shortName: string }> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (key === '__proto__') continue;
+    const where = `bill.customers."${key}"`;
+    if (!isPlainObject(raw)) throw new ConfigError(`${where} must be an object with a shortName.`);
+    const shortName = raw['shortName'];
+    if (typeof shortName !== 'string' || shortName.trim() === '') throw new ConfigError(`${where}.shortName must be a non-empty string.`);
+    out[key] = { shortName };
+  }
+  return out;
+}
+
+function readBill(value: unknown): BillConfig {
+  const defaults = DEFAULT_CONFIG.bill;
+  if (value === undefined) return structuredClone(defaults);
+  if (!isPlainObject(value)) throw new ConfigError('bill must be an object.');
+
+  const bill: BillConfig = {
+    items: readBillItems(value['items']),
+    vendors: readBillVendors(value['vendors']),
+    customers: readBillCustomers(value['customers']),
+    memoTemplate: readTemplate(value['memoTemplate'], 'bill.memoTemplate', defaults.memoTemplate),
+    commissionMemoTemplate: readTemplate(value['commissionMemoTemplate'], 'bill.commissionMemoTemplate', defaults.commissionMemoTemplate),
+    billMemoTemplate: readTemplate(value['billMemoTemplate'], 'bill.billMemoTemplate', defaults.billMemoTemplate),
+    tagLinesWithCustomer: defaults.tagLinesWithCustomer,
+    excelFileNamePattern: defaults.excelFileNamePattern,
+  };
+  if (value['tagLinesWithCustomer'] !== undefined) {
+    if (typeof value['tagLinesWithCustomer'] !== 'boolean') throw new ConfigError('bill.tagLinesWithCustomer must be true or false.');
+    bill.tagLinesWithCustomer = value['tagLinesWithCustomer'];
+  }
+  if (value['excelFileNamePattern'] !== undefined) {
+    if (typeof value['excelFileNamePattern'] !== 'string') throw new ConfigError('bill.excelFileNamePattern must be a string.');
+    if (!value['excelFileNamePattern'].toLowerCase().endsWith('.xlsx')) throw new ConfigError('bill.excelFileNamePattern must end in .xlsx.');
+    bill.excelFileNamePattern = value['excelFileNamePattern'];
+  }
+  return bill;
+}
+
 /** Validate a parsed JSON object into a configuration, filling in defaults. */
 export function normalizeConfig(input: unknown): AceExportConfig {
   if (input === undefined || input === null) return structuredClone(DEFAULT_CONFIG);
@@ -298,6 +457,7 @@ export function normalizeConfig(input: unknown): AceExportConfig {
     invoiceDefaults: readInvoiceFieldMap(input['invoiceDefaults'], 'invoiceDefaults'),
     manual: readInvoiceFieldMap(input['manual'], 'manual'),
     output: readOutput(input['output']),
+    bill: readBill(input['bill']),
   };
 
   if (!/^\d{1,2}\.\d$/.test(config.qbxmlVersion)) {
@@ -330,20 +490,54 @@ export function writeConfigFile(path: string, config: AceExportConfig): void {
   writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 }
 
+/**
+ * Item names are hierarchical ("Almonds:Shelled Almonds:Carmel"). The names a
+ * rule may live under, nearest first: the item itself, then each parent.
+ */
+export function itemNameCandidates(itemFullName: string): string[] {
+  const parts = itemFullName.split(':');
+  const names: string[] = [];
+  for (let depth = parts.length; depth > 0; depth -= 1) names.push(parts.slice(0, depth).join(':'));
+  return names;
+}
+
 /** The profile that applies to one item: its own entry over the defaults. */
 export function profileForItem(config: AceExportConfig, itemFullName: string): ItemExportProfile {
-  const own = config.items[itemFullName];
-  if (own) return { ...config.itemDefaults, ...own };
-
-  // Item names are hierarchical ("Almonds:Shelled Almonds"). A profile on the
-  // parent applies to its children unless the child overrides it.
-  const parts = itemFullName.split(':');
-  for (let depth = parts.length - 1; depth > 0; depth -= 1) {
-    const parent = parts.slice(0, depth).join(':');
-    const inherited = config.items[parent];
-    if (inherited) return { ...config.itemDefaults, ...inherited };
+  // A profile on the parent applies to its children unless the child has its
+  // own; the child's profile then replaces the parent's whole, not per field.
+  for (const name of itemNameCandidates(itemFullName)) {
+    const profile = config.items[name];
+    if (profile) return { ...config.itemDefaults, ...profile };
   }
   return { ...config.itemDefaults };
+}
+
+export interface ResolvedBillRule {
+  vendor: { value: string; source: string } | null;
+  account: { value: string; source: string } | null;
+}
+
+/**
+ * The vendor and account for one item, each resolved separately to the
+ * nearest name in the hierarchy that sets it. Unlike `profileForItem`, this
+ * is per field: `bill.items."Almonds"` may name the vendor while
+ * `bill.items."Almonds:Carmel"` names only the account. `source` is the
+ * config key the value came from, for the preview.
+ */
+export function billRuleForItem(config: AceExportConfig, itemFullName: string): ResolvedBillRule {
+  const resolved: ResolvedBillRule = { vendor: null, account: null };
+  for (const name of itemNameCandidates(itemFullName)) {
+    const rule = config.bill.items[name];
+    if (!rule) continue;
+    if (resolved.vendor === null && rule.vendor !== undefined) {
+      resolved.vendor = { value: rule.vendor, source: `bill.items."${name}".vendor` };
+    }
+    if (resolved.account === null && rule.account !== undefined) {
+      resolved.account = { value: rule.account, source: `bill.items."${name}".account` };
+    }
+    if (resolved.vendor && resolved.account) break;
+  }
+  return resolved;
 }
 
 /** A starter configuration carrying the sample invoice's item, for `init`. */
@@ -360,6 +554,15 @@ export function starterConfig(): AceExportConfig {
       aceUom1: 'KG',
       quantity1From: 'weight',
     },
+  };
+  config.bill.items = {
+    'Shelled Almonds': { vendor: 'Blue Diamond Growers', account: 'Cost of Goods Sold:Almonds' },
+  };
+  config.bill.vendors = {
+    'Blue Diamond Growers': { commission: { account: 'Commissions Income', rate: 0.02 } },
+  };
+  config.bill.customers = {
+    'Aydin Kuruyemis San Ve Tic A.S': { shortName: 'Aydin' },
   };
   return config;
 }

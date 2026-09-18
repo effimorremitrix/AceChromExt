@@ -124,3 +124,45 @@ export function formatAddress(address: QbAddress | null): string {
   const locality = [address.city, address.state, address.postalCode].filter((part) => part !== '').join(' ');
   return [...street, locality, address.country].filter((part) => part !== '').join(', ');
 }
+
+/** A row of a `BillQueryRs`: enough to recognise a bill that already exists. */
+export interface QbBillSummary {
+  txnId: string;
+  refNumber: string;
+  txnDate: string;
+  vendor: QbRef;
+  amountDue: number | null;
+}
+
+/** One expense line as QuickBooks returns it on a `BillRet`. */
+export interface QbBillExpenseLine {
+  txnLineId: string;
+  account: QbRef;
+  amount: number | null;
+  memo: string;
+}
+
+/** The bill QuickBooks reports back after a `BillAddRq`, or in a full query. */
+export interface QbBillRet extends QbBillSummary {
+  timeCreated: string;
+  editSequence: string;
+  dueDate: string;
+  terms: QbRef;
+  memo: string;
+  lines: QbBillExpenseLine[];
+}
+
+/** A vendor as returned by `VendorQueryRs`, reduced to what a write needs to check. */
+export interface QbVendor {
+  listId: string;
+  fullName: string;
+  isActive: boolean | null;
+}
+
+/** An account as returned by `AccountQueryRs`, reduced to what a write needs to check. */
+export interface QbAccount {
+  listId: string;
+  fullName: string;
+  accountType: string;
+  isActive: boolean | null;
+}

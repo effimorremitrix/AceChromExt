@@ -80,11 +80,28 @@ export const PAGE_HTML = `<!doctype html>
     <h2>Every field, and where it came from</h2>
     <pre id="preview"></pre>
   </section>
+
+  <section class="panel" id="bill" hidden>
+    <h2>Vendor bill</h2>
+    <p class="hint">Builds the supplier's Bill from this invoice: the vendor and
+    expense account come from the item rules in the configuration, the
+    commission from the vendor rule, the terms and dates from the invoice.
+    Nothing is written until you press Write, and never twice for one number.</p>
+    <pre id="billPreview">(not built yet)</pre>
+    <div class="row">
+      <button id="billBuild" type="button">Preview bill</button>
+      <button id="billWrite" type="button" class="primary" disabled>Write bill to QuickBooks</button>
+      <button id="billExcel" type="button" disabled>Save calculation (.xlsx)</button>
+    </div>
+    <p id="billResult"></p>
+  </section>
 </main>
 
 <footer>
   <p>Everything stays on this machine. The extension never saves, submits or
-  certifies a filing - review each field in ACE and submit it yourself.</p>
+  certifies a filing - review each field in ACE and submit it yourself. The
+  only change this window can make in QuickBooks is a vendor Bill, and only
+  when you press Write.</p>
 </footer>
 
 <script src="app.js"></script>
@@ -299,7 +316,73 @@ export const PAGE_JS = `(function () {
       show('readiness', true);
       show('checks', true);
       show('detail', true);
+      show('bill', true);
+      billReady = false;
+      $('billWrite').disabled = true;
+      $('billExcel').disabled = true;
+      $('billPreview').textContent = '(not built yet)';
+      $('billResult').textContent = '';
     }).catch(fail);
+  }
+
+  var billReady = false;
+
+  function billFail(error) {
+    var result = $('billResult');
+    result.textContent = error.message;
+    result.className = 'bad';
+  }
+
+  function showBill(data) {
+    billReady = !!data.ok && !data.written;
+    $('billWrite').disabled = !billReady;
+    $('billExcel').disabled = !data.plan;
+    if (!data.ok && data.refusals && data.refusals.length && !data.plan) {
+      $('billPreview').textContent = 'No bill was built from this invoice:\n' + data.refusals.map(function (r) { return '  \u2717 ' + r; }).join('\n');
+      return;
+    }
+    $('billPreview').textContent = data.preview;
+  }
+
+  function previewBill() {
+    if (!selected) { billFail(new Error('Preview an invoice first.')); return; }
+    $('billResult').textContent = '';
+    post('/api/bill', { id: selected }).then(function (data) {
+      showBill(data);
+      var result = $('billResult');
+      result.textContent = data.ok ? 'Checks passed. Nothing was written.' : (data.plan ? 'A check failed; Write is disabled.' : '');
+      result.className = data.ok ? 'ok' : 'bad';
+    }).catch(billFail);
+  }
+
+  function writeBill() {
+    if (!selected || !billReady) { billFail(new Error('Preview the bill first.')); return; }
+    if (!confirm('Add this bill to QuickBooks? This cannot be undone from here.')) return;
+    var button = $('billWrite');
+    button.disabled = true;
+    post('/api/bill', { id: selected, write: true }).then(function (data) {
+      showBill(data);
+      var result = $('billResult');
+      result.textContent = data.written
+        ? 'Added bill TxnID ' + data.written.txnId + ' for ' + data.written.vendor + '. Open it in QuickBooks and read it before it is paid.'
+        : 'Nothing was written.';
+      result.className = data.written ? 'ok' : 'bad';
+    }).catch(function (error) {
+      billFail(error);
+      $('billWrite').disabled = !billReady;
+    });
+  }
+
+  function saveBillWorkbook() {
+    if (!selected) { billFail(new Error('Preview the bill first.')); return; }
+    var button = $('billExcel');
+    button.disabled = true;
+    post('/api/bill', { id: selected, excel: true }).then(function (data) {
+      showBill(data);
+      var result = $('billResult');
+      result.textContent = data.excel ? 'Wrote ' + data.excel.path + '.' : 'No workbook was written.';
+      result.className = data.excel ? 'ok' : 'bad';
+    }).catch(billFail).then(function () { button.disabled = false; });
   }
 
   function exportWorkbook() {
@@ -318,6 +401,9 @@ export const PAGE_JS = `(function () {
   $('refresh').addEventListener('click', preview);
   $('applyLines').addEventListener('click', preview);
   $('export').addEventListener('click', exportWorkbook);
+  $('billBuild').addEventListener('click', previewBill);
+  $('billWrite').addEventListener('click', writeBill);
+  $('billExcel').addEventListener('click', saveBillWorkbook);
   $('search').addEventListener('keydown', function (event) { if (event.key === 'Enter') loadInvoices(); });
 
   api('/api/source').then(function (data) {

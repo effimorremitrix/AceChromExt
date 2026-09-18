@@ -312,14 +312,30 @@ describe('the QuickBooks companion', () => {
     expect(server).toMatch(/query\.get\('t'\) !== context\.token/);
   });
 
-  it('only ever reads from QuickBooks', () => {
-    // An Add/Mod/Del request would let a data-entry aid change the books.
+  it('writes nothing to QuickBooks except a Bill, and only through BillAddRq', () => {
+    // A data-entry aid that could Mod or Del could change the books it was
+    // asked to read. The one write it makes - `ace-export bill --write`, which
+    // adds a vendor Bill mirroring an invoice - is pinned here by name: every
+    // other element built is a query, and no Mod, Del or other Add request
+    // exists anywhere in the companion. docs/SECURITY.md says the same.
     const requests = readFileSync(join(COMPANION, 'src', 'qbxml', 'requests.ts'), 'utf8');
     const built = requests.match(/<(\w+)Rq/g) ?? [];
     for (const element of built) {
-      expect(element, requests).toMatch(/^<(QBXMLMsgs|\w*Query)Rq$/);
+      expect(element, requests).toMatch(/^<(QBXMLMsgs|\w*Query|BillAdd)Rq$/);
     }
-    expect(companionOffenders(/InvoiceAddRq|InvoiceModRq|TxnDelRq/)).toEqual([]);
+    expect(companionOffenders(/\b\w*(Mod|Del)Rq\b/)).toEqual([]);
+    expect(companionOffenders(/\b(?!BillAddRq\b)\w+AddRq\b/)).toEqual([]);
+  });
+
+  it('has one door to BillAddRq, behind the write gate', () => {
+    // The builder is imported by the writer alone, the writer runs its checks
+    // inside write(), and the command line only sends on an explicit --write.
+    expect(companionOffenders(/\bbuildBillAdd\b/).sort()).toEqual(['src/adapter/BillWriter.ts', 'src/qbxml/requests.ts']);
+    const writer = readFileSync(join(COMPANION, 'src', 'adapter', 'BillWriter.ts'), 'utf8');
+    expect(writer).toMatch(/async write\([\s\S]*?await this\.check\(/);
+    const cli = readFileSync(join(COMPANION, 'src', 'ui', 'cli.ts'), 'utf8');
+    expect(cli).toMatch(/booleans\.has\('write'\)/);
+    expect(cli).toMatch(/if \(options\.write\)/);
   });
 
   it('handles no QuickBooks credential', () => {

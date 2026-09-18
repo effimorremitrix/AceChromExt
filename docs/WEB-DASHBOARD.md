@@ -78,7 +78,7 @@ manifests name no dashboard host and that nothing in `src/`,
 | **Hosted on Cloudflare** | the edge, as static files | `index.html`, `dashboard.js`, two stylesheets, `_headers`, a `404.html`. No Worker script, no binding, no database, no log of anything but the request for those files. |
 | **In the operator's browser** | the page, in memory | the imported workbook, the email text, the extraction, the package, the operator's decisions. Gone when the tab closes. |
 | **On the operator's disk** | wherever they save | `filing-package.json`, `ACE_Invoice_<n>.xlsx`, saved Deckhand JSON. The audit trail. |
-| **On the QuickBooks PC** | `ace-export`, over local COM | the company file, read-only, never reachable from the Internet |
+| **On the QuickBooks PC** | `ace-export`, over local COM | the company file, read except for the one vendor Bill `bill --write` adds, never reachable from the Internet |
 | **In Chrome, on the portals** | the two extensions | the fill, in front of the form, and the operator's submission |
 
 Nothing in the first row can see anything in the second: the page's CSP is

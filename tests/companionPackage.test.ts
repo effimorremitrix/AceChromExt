@@ -134,6 +134,7 @@ describe('ace-export package', () => {
     await runCli(['--help'], streams);
     expect(out.join('\n')).toMatch(/ace-export package <invoice>/);
     expect(out.join('\n')).toMatch(/ace-export deckhand <file>/);
+    expect(out.join('\n')).toMatch(/ace-export bill <invoice>/);
   });
 
   it('builds the same package through the library functions', async () => {

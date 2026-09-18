@@ -1,0 +1,6 @@
+<?xml version="1.0" ?>
+<QBXML>
+  <QBXMLMsgsRs>
+    <BillAddRs requestID="1" statusCode="3140" statusSeverity="Error" statusMessage="There is an invalid reference to QuickBooks Account &quot;Commissions Incom&quot; in the Bill." />
+  </QBXMLMsgsRs>
+</QBXML>

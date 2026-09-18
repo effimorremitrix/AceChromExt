@@ -156,7 +156,7 @@ pages, and that ACE's Save Line button is never clicked during a fill.
 | Any outbound network request | there is no `fetch`, no HTTP client, and no URL to anything: everything it talks to is on the same machine |
 | Cloud upload, telemetry, analytics | there is no server and no endpoint |
 | Storing or reading a QuickBooks password | QuickBooks authorization is the SDK's certificate mechanism; no credential is ever seen |
-| Writing to QuickBooks | only `*QueryRq` requests are built. There is no `Add`, `Mod` or `Del` request anywhere in the code |
+| Writing to QuickBooks, other than one vendor Bill | one request type, `BillAddRq`, is built in one file and sent only by `ace-export bill --write` after a duplicate, vendor and account check. There is no `Mod`, no `Del` and no other `Add` request anywhere in the code; `tests/invariants.test.ts` pins that list |
 | Filing anything | it writes a spreadsheet. The extension then fills fields, and a person submits |
 | Inventing customs data | a missing Schedule B, origin or licence code stays blank and is reported as an error |
 
@@ -166,7 +166,8 @@ Access is granted through the SDK's **application certificate**, stored inside
 the company file, approved once by a QuickBooks Admin, and revocable at any
 time under *Edit > Preferences > Integrated Applications*. The companion never
 sees, asks for, or stores a QuickBooks password. Only `*QueryRq` requests are
-sent, so an authorized session cannot alter the company file.
+sent, plus one `BillAddRq` on an explicit `bill --write`, so an authorized
+session can add a vendor Bill and change nothing else in the company file.
 
 ### The COM bridge
 

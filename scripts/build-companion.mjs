@@ -69,6 +69,8 @@ writeFileSync(
     'Full instructions: docs/QUICKBOOKS-INTEGRATION.md in the repository.',
     '',
     'Nothing here contacts the internet. Invoice data stays on this machine.',
+    'It writes to QuickBooks in exactly one case: "ace-export bill <invoice> --write",',
+    'which adds a vendor Bill. Without --write it only previews.',
     '',
   ].join('\n'),
 );
