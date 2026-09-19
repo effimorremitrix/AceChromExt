@@ -29,6 +29,13 @@ Then `chrome://extensions`, **Developer mode** on, **Load unpacked**, choose
 Reload any portal tab that was already open; a content script is only
 injected into pages loaded after the extension.
 
+**First run, once:** open the ACE Helper panel, **Overview**, and type where
+your Shipment Reference Number sequence stands into the box under **Shipment
+Reference Number** (someone who last filed 4087 types `4088`), then press
+**Set starting number**. It is there with nothing imported, and it is kept on
+this machine. Skip it and ACE Step 1 gets the invoice number instead;
+USER-GUIDE.md section 4 has the rest.
+
 Each extension asks for exactly one permission (`storage`) and for its own
 portal's hosts only: `cbp.dhs.gov` for ACE, `inttra.com` and `e2open.com` for
 INTTRA. Neither has a network permission, and each content security policy
