@@ -24,7 +24,7 @@
 
 import { build, context } from 'esbuild';
 import { buildVersionName } from './buildStamp.mjs';
-import { PLAYGROUND_MATCHES, writePlayground } from './playground.mjs';
+import { HELPERS, playgroundManifest, writePlayground } from './playground.mjs';
 import { cpSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,20 +55,18 @@ function copyStatic() {
 
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   const manifestPath = join(dist, 'manifest.json');
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  let manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   manifest.version = pkg.version;
   // ...and stamp the build (git commit + time) so a loaded build can be told apart.
   manifest.version_name = buildVersionName(pkg.version, root);
-  if (playground) {
-    manifest.name = 'Quickfill Helper (playground)';
-    manifest.action.default_title = 'Quickfill Helper (playground)';
-    manifest.description = 'Practice build: runs only on pages opened from disk or from localhost, never on ACE or INTTRA. Paste the example rows and fill the four mock steps in playground/.';
-    delete manifest.host_permissions;
-    for (const script of manifest.content_scripts) script.matches = [...PLAYGROUND_MATCHES];
-  }
+  if (playground) manifest = playgroundManifest(manifest, HELPERS.quickfill);
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   if (playground) {
-    const files = writePlayground(join(dist, 'playground'), { fixtures: join(root, 'tests', 'fixtures'), stamp: manifest.version_name });
+    const files = writePlayground(join(dist, 'playground'), {
+      fixtures: join(root, 'tests', 'fixtures'),
+      stamp: manifest.version_name,
+      helper: HELPERS.quickfill,
+    });
     console.log(`  playground/: ${files.join(', ')}`);
   }
 }

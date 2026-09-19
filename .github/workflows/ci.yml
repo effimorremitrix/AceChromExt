@@ -110,6 +110,14 @@ jobs:
           path: dist/
           retention-days: 14
 
+      - name: Upload the ACE Helper playground
+        if: matrix.node == '22'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ace-playground-unpacked
+          path: dist-ace-playground/
+          retention-days: 14
+
       - name: Upload the unpacked INTTRA Helper
         if: matrix.node == '22'
         uses: actions/upload-artifact@v4

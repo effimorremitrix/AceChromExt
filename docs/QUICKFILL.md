@@ -205,6 +205,11 @@ four AESDirect steps as pages, the example workbook and a README. The card in
 mistaken for the real build, and it cannot open a portal page, so nothing can
 be filed from it.
 
+The ACE Helper has the same thing, from the same generator:
+`npm run build:playground` writes `dist-ace-playground/` with these four pages
+and this workbook, for the panel rather than the paste box (USER-GUIDE.md
+section 4).
+
 The four pages are `tests/fixtures/ace-*.html` wrapped at build time
 (`scripts/playground.mjs`): the real labels and the six ids captured from the
 live portal, tabs that link the four files, and mock buttons (Save shows a note,

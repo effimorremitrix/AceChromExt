@@ -23,7 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { QuickfillContentRequest, QuickfillContentResponse } from '../quickfill-extension/src/core/messages.js';
 import { isFailure, parsePaste } from '../quickfill-extension/src/paste.js';
-import { ACE_STEPS, PLAYGROUND_MATCHES, WORKBOOK_FILE, playgroundReadme, wrapAceScreen, writePlayground } from '../scripts/playground.mjs';
+import { ACE_STEPS, HELPERS, PLAYGROUND_MATCHES, WORKBOOK_FILE, playgroundReadme, wrapAceScreen, writePlayground } from '../scripts/playground.mjs';
 import { COLUMNS, EXAMPLE_ROWS } from '../scripts/templateData.mjs';
 
 const FIXTURES = join(__dirname, 'fixtures');
@@ -145,9 +145,10 @@ describe('the playground folder', () => {
   it('wraps every fixture as a page whose tabs link the four files, keeping every id', () => {
     for (const step of ACE_STEPS) {
       const fragment = fixture(step.fixture);
-      const page = wrapAceScreen(fragment, step);
+      const page = wrapAceScreen(fragment, step, HELPERS.quickfill);
       expect(page.startsWith('<!doctype html>')).toBe(true);
       expect(page).toContain(`<title>ACE playground: ${step.title}</title>`);
+      expect(page).toContain('<strong>Quickfill playground.</strong>');
       expect(page).not.toContain('href="#step');
       for (const other of ACE_STEPS) expect(page).toContain(`href="${other.file}"`);
       for (const id of fragment.match(/ id="[^"]+"/g) ?? []) expect(page).toContain(id);
@@ -162,7 +163,7 @@ describe('the playground folder', () => {
 
   it('writes the four pages, the workbook and the README, with the workbook rows as the paste', () => {
     const dir = mkdtempSync(join(tmpdir(), 'quickfill-playground-'));
-    const files = writePlayground(dir, { fixtures: FIXTURES, stamp: '0.1.0+test' });
+    const files = writePlayground(dir, { fixtures: FIXTURES, stamp: '0.1.0+test', helper: HELPERS.quickfill });
     expect(files).toEqual([...ACE_STEPS.map((step) => step.file), WORKBOOK_FILE, 'README.md']);
     const workbook = XLSX.read(readFileSync(join(dir, WORKBOOK_FILE)), { type: 'buffer' });
     expect(workbook.SheetNames).toEqual(['Shipment']);
@@ -172,6 +173,6 @@ describe('the playground folder', () => {
     expect(rows[1]?.[COLUMNS.indexOf('Carrier')]).toBe('ZIMU');
     expect(rows[1]?.[COLUMNS.indexOf('ContainerNumber')]).toBe('ZIMU1234569');
     expect(readFileSync(join(dir, 'README.md'), 'utf8')).toContain('Allow access to file URLs');
-    expect(playgroundReadme('0.1.0+test')).toContain('0.1.0+test');
+    expect(playgroundReadme('0.1.0+test', HELPERS.quickfill)).toContain('0.1.0+test');
   });
 });

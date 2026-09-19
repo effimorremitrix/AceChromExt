@@ -1,8 +1,12 @@
 /**
  * Talking to the ACE tab.
  *
- * The extension only ever addresses tabs whose URL matches the ACE/CBP host
- * patterns in the manifest; it has no permission to touch anything else.
+ * The extension only ever addresses tabs whose URL matches the host patterns
+ * in its own manifest; it has no permission to touch anything else. That is
+ * enforced by asking Chrome to do the matching (`tabPatterns` below) rather
+ * than by a second URL test here, so the panel and the page can never disagree
+ * about which tabs count: the patterns that decide whether the content script
+ * was injected are the patterns the panel searches.
  */
 
 import { CONTENT_NOT_READY, type BackgroundRequest, type BackgroundResponse, type ContentRequest, type ContentResponse } from '../core/messages.js';
@@ -20,29 +24,37 @@ export interface AceTab {
   title: string;
 }
 
-function isAceUrl(url: string | undefined): boolean {
-  if (!url) return false;
+/**
+ * The pages THIS build may address: whatever its own manifest injects the
+ * content script into.
+ *
+ * The shipping manifest declares the three CBP hosts above and nothing else,
+ * so nothing changes for it. The playground build (`npm run build:playground`)
+ * declares pages opened from disk and from localhost instead, which is what
+ * lets the panel find a mock step without the manifest ever naming a portal.
+ * `ACE_URL_PATTERNS` remains the answer where there is no manifest to read.
+ */
+export function tabPatterns(): string[] {
   try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'https:' && (parsed.hostname === 'cbp.dhs.gov' || parsed.hostname.endsWith('.cbp.dhs.gov'));
+    const manifest = chrome.runtime.getManifest() as { content_scripts?: Array<{ matches?: string[] }> };
+    const declared = (manifest.content_scripts ?? []).flatMap((script) => script.matches ?? []);
+    if (declared.length) return declared;
   } catch {
-    return false;
+    // No manifest to read here. Fall through to the shipping patterns.
   }
+  return [...ACE_URL_PATTERNS];
 }
 
-/** The ACE tab to act on: the active tab when it is ACE, otherwise the most recently used ACE tab. */
+/** The ACE tab to act on: the active tab when it is one, otherwise the most recently used one. */
 export async function resolveAceTab(): Promise<AceTab | null> {
+  // Chrome matches the patterns, and hands back a url only for a tab this
+  // build has host permission for - which is why the playground manifest keeps
+  // host permissions for its local pages while Quickfill's needs none.
+  const matching = (await chrome.tabs.query({ url: tabPatterns() })).filter((tab) => tab.id !== undefined);
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (active?.id !== undefined && isAceUrl(active.url)) {
-    return { id: active.id, url: active.url ?? '', title: active.title ?? '' };
-  }
 
-  const candidates = await chrome.tabs.query({ url: ACE_URL_PATTERNS });
-  const usable = candidates
-    .filter((tab) => tab.id !== undefined && isAceUrl(tab.url))
-    .sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0));
-
-  const best = usable[0];
+  const here = active?.id === undefined ? undefined : matching.find((tab) => tab.id === active.id);
+  const best = here ?? [...matching].sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
   if (!best || best.id === undefined) return null;
   return { id: best.id, url: best.url ?? '', title: best.title ?? '' };
 }
