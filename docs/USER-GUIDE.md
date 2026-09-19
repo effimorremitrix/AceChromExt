@@ -386,6 +386,36 @@ ACE reference falls back to the invoice number, and is empty for an email-only
 paste. If the gap-free sequence matters for a filing, file that one with the
 ACE Helper.
 
+### Practising without the portal: the playground
+
+`npm run build:playground` writes `dist-ace-playground/`: the same ACE Helper
+under a manifest that matches **pages opened from disk and from localhost
+only**, with the four mock AESDirect steps and the example workbook in a
+`playground/` folder beside it. The card in `chrome://extensions` reads
+"ACE Helper (playground)", and it cannot open a portal page at all, so nothing
+can be filed from it. In CI it is the `ace-playground-unpacked` artifact, so
+it can be downloaded rather than built.
+
+Load that folder unpacked, turn on **Allow access to file URLs** on its card
+(without it the panel cannot see a page opened from disk and keeps saying
+"No ACE tab detected"), and open `playground/step1-shipment.html`. From there
+the panel is the real one: set a starting number, import
+`ACE_Import_Example.xlsx`, read the Preview, press **Fill Current Page**, and
+on Step 3 fill line 1, press **Add New Line** on the page, then fill line 2.
+`playground/README.md` is the walkthrough.
+
+The four pages are `tests/fixtures/ace-*.html` wrapped at build time, so they
+are the same screens the tests run against, with the real labels and the six
+ids captured from the live portal. The Save buttons only show a note.
+
+What it proves: the workbook is read, the mapping tables find the fields, the
+values are transformed on the way, the checks and the preview run, and the
+reference counter hands out and retires a number. What it does not: the live
+dropdowns are Select2 widgets and the playground's are plain selects; twenty
+of the twenty-six fields still match by label wording only; ACE's own
+validation is absent. **A fill that works here is the mechanics working, not
+the portal.**
+
 ### Preview: your review gate
 
 Every field shows a traffic light: **green** mapped and plausible; **yellow**

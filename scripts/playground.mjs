@@ -1,7 +1,13 @@
 /**
- * The Quickfill playground: the four AESDirect steps as pages that open from
- * disk, the example workbook, and a README, written into the playground build
- * of the Quickfill Helper (scripts/build-quickfill.mjs --playground).
+ * The playground: the four AESDirect steps as pages that open from disk, the
+ * example workbook, and a README, written into the playground build of the
+ * Quickfill Helper (scripts/build-quickfill.mjs --playground) or of the ACE
+ * Helper (scripts/build.mjs --playground).
+ *
+ * The pages are the same four either way, because they are mocks of ACE, not
+ * of a helper. What differs is who fills them: Quickfill pastes into one box,
+ * the ACE Helper imports the workbook in its panel and previews before it
+ * fills. HELPERS below is that difference, and the only difference.
  *
  * The pages are the test fixtures in tests/fixtures/ace-*.html, wrapped at
  * build time: the real labels and the six captured ids stay the single copy
@@ -33,6 +39,53 @@ export const WORKBOOK_FILE = 'ACE_Import_Example.xlsx';
 
 /** The content-script matches of the playground manifest: pages from disk and from a local server, never a portal. */
 export const PLAYGROUND_MATCHES = ['file:///*', 'http://127.0.0.1/*', 'http://localhost/*'];
+
+/**
+ * Which helper a playground folder is built for.
+ *
+ * `hostPermissions` is the one real asymmetry. Quickfill asks the content
+ * script where it is, so it needs no URL access and declares no host
+ * permission at all. The ACE Helper's panel finds its tab BY URL
+ * (`resolveAceTab` in src/ui/tabs.ts), and Chrome hands an extension a tab's
+ * url only for hosts it has permission for - so the ACE playground declares
+ * the same three local patterns it injects into, and nothing else. Neither
+ * build can name a portal host.
+ */
+export const HELPERS = {
+  quickfill: {
+    id: 'quickfill',
+    card: 'Quickfill Helper (playground)',
+    banner: 'Quickfill playground',
+    bannerHow: 'Paste the example rows into Quickfill and press Fill this page.',
+    description:
+      'Practice build: runs only on pages opened from disk or from localhost, never on ACE or INTTRA. Paste the example rows and fill the four mock steps in playground/.',
+    hostPermissions: null,
+  },
+  ace: {
+    id: 'ace',
+    card: 'ACE Helper (playground)',
+    banner: 'ACE Helper playground',
+    bannerHow: 'Import the example workbook in the panel, read the Preview, then press Fill Current Page.',
+    description:
+      'Practice build: runs only on pages opened from disk or from localhost, never on ACE. Import the example workbook and fill the four mock steps in playground/.',
+    hostPermissions: PLAYGROUND_MATCHES,
+  },
+};
+
+/**
+ * The shipping manifest, rewritten for a playground build: a card name that
+ * cannot be mistaken for the real extension, local pages instead of portal
+ * hosts, everything else untouched. The permissions list and the CSP are not
+ * this function's to widen.
+ */
+export function playgroundManifest(manifest, helper) {
+  const next = { ...manifest, name: helper.card, description: helper.description };
+  if (next.action) next.action = { ...next.action, default_title: helper.card };
+  if (helper.hostPermissions) next.host_permissions = [...helper.hostPermissions];
+  else delete next.host_permissions;
+  next.content_scripts = (next.content_scripts ?? []).map((script) => ({ ...script, matches: [...PLAYGROUND_MATCHES] }));
+  return next;
+}
 
 const STYLE = `
   :root { color-scheme: light; }
@@ -98,7 +151,7 @@ const SCRIPT = `
         var heading = panel.querySelector('h2');
         var match = heading && /Line (\\d+) Details/.exec(heading.textContent || '');
         if (heading && match) heading.textContent = 'Line ' + (Number(match[1]) + 1) + ' Details';
-        note(button, 'A new empty line, here only. In Quickfill pick the next line and press Fill line.');
+        note(button, 'A new empty line, here only. Pick the next line in the helper and fill it.');
         return;
       }
       if (/^delete/i.test(id)) { note(button, 'A mock: there is nothing to delete.'); return; }
@@ -108,7 +161,7 @@ const SCRIPT = `
 `;
 
 /** A fixture fragment as a page of its own: a document, a stylesheet, tabs that link the four files, and the mock buttons. */
-export function wrapAceScreen(fragment, step) {
+export function wrapAceScreen(fragment, step, helper) {
   let body = fragment.replace(/^\s*<!--[\s\S]*?-->\s*/, '');
   for (const other of ACE_STEPS) body = body.replaceAll(`href="#step${other.step}"`, `href="${other.file}"`);
   return [
@@ -121,7 +174,7 @@ export function wrapAceScreen(fragment, step) {
     `<style>${STYLE}</style>`,
     '</head>',
     '<body>',
-    `<div class="playground-banner"><strong>Quickfill playground.</strong> A mock of AESDirect ${step.title}, opened from your disk. Paste the example rows into Quickfill and press Fill this page. Nothing here is sent anywhere.</div>`,
+    `<div class="playground-banner"><strong>${helper.banner}.</strong> A mock of AESDirect ${step.title}, opened from your disk. ${helper.bannerHow} Nothing here is sent anywhere.</div>`,
     body.trim(),
     `<script>${SCRIPT}</script>`,
     '</body>',
@@ -143,7 +196,11 @@ export function exampleWorkbook() {
   return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 }
 
-export function playgroundReadme(stamp) {
+export function playgroundReadme(stamp, helper) {
+  return helper.id === 'ace' ? aceReadme(stamp) : quickfillReadme(stamp);
+}
+
+function quickfillReadme(stamp) {
   return `# Quickfill playground
 
 Four mock AESDirect steps and an example workbook, to practise the Quickfill
@@ -190,13 +247,74 @@ validation is not here. Never file from this build; it cannot reach a portal.
 `;
 }
 
+function aceReadme(stamp) {
+  return `# ACE Helper playground
+
+Four mock AESDirect steps and the example workbook, to practise the ACE Helper
+without a portal. Nothing on these pages is sent anywhere, and this build of
+the helper cannot open a portal page at all: it runs only on pages opened from
+disk or from localhost.
+
+Build: ${stamp}
+
+## Set up, once
+
+1. \`chrome://extensions\`, Developer mode on, **Load unpacked**, and pick the
+   folder that holds \`manifest.json\` (the parent of this \`playground\`
+   folder). The card reads "ACE Helper (playground)".
+2. On that card, **Details**, and turn on **Allow access to file URLs**.
+   Without it the panel cannot see a page opened from disk and will keep
+   saying "No ACE tab detected".
+3. Pin the helper to the toolbar.
+
+## Practise
+
+1. Open \`${ACE_STEPS[0].file}\` (double-click it). Click the toolbar icon: the
+   pill in the header should now name the step instead of "No ACE tab
+   detected".
+2. **Open full panel**. On **Overview**, type \`4088\` under Shipment Reference
+   Number and press **Set starting number**. Skip this and ACE Step 1 gets the
+   invoice number instead, which is also worth seeing once.
+3. **Import**, and choose \`${WORKBOOK_FILE}\` from this folder. The panel says
+   which kind of file it opened and how many commodity lines it read.
+4. **Preview**: every field with its traffic light, and the original beside the
+   ACE value wherever something was transformed. This is the review gate; read
+   the yellows.
+5. **Fill Current Page**. It writes into the most recently used playground tab,
+   so it lands on step 1 even while you are looking at the panel. Read what
+   arrived: the reference number, the departure date as MM/DD/YYYY, the origin
+   state, the country of destination.
+6. Steps 2 and 4 through the page tabs, **Fill Current Page** on each. On
+   step 3 use **Fill Current Line** for line 1, then press **Add New Line** on
+   the page, pick line 2 in the panel, and fill again.
+7. If you set a starting number: **Mark 4088 as filed** on Overview retires it
+   and the next fill hands out 4089. Nothing else advances the sequence, so an
+   abandoned draft leaves no gap.
+8. The Save buttons only show a note. The helper never presses one, here or on
+   the portal. Reload a page to start it over.
+
+## What this proves, and what it does not
+
+It proves the mechanics: the workbook is read, the mapping tables find the
+fields by the labels and the six ids captured from the live portal, the values
+are transformed on the way (the date to MM/DD/YYYY, pounds to whole kilograms,
+codes upper-cased), the preview and the data quality checks run, and the
+reference counter hands out and retires a number.
+
+It does not prove the live portal. The dropdowns here are plain selects; on
+AESDirect every dropdown is a Select2 widget that no build has written to yet.
+Twenty of the twenty-six fields still match by label wording only. ACE's own
+validation is not here. Never file from this build; it cannot reach a portal.
+`;
+}
+
 /** Write the whole playground folder: the four pages, the workbook, the README. */
-export function writePlayground(dir, { fixtures, stamp }) {
+export function writePlayground(dir, { fixtures, stamp, helper }) {
   mkdirSync(dir, { recursive: true });
   for (const step of ACE_STEPS) {
-    writeFileSync(join(dir, step.file), wrapAceScreen(readFileSync(join(fixtures, step.fixture), 'utf8'), step));
+    writeFileSync(join(dir, step.file), wrapAceScreen(readFileSync(join(fixtures, step.fixture), 'utf8'), step, helper));
   }
   writeFileSync(join(dir, WORKBOOK_FILE), exampleWorkbook());
-  writeFileSync(join(dir, 'README.md'), playgroundReadme(stamp));
+  writeFileSync(join(dir, 'README.md'), playgroundReadme(stamp, helper));
   return [...ACE_STEPS.map((step) => step.file), WORKBOOK_FILE, 'README.md'];
 }

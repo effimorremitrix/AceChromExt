@@ -4,6 +4,7 @@ dist/
 .DS_Store
 .vitest/
 coverage/
+dist-ace-playground/
 dist-companion/
 dist-inttra/
 dist-quickfill/

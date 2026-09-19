@@ -97,6 +97,7 @@ repository outside the one history note in `docs/DECKHAND.md`. Keep it that way.
 | --- | --- |
 | `npm run verify` | typecheck + tests + template + all three extension builds + their three bundle checks + companion build + dashboard build + its bundle check. Run before every push. |
 | `npm run build` / `build:watch` | build `dist/` (the ACE Helper) |
+| `npm run build:playground` | build `dist-ace-playground/`: the same ACE Helper bundles under a manifest that matches local files only, plus the four mock ACE steps and the example workbook (`docs/USER-GUIDE.md` section 4). `check:bundle:playground` runs the bundle check on it |
 | `npm run build:inttra` | build `dist-inttra/` (the INTTRA Helper) |
 | `npm run build:quickfill` | build `dist-quickfill/` (the Quickfill Helper) |
 | `npm run build:quickfill:playground` | build `dist-quickfill-playground/`: the same bundles under a manifest that matches local files only, plus the four mock ACE steps and the example workbook (`docs/QUICKFILL.md` section 5a). `check:bundle:quickfill:playground` runs the bundle check on it |
@@ -188,7 +189,8 @@ check; `tests/invariants.test.ts` pins it to that request type, built in
 | a document reader (PDF, mailbox) | implement `DocumentReader` in `deckhand/src/readers/`, register in `deckhand/src/extractor.ts` |
 | a dashboard screen | a renderer in `web/src/views/` over `ShipmentRecord`; the rules stay in `src/`, `shared/`, `deckhand/`. A workflow step is a pure function in `web/src/workflow.ts` |
 | what Quickfill accepts in its one paste box | the detection ladder in `quickfill-extension/src/paste.ts`. Never add a format picker: one box is the product |
-| the Quickfill playground (the four mock ACE steps, the example workbook, its README) | `scripts/playground.mjs` wraps `tests/fixtures/ace-*.html` at build time, never a second copy of a screen; the example data is `scripts/templateData.mjs`, shared with `npm run template` |
+| either playground (the four mock ACE steps, the example workbook, its README) | `scripts/playground.mjs` wraps `tests/fixtures/ace-*.html` at build time, never a second copy of a screen; the example data is `scripts/templateData.mjs`, shared with `npm run template`. `HELPERS` is the only difference between the ACE build's playground and Quickfill's: the card name, the banner, the README, and whether the generated manifest keeps host permissions (the ACE panel finds its tab by URL, Quickfill asks the content script) |
+| which tabs the ACE panel will address | `tabPatterns()` in `src/ui/tabs.ts`, read from this build's own manifest, so the panel searches exactly what Chrome injected into. `ACE_URL_PATTERNS` stays in the file as the fallback and because `tests/invariants.test.ts` pins it against `host_permissions` |
 | how gated Quickfill is | `quickfill-extension/src/aceShipment.ts`. It is the local, ungated twin of `shared/src/aceView.ts`, and the one file where "fill it anyway" lives. Do not gate it, and do not ungate `aceView.ts` |
 | the dashboard's hosting | `web/wrangler.jsonc` (static assets only), `web/_headers`, `.github/workflows/deploy-web.yml` |
 | the guides in the dashboard's Help tab | `docs/USER-GUIDE.md` and `docs/SETUP-GUIDE.md` themselves; the page bundles them at build time (`?raw` import), never a second copy |
@@ -251,6 +253,13 @@ stay honestly described:
    model and the spreadsheet for the INTTRA Helper; they are not ACE fields.
    Port of Export and Port of Unlading are on Step 1, vary per shipment, and
    are **not mapped yet**.
+
+   A playground build (`npm run build:playground` -> `dist-ace-playground/`,
+   local files only, never a portal) drives the whole panel against the four
+   mock steps. Like Quickfill's, it proves the mechanics on the captured
+   labels and the six captured ids, and nothing whatever about the live
+   portal: its dropdowns are plain selects, and no Select2 write has still
+   ever run. A green fill there does not shrink the twenty.
 
 2. The QuickBooks **COM hop has never run against a real QuickBooks** - there is
    no Windows machine with QuickBooks Desktop in this toolchain. Everything

@@ -74,12 +74,18 @@ Individual steps, if you prefer:
    the folder Chrome loaded (also shown as the version in `chrome://extensions`).
    If it is not the build you just ran, Chrome is still running an older
    folder: reload the card, then the portal tab.
-9. To practise a fill without a portal, load `dist-quickfill-playground/` the
-   same way (`npm run build:quickfill:playground`, or the
-   `quickfill-playground-unpacked` CI artifact), turn on **Allow access to
-   file URLs** on its card, and open `playground/step1-shipment.html` from
-   that folder. It runs on local pages only and can never reach a portal;
-   `docs/QUICKFILL.md` section 5a.
+9. To practise a fill without a portal, load a playground build the same way,
+   turn on **Allow access to file URLs** on its card, and open
+   `playground/step1-shipment.html` from that folder. Both run on local pages
+   only and can never reach a portal:
+
+   | Build | Folder, or CI artifact | What it drives |
+   | --- | --- | --- |
+   | `npm run build:playground` | `dist-ace-playground/`, `ace-playground-unpacked` | the ACE Helper panel: import, preview, checks, the reference counter, fill (`docs/USER-GUIDE.md` section 4) |
+   | `npm run build:quickfill:playground` | `dist-quickfill-playground/`, `quickfill-playground-unpacked` | the Quickfill popup: one paste box (`docs/QUICKFILL.md` section 5a) |
+
+   Load whichever you are practising; loading both at once means two helpers
+   answering on the same page.
 
 ## 4. Check it is alive
 

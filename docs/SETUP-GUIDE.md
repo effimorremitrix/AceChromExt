@@ -29,6 +29,10 @@ Then `chrome://extensions`, **Developer mode** on, **Load unpacked**, choose
 Reload any portal tab that was already open; a content script is only
 injected into pages loaded after the extension.
 
+**To practise before the first real filing:** `npm run build:playground` and
+load `dist-ace-playground/` instead; it runs on local mock steps only and can
+never reach ACE. USER-GUIDE.md section 4 has the walkthrough.
+
 **First run, once:** open the ACE Helper panel, **Overview**, and type where
 your Shipment Reference Number sequence stands into the box under **Shipment
 Reference Number** (someone who last filed 4087 types `4088`), then press

@@ -4,8 +4,18 @@
  * esbuild bundles every dependency (including SheetJS) into the output, so the
  * extension ships no remote code and needs no network access at runtime.
  *
- *   npm run build          one-off build
- *   npm run build:watch    rebuild on change
+ *   npm run build              one-off build
+ *   npm run build:watch        rebuild on change
+ *   npm run build:playground   --playground: dist-ace-playground/
+ *
+ * The playground build is the same bundles under a manifest that matches pages
+ * opened from disk and from localhost only, never a portal, with the four mock
+ * AESDirect steps and the example workbook written beside it
+ * (scripts/playground.mjs, shared with the Quickfill Helper's playground). It
+ * is how an operator drives the whole panel - import, preview, mapping status,
+ * the data quality checks, the reference counter, fill - without the live
+ * portal, and it can never be mistaken for the real build: a different name on
+ * the card, and not one CBP host in its manifest.
  *
  * Output formats matter here:
  *   - the content script and the popup/panel scripts are IIFEs, because MV3
@@ -15,14 +25,16 @@
 
 import { build, context } from 'esbuild';
 import { buildVersionName } from './buildStamp.mjs';
+import { HELPERS, playgroundManifest, writePlayground } from './playground.mjs';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
-const dist = join(root, 'dist');
 const watch = process.argv.includes('--watch');
+const playground = process.argv.includes('--playground');
+const dist = join(root, playground ? 'dist-ace-playground' : 'dist');
 
 const CLASSIC_ENTRIES = {
   aceContent: 'src/content/aceContent.ts',
@@ -49,11 +61,21 @@ function copyStatic() {
   // Keep the manifest version in step with package.json.
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   const manifestPath = join(dist, 'manifest.json');
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  let manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   manifest.version = pkg.version;
   // ...and stamp the build (git commit + time) so a loaded build can be told apart.
   manifest.version_name = buildVersionName(pkg.version, root);
+  if (playground) manifest = playgroundManifest(manifest, HELPERS.ace);
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  if (playground) {
+    const files = writePlayground(join(dist, 'playground'), {
+      fixtures: join(root, 'tests', 'fixtures'),
+      stamp: manifest.version_name,
+      helper: HELPERS.ace,
+    });
+    console.log(`  playground/: ${files.join(', ')}`);
+  }
 }
 
 function optionsFor(entries, format) {
@@ -97,7 +119,12 @@ async function run() {
     console.log(`  ${name}.js  ${(size / 1024).toFixed(1)} kB`);
   }
   console.log(`\nUnpacked extension ready: ${dist}`);
-  console.log('Load it with chrome://extensions -> Developer mode -> Load unpacked.');
+  if (playground) {
+    console.log('Load it with chrome://extensions -> Developer mode -> Load unpacked, allow access to file URLs on its card,');
+    console.log('then open playground/step1-shipment.html. playground/README.md is the walkthrough.');
+  } else {
+    console.log('Load it with chrome://extensions -> Developer mode -> Load unpacked.');
+  }
 }
 
 run().catch((error) => {
