@@ -550,6 +550,10 @@ function renderOverview(): HTMLElement {
     section.append(
       el('p', { className: 'muted', text: 'Nothing loaded. Import an ACE workbook, or export one from QuickBooks first.' }),
       state.surface === 'panel' ? actionButton('Import a workbook', 'import', true) : buildOpenPanelButton('Open the panel to import'),
+      // The sequence is the filer's own, not the workbook's, and seeding it is
+      // a first-run act. Hiding it until an import would mean the first filing
+      // is the earliest it can be set, which is a filing too late.
+      referenceCounterBlock(),
     );
     return section;
   }
@@ -1659,16 +1663,22 @@ export async function startApp(surface: Surface, excelImporter: ExcelImporter | 
  * filing exists, and a number in flight that nobody can see is a number that
  * gets handed out twice. So it sits next to the fill buttons, saying what will
  * be written and what is waiting to be retired.
+ *
+ * It renders on BOTH overview states, loaded and empty. The counter is operator
+ * state in `chrome.storage.local`, not shipment data, so it owes nothing to an
+ * import; and the moment an operator wants it is the moment they install, with
+ * nothing loaded at all.
  */
 function referenceCounterBlock(): HTMLElement {
   const box = el('div', { className: 'panel-subsection' });
   const counter = state.counter;
+  box.append(el('h2', { text: 'Shipment Reference Number' }));
 
   if (!counter.configured) {
     box.append(
       el('p', {
         className: 'small muted',
-        text: 'Shipment Reference Number: using the invoice number. Set a starting number to file your own running sequence instead.',
+        text: 'Using the invoice number. Set a starting number to file your own running sequence instead.',
       }),
     );
     box.append(startingNumberForm('Set starting number'));
@@ -1681,8 +1691,8 @@ function referenceCounterBlock(): HTMLElement {
     el('p', {
       className: 'small',
       text: held
-        ? `Shipment Reference Number ${formatReference(next)} is in use. It stays on every fill until you mark it filed, so an abandoned draft leaves no gap.`
-        : `Next Shipment Reference Number: ${formatReference(next)}. Last filed: ${counter.lastFiled || 'none yet'}.`,
+        ? `${formatReference(next)} is in use. It stays on every fill until you mark it filed, so an abandoned draft leaves no gap.`
+        : `Next: ${formatReference(next)}. Last filed: ${counter.lastFiled || 'none yet'}.`,
     }),
   );
 

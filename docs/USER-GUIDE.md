@@ -327,10 +327,64 @@ Status
 ✓ Deckhand extraction approved
 ✓ Filing package CN-1042_EBKG18531408 built
 
+Shipment Reference Number
+Next: 4088. Last filed: 4087.
+[ ____ ] [ Set next number ]
+
 Actions
 [ Preview ] [ Mapping status ] [ Fill Current Page ] [ Fill Current Line ]
 [ Calculator ] [ Clear Data ]
 ```
+
+### The Shipment Reference Number
+
+ACE Step 1 wants a Shipment Reference Number. There are two ways to feed it:
+
+- **Do nothing** and it is the invoice number, as the workbook has it.
+- **Set a starting number** and it is your own running sequence, kept by the
+  extension and handed out one filing at a time.
+
+It is on the **Overview**, under its own heading, and it is there before you
+import anything. So the first thing to do after installing is to say where
+your sequence stands:
+
+```
+Shipment Reference Number
+Using the invoice number. Set a starting number to file your own running
+sequence instead.
+[ 4088 ] [ Set starting number ]
+```
+
+Type the number you want handed out **next**: someone who last filed 4087
+types `4088`. It is kept in this browser beside the settings, on this machine
+only. It survives **Clear Data**, closing the browser and restarting the PC,
+because it is your record rather than shipment data.
+
+**A fill reserves the number; it does not advance the sequence.** The sequence
+may have no gaps, so filling Step 1 writes 4088 and holds it:
+
+```
+Shipment Reference Number
+4088 is in use. It stays on every fill until you mark it filed, so an
+abandoned draft leaves no gap.
+[ Mark 4088 as filed ] [ ____ ] [ Set next number ]
+```
+
+Fill another draft and it writes 4088 again. Only **Mark 4088 as filed** moves
+the sequence on, and that is yours to press once the filing exists in ACE. An
+abandoned draft therefore burns nothing. The cost of that rule is the mirror
+risk: file 4088 and forget to press the button, and the next shipment is
+handed 4088 a second time. That is why the held number is on the Overview
+every time you open it.
+
+**Correcting it.** **Set next number** states what the truth is: it drops any
+held number and continues from what you typed. Use it after a filing made
+outside the extension, or after a typo.
+
+**What does not touch it.** The Quickfill Helper never uses the counter: its
+ACE reference falls back to the invoice number, and is empty for an email-only
+paste. If the gap-free sequence matters for a filing, file that one with the
+ACE Helper.
 
 ### Preview: your review gate
 
@@ -519,7 +573,9 @@ submitting or adding a row.
 extraction, the package and the session log from memory, and clears the
 tinting. All of it also disappears when the browser closes: it is held in
 session memory and never written to disk. Save the package file first if you
-want to keep it.
+want to keep it. The Shipment Reference Number sequence is not part of this.
+It is your own record, kept beside the settings, and it survives both **Clear
+Data** and closing the browser (section 4).
 
 **The session log.** Panel, **Diagnostics**. Everything that happened, in
 order: imports, transformations, extractions, package builds, fills. **Copy
