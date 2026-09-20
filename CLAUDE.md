@@ -128,6 +128,16 @@ of these, so do not work around them - fix the cause:
 - no `document.cookie`, password handling, `localStorage`, or `sessionStorage`;
   imported data lives in `chrome.storage.session` only;
 - `innerHTML` is only ever assigned a string literal;
+- **nothing in the content layer joins the page's stylesheets**: no `<style>`
+  element, no `head.appendChild`, no `adoptedStyleSheets`, no `insertRule`.
+  A stylesheet added to the page invalidates its style, and the detector
+  forces that work to run synchronously (`isVisible` reads `getClientRects()`
+  and `getComputedStyle()`), so the PAGE's own pending font and style work
+  ran inside our stack and Chrome billed us for it - live INTTRA reported
+  "Failed to decode downloaded font ... OpenSans_600.woff", a font INTTRA
+  serves from its own host, against `inttraContent.js` on the extension's
+  Errors panel. The calculator is the one thing with CSS of its own, and it
+  keeps it in a SHADOW ROOT, which is the pattern to copy;
 - the manifest keeps `permissions: ["storage"]`, CBP-only hosts, and a CSP with
   `script-src 'self'` + `connect-src 'none'`.
 
@@ -182,6 +192,7 @@ check; `tests/invariants.test.ts` pins it to that request type, built in
 | a grid heading that is a dropdown, or the shape of the paste block | `readHeaderCell` and `gridPasteBlock` in `inttra-extension/src/content/gridWriter.ts`, shared by both helpers |
 | how a value is presented to a portal box (HS code without its dot, a weight rounded) | a transformer in `src/ace/transformers/` + its name in the mapping's `transforms`. The canonical value never changes: `0802.12` stays `0802.12` in the package and goes in as `080212` because INTTRA said "Field cannot contain decimal points" |
 | what the detector may do when one query matches several controls | `ofKind` in `src/content/fieldDetector.ts`, driven by the mapping's `controlKind` (derived from the INTTRA field `type` in `mappings/types.ts`). It is the ONLY narrowing: a `select` field takes the one dropdown, a `number` field the one box. Nothing positional, and everything else is still AMBIGUOUS and still refused |
+| how a filled field is highlighted, or the "show field" pulse | `src/content/highlight.ts`, shared by all three helpers. Inline styles plus `Element.animate`, never a stylesheet: see the rule above, and `tests/invariants.test.ts` fails the build on a `<style>` in the content layer |
 | how a type-ahead is written (the ports) | `type: 'lookup'` on the mapping; `fillOne` in `inttra-extension/src/content/filler.ts` then writes it with no `change`, no `blur` and no focus, because each of those makes INTTRA empty the box |
 | how the container grid is found when it is not a table | `findHeaderRowByText` and `findContainerGrid` in `inttra-extension/src/content/gridWriter.ts`; the detector and both content scripts go through `findContainerGrid` |
 | what Diagnostics says about the page's structure (frame, markers, what is around "Container Number") | `inttra-extension/src/content/structureProbe.ts` |

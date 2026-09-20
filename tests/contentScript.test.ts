@@ -192,6 +192,8 @@ describe('highlighting', () => {
     highlightField(input, 'filled', 0, 'ShippingWeight');
     expect(input.getAttribute(MARKER_ATTRIBUTE)).toBe('ShippingWeight');
     expect(input.style.outline).toContain('solid');
+    // The transition is inline now, not a rule in an injected stylesheet.
+    expect(input.style.transition).toContain('background-color');
 
     input.scrollIntoView = () => undefined;
     expect(revealField('ShippingWeight')).toBe(true);
@@ -201,5 +203,69 @@ describe('highlighting', () => {
     expect(input.hasAttribute(MARKER_ATTRIBUTE)).toBe(false);
     expect(input.style.backgroundColor).toBe('rgb(255, 255, 255)');
     expect(input.style.outline).toBe('');
+    expect(input.style.transition).toBe('');
+  });
+
+  /**
+   * The page's stylesheets stay the page's.
+   *
+   * Appending a `<style>` element invalidates the document's style, and the
+   * detector forces that work to run synchronously a moment later, so the
+   * page's own pending font work was processed inside our stack and Chrome
+   * billed the extension for it - live INTTRA reported a font of INTTRA's own
+   * that fails to decode against `inttraContent.js`. Nothing here may add a
+   * stylesheet to the page again.
+   */
+  it('adds nothing to the page stylesheets, before or after a highlight', async () => {
+    document.body.innerHTML = '<input id="f" />';
+    const before = document.querySelectorAll('style, link[rel="stylesheet"]').length;
+    const { clearAllHighlights, highlightField, revealField } = await import('../src/content/highlight.js');
+    const input = document.getElementById('f') as HTMLInputElement;
+    input.scrollIntoView = () => undefined;
+
+    highlightField(input, 'error', 0, 'Vessel');
+    revealField('Vessel');
+    expect(document.querySelectorAll('style, link[rel="stylesheet"]').length).toBe(before);
+    expect(document.head.children.length).toBe(0);
+
+    clearAllHighlights();
+    expect(document.querySelectorAll('style, link[rel="stylesheet"]').length).toBe(before);
+  });
+
+  it('pulses through the element itself, and cancels that pulse on clear', async () => {
+    document.body.innerHTML = '<input id="f" />';
+    const { clearAllHighlights, highlightField, revealField } = await import('../src/content/highlight.js');
+    const input = document.getElementById('f') as HTMLInputElement;
+    input.scrollIntoView = () => undefined;
+
+    // jsdom has no Web Animations, which is the branch the live browser does
+    // not take; stub it to check the call this module actually makes.
+    const cancelled: string[] = [];
+    let keyframes: unknown = null;
+    (input as unknown as { animate: unknown }).animate = (frames: unknown) => {
+      keyframes = frames;
+      return { cancel: () => cancelled.push('cancel') } as unknown as Animation;
+    };
+
+    highlightField(input, 'warning', 0, 'PortOfLoading');
+    revealField('PortOfLoading');
+    expect(keyframes).toEqual([{ outlineOffset: '0px' }, { outlineOffset: '4px' }, { outlineOffset: '0px' }]);
+
+    clearAllHighlights();
+    expect(cancelled).toEqual(['cancel']);
+  });
+
+  it('still highlights where the browser has no Web Animations at all', async () => {
+    document.body.innerHTML = '<input id="f" />';
+    const { highlightField, revealField, MARKER_ATTRIBUTE } = await import('../src/content/highlight.js');
+    const input = document.getElementById('f') as HTMLInputElement;
+    input.scrollIntoView = () => undefined;
+    expect(typeof input.animate).not.toBe('function');
+
+    highlightField(input, 'error', 0, 'Voyage');
+    // No pulse, and no throw: the outline and the scroll still say which field.
+    expect(revealField('Voyage')).toBe(true);
+    expect(input.getAttribute(MARKER_ATTRIBUTE)).toBe('Voyage');
+    expect(input.style.outline).toContain('solid');
   });
 });

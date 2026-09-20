@@ -128,6 +128,49 @@ describe('no ACE automation beyond typing', () => {
   });
 });
 
+/**
+ * The portal's own stylesheets are the portal's.
+ *
+ * `src/content/highlight.ts` used to append a `<style>` element to the page
+ * for a transition and a pulse keyframe. A stylesheet added to a document
+ * invalidates its style, and the detector forces that work to run
+ * synchronously a moment later (`isVisible` reads `getClientRects()` and
+ * `getComputedStyle()` on every candidate). The page's own pending style and
+ * font work therefore ran inside our call stack, and Chrome billed us for it:
+ * live INTTRA logged "Failed to decode downloaded font: .../OpenSans_600.woff"
+ * against `inttraContent.js`, in the extension's Errors panel, for a font
+ * INTTRA serves from INTTRA's own host and nothing here ever asked for.
+ *
+ * The highlight now uses inline styles and a Web Animations call, so the
+ * content layer adds nothing to the page's stylesheets at all. The calculator
+ * is the one thing that still needs its own CSS, and it has always kept it in
+ * a shadow root, where it belongs.
+ */
+describe('nothing of ours joins the page stylesheets', () => {
+  it('never adds a stylesheet to the page from the content layer', () => {
+    const content = stripped.filter(({ path }) => path.includes('/content/'));
+    expect(content.length).toBeGreaterThan(0);
+    for (const { path, code } of content) {
+      expect(code, path).not.toMatch(/createElement\s*\(\s*['"`]style['"`]/);
+      expect(code, path).not.toMatch(/\bhead\s*\.\s*(appendChild|append|insertBefore|prepend)/);
+      expect(code, path).not.toMatch(/adoptedStyleSheets/);
+      expect(code, path).not.toMatch(/\.insertRule\s*\(/);
+      expect(code, path).not.toMatch(/\bstyleSheets\b/);
+    }
+  });
+
+  it('keeps the calculator, the one thing with its own CSS, inside a shadow root', () => {
+    const withStyle = stripped.filter(
+      ({ path, code }) => path.includes('/calculator/') && /createElement\s*\(\s*['"`]style['"`]/.test(code),
+    );
+    expect(withStyle.length).toBe(1);
+    for (const { path, code } of withStyle) {
+      expect(code, path).toMatch(/attachShadow/);
+      expect(code, path).not.toMatch(/\bhead\s*\.\s*(appendChild|append)/);
+    }
+  });
+});
+
 describe('the session log', () => {
   it('lives in session storage, never storage.local or a file', () => {
     const log = readFileSync(join(SRC, 'core', 'sessionLog.ts'), 'utf8');

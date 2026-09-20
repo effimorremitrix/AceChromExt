@@ -746,6 +746,52 @@ Above it: `Container Type`, and `Unit of Measure` (Weight `Kgs`, Volume
 - The paste into the grid was never performed, so the paste block has still
   never met the live grid.
 
+## 5f. The Errors panel, 2026-09-20: a font that is not ours
+
+After the section 5e build was loaded, `chrome://extensions` showed a red
+**Errors** button on the INTTRA Helper. The entry is a warning, not an error,
+and it reads:
+
+```
+⚠ Failed to decode downloaded font:
+  https://ship.inttra.e2open.com/siact/css/fonts/opensans/OpenSans_600.woff
+Context:     https://ship.inttra.e2open.com/siact/siworkspace#/create/...
+Stack trace: inttraContent.js
+```
+
+**The font is INTTRA's**, served from INTTRA's own host, and the helper has
+never asked for it: nothing in this repository references a `.woff`, an
+`@font-face` or a remote font, and the manifest's CSP is `connect-src 'none'`.
+The file itself is what is broken; the page falls back to another face and
+carries on.
+
+**Why our name was on it.** Two things of ours met:
+
+1. `src/content/highlight.ts` appended a `<style>` element to the page for a
+   transition and a pulse keyframe. A stylesheet added to a document
+   invalidates that document's style.
+2. The detector forces that work to run **synchronously** a moment later:
+   `isVisible` calls `getClientRects()` and `getComputedStyle()` on every
+   candidate it tries, and `isInttraVisible` calls `checkVisibility()`. Each
+   is a forced style flush, and a fill does hundreds of them.
+
+So the page's own pending style and font work was processed inside our call
+stack, and Chrome attributed the console warning to the script on top of it.
+
+**What changed.** The stylesheet is gone. The transition is an inline style
+like the rest of the highlight's snapshot, and the pulse is an
+`Element.animate` call on the one element, which needs no `@keyframes` rule
+and so no stylesheet. The content layer now adds nothing to the page's
+stylesheets at all, and `tests/invariants.test.ts` fails the build if that
+changes. The calculator keeps CSS of its own and always did the right thing
+with it - it lives in a shadow root.
+
+**What this does not fix.** The forced style reads stay, because knowing
+whether a control is visible before writing to it is the point of them. A
+page whose own CSS is still loading can therefore still surface its own
+warnings through our stack. What is fixed is that we no longer hand it
+anything of ours to process, and the font itself is INTTRA's to repair.
+
 ## 6. The live procedure: capturing the real selectors
 
 Do this once, on the first attended session, with a Shipping Instruction open
