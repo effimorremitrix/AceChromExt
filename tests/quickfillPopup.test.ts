@@ -165,7 +165,9 @@ describe('the popup', () => {
     place = { portal: 'inttra', label: 'General Details', hasLines: false, isGrid: false, gridWritable: false };
     const box = await mount();
     await paste(box, email);
-    expect(buttonLabels()).toEqual(['Fill this screen', 'Fill container 1']);
+    // One press per screen: the number of containers differs per draft, so the
+    // button walks every container block rather than naming one.
+    expect(buttonLabels()).toEqual(['Fill this screen', 'Fill all 3 containers']);
   });
 
   it('leads with Copy rows on a grid that cannot be typed into', async () => {

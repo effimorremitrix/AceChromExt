@@ -1,0 +1,49 @@
+<!--
+  Mock of the live Particulars section (Create Shipping Instruction), two
+  container blocks.
+
+  The ids, names, classes, maxlengths and label wording here WERE copied from
+  the live DOM on 2026-09-20 (ship.inttra.e2open.com): every control of
+  container N carries the same `-N` suffix, numbered from 1 upward, `id` and
+  `name` hold the same string, and the class is identical on every row, which
+  is why the class is never the selector. The surrounding markup is trimmed.
+-->
+<div id="particulars">
+  <h2>Particulars</h2>
+
+  <div class="row row-5-gutter" id="container-block-1">
+    <div class="col-md-12 col-5-gutter form-group">
+      <label for="cont-num-1" id="cont-numlbl-1">Container Number</label>
+      <input type="text" class="form-control input-sm cont-num-1" name="cont-num-1" id="cont-num-1"
+             inttra-ng-change="$ctrl.trimSpaces($elementId);" maxlength="11" placeholder="Enter Number..." />
+    </div>
+    <div class="col-md-12 col-5-gutter form-group">
+      <label for="carr-seal-1" id="carr-seallbl-1" class="carr-seal-numlbl">Carrier Seal Number(s)</label>
+      <input type="text" class="form-control input-sm carr-seal-1" name="carr-seal-1" id="carr-seal-1"
+             inttra-ng-change="$ctrl.trimSpaces($elementId);" maxlength="79" placeholder="Enter Number(s)..." />
+    </div>
+    <div class="col-md-12 col-5-gutter form-group">
+      <label for="ship-seal-1" id="ship-seallbl-1" class="ship-seal-NumLbl">Shipper Seal Number(s)</label>
+      <input type="text" class="form-control input-sm ship-seal-1" name="ship-seal-1" id="ship-seal-1"
+             inttra-ng-change="$ctrl.trimSpaces($elementId);" maxlength="79" placeholder="Enter Number(s)..." />
+    </div>
+  </div>
+
+  <div class="row row-5-gutter" id="container-block-2">
+    <div class="col-md-12 col-5-gutter form-group">
+      <label for="cont-num-2" id="cont-numlbl-2">Container Number</label>
+      <input type="text" class="form-control input-sm cont-num-1" name="cont-num-2" id="cont-num-2"
+             inttra-ng-change="$ctrl.trimSpaces($elementId);" maxlength="11" placeholder="Enter Number..." />
+    </div>
+    <div class="col-md-12 col-5-gutter form-group">
+      <label for="carr-seal-2" id="carr-seallbl-2" class="carr-seal-numlbl">Carrier Seal Number(s)</label>
+      <input type="text" class="form-control input-sm carr-seal-1" name="carr-seal-2" id="carr-seal-2"
+             inttra-ng-change="$ctrl.trimSpaces($elementId);" maxlength="79" placeholder="Enter Number(s)..." />
+    </div>
+    <div class="col-md-12 col-5-gutter form-group">
+      <label for="ship-seal-2" id="ship-seallbl-2" class="ship-seal-NumLbl">Shipper Seal Number(s)</label>
+      <input type="text" class="form-control input-sm ship-seal-1" name="ship-seal-2" id="ship-seal-2"
+             inttra-ng-change="$ctrl.trimSpaces($elementId);" maxlength="79" placeholder="Enter Number(s)..." />
+    </div>
+  </div>
+</div>

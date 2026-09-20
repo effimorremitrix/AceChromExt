@@ -21,7 +21,7 @@ import { INTTRA_PAGE_SIGNATURES } from '../inttra-extension/src/pages.js';
 import { isInttraUrl } from '../inttra-extension/src/ui/tabs.js';
 import { parseOverrides } from '../src/ace/selectors/overrides.js';
 import { PACKAGE_CONTAINER_FIELDS, PACKAGE_HEADER_FIELDS } from '../shared/src/filingPackage.js';
-import { approveDeckhand, buildFilingPackage, type FilingPackage } from '../shared/src/index.js';
+import { approveDeckhand, buildFilingPackage, setManualContainer, type FilingPackage } from '../shared/src/index.js';
 import { extractWithRules } from '../deckhand/src/index.js';
 
 const FIXTURES = join(__dirname, 'fixtures');
@@ -485,12 +485,24 @@ describe('mapping tables', () => {
     for (const column of GRID_COLUMNS) expect(PACKAGE_CONTAINER_FIELDS as readonly string[]).toContain(column.source);
   });
 
-  it('ships every selector as a placeholder, none marked verified', () => {
-    expect(unverifiedInttraFieldKeys()).toEqual(ALL_INTTRA_MAPPINGS.map((mapping) => mapping.key));
+  it('names the three fields captured from the live DOM, and ships the rest as placeholders', () => {
+    // Copied off the live Particulars block on 2026-09-20. This list can only
+    // grow as fields are captured; a field marked verified without being added
+    // here fails the test, which is the point.
+    const captured = ['ContainerNumber', 'CarrierSeal', 'ShipperSeal'];
+    expect(unverifiedInttraFieldKeys()).toEqual(ALL_INTTRA_MAPPINGS.map((mapping) => mapping.key).filter((key) => !captured.includes(key)));
     for (const mapping of ALL_INTTRA_MAPPINGS) {
-      expect(mapping.verificationStatus).toBe('placeholder');
-      expect(mapping.candidates.every((candidate) => candidate.verified === false)).toBe(true);
       expect(mapping.devtoolsHint).toBeTruthy();
+      if (captured.includes(mapping.key)) {
+        expect(mapping.verificationStatus, mapping.key).toBe('verified');
+        // The captured selector is the row-numbered id, not the class: the
+        // class is identical on every container block.
+        expect(mapping.candidates[0], mapping.key).toMatchObject({ strategy: 'id', verified: true });
+        expect(mapping.candidates[0]?.selector, mapping.key).toContain('{n}');
+        continue;
+      }
+      expect(mapping.verificationStatus, mapping.key).toBe('placeholder');
+      expect(mapping.candidates.every((candidate) => candidate.verified === false), mapping.key).toBe(true);
     }
   });
 
@@ -498,7 +510,12 @@ describe('mapping tables', () => {
     const keys = ALL_INTTRA_MAPPINGS.map((mapping) => mapping.key);
     expect(new Set(keys).size).toBe(keys.length);
     expect(inttraFieldsForPage('containerCargo').every((mapping) => mapping.scope === 'container')).toBe(true);
-    expect(inttraFieldsForPage('generalDetails').every((mapping) => mapping.scope === 'shipment')).toBe(true);
+    // The live Create Shipping Instruction page carries both: General Details
+    // and the Particulars blocks (2026-09-20), so it serves both scopes.
+    expect(inttraFieldsForPage('generalDetails', 'shipment').every((mapping) => mapping.scope === 'shipment')).toBe(true);
+    expect(inttraFieldsForPage('generalDetails', 'container').map((mapping) => mapping.key)).toEqual(
+      inttraFieldsForPage('containerCargo').map((mapping) => mapping.key),
+    );
     expect(inttraFieldsForPage('notificationEmails')).toEqual([]);
     expect(inttraFieldsForPage('unknown')).toEqual([]);
   });
@@ -758,5 +775,92 @@ describe('hosts', () => {
     expect(isInttraUrl('http://www.inttra.com/')).toBe(false);
     expect(isInttraUrl('https://ace.cbp.dhs.gov/')).toBe(false);
     expect(isInttraUrl('https://inttra.com.evil.example/')).toBe(false);
+  });
+});
+
+/**
+ * The Particulars blocks: one per container, numbered from 1 upward.
+ *
+ * Captured from the live DOM on 2026-09-20. Every draft carries a different
+ * number of containers, so what matters is that container k is written into
+ * row k and nowhere else, and that a row the screen does not have is reported
+ * rather than written somewhere it would fit.
+ */
+describe('one container per row', () => {
+  const value = (id: string): string => (document.getElementById(id) as HTMLInputElement | null)?.value ?? '(missing)';
+
+  beforeEach(() => {
+    document.body.innerHTML = html('inttra-container-particulars');
+  });
+
+  it('writes each container into its own row, seals included', () => {
+    const pkg = samplePackage();
+    const first = fillInttraFields({ pkg, page: 'generalDetails', scope: 'container', containerIndex: 0 }, document);
+    const second = fillInttraFields({ pkg, page: 'generalDetails', scope: 'container', containerIndex: 1 }, document);
+
+    expect(value('cont-num-1')).toBe('MSCU1234566');
+    expect(value('carr-seal-1')).toBe('SL-4471209');
+    expect(value('ship-seal-1')).toBe('SH-001');
+    expect(value('cont-num-2')).toBe('MSDU7654322');
+    expect(value('carr-seal-2')).toBe('SL-4471210');
+    // Container 2 carried no shipper seal in the document, so the box stays
+    // empty: a seal is never moved from another row to fill a gap.
+    expect(value('ship-seal-2')).toBe('');
+    expect(first.errors + second.errors).toBe(0);
+    expect(first.outcomes.find((outcome) => outcome.key === 'ContainerNumber')?.matchedWith).toContain('#cont-num-1');
+    expect(second.outcomes.find((outcome) => outcome.key === 'ContainerNumber')?.matchedWith).toContain('#cont-num-2');
+  });
+
+  it('never lets one row overwrite another', () => {
+    const pkg = samplePackage();
+    fillInttraFields({ pkg, page: 'generalDetails', scope: 'container', containerIndex: 1 }, document);
+    expect(value('cont-num-1')).toBe('');
+    expect(value('carr-seal-1')).toBe('');
+    expect(value('cont-num-2')).toBe('MSDU7654322');
+  });
+
+  it('reports the row number when the screen has fewer blocks than the package has containers', () => {
+    const pkg = samplePackage();
+    expect(pkg.containers.length).toBeGreaterThan(2);
+    const report = fillInttraFields({ pkg, page: 'generalDetails', scope: 'container', containerIndex: 2 }, document);
+    const outcome = report.outcomes.find((item) => item.key === 'ContainerNumber');
+    expect(outcome?.status).toBe('warning');
+    expect(outcome?.message).toContain('row 3');
+    expect(outcome?.message).toContain('never presses Add Container');
+    // Nothing was written into the rows that do exist.
+    expect(value('cont-num-1')).toBe('');
+    expect(value('cont-num-2')).toBe('');
+  });
+
+  it('never falls back to row 1 when the draft has fewer blocks than the package has containers', () => {
+    // The trap this guards: every draft carries a different number of
+    // containers, so filling container 2 on a one-block draft must write
+    // nothing at all rather than land in container 1's boxes.
+    document.getElementById('container-block-2')?.remove();
+    const pkg = samplePackage();
+    const report = fillInttraFields({ pkg, page: 'generalDetails', scope: 'container', containerIndex: 1 }, document);
+    expect(value('cont-num-1')).toBe('');
+    expect(value('carr-seal-1')).toBe('');
+    expect(value('ship-seal-1')).toBe('');
+    expect(report.filled).toBe(0);
+    expect(report.outcomes.find((outcome) => outcome.key === 'ContainerNumber')?.message).toContain('row 2');
+  });
+
+  it('keeps a multi-seal value whole, because the live box takes 79 characters', () => {
+    const seals = 'SL-4471209, SL-4471210, SL-4471211, SL-4471212';
+    expect(seals.length).toBeGreaterThan(15);
+    const pkg = setManualContainer(samplePackage(), 0, 'carrierSeal', seals);
+    fillInttraFields({ pkg, page: 'generalDetails', scope: 'container', containerIndex: 0 }, document);
+    expect(value('carr-seal-1')).toBe(seals);
+  });
+
+  it('substitutes the row token in a pasted override too', () => {
+    document.body.innerHTML += '<input id="my-row-1" /><input id="my-row-2" />';
+    const overrides = parseOverrides({ version: 1, fields: { ContainerNumber: [{ strategy: 'id', selector: '#my-row-{n}' }] } }, document);
+    const pkg = samplePackage();
+    fillInttraFields({ pkg, page: 'generalDetails', scope: 'container', containerIndex: 1, overrides }, document);
+    expect(value('my-row-2')).toBe('MSDU7654322');
+    expect(value('my-row-1')).toBe('');
+    expect(value('cont-num-2')).toBe('');
   });
 });

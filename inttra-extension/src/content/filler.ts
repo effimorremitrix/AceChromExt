@@ -12,7 +12,7 @@ import { describeCandidate } from '../../../src/ace/selectors/types.js';
 import { runTransforms } from '../../../src/ace/transformers/index.js';
 import { truncate } from '../../../src/ace/transformers/text.js';
 import { DEFAULT_SETTINGS } from '../../../src/core/settings.js';
-import type { SelectorOverrides } from '../../../src/ace/selectors/overrides.js';
+import { ROW_TOKEN, withRowNumber, type SelectorOverrides } from '../../../src/ace/selectors/overrides.js';
 import type { FilingPackage, PackageContainer, PackageContainerField, PackageHeaderField } from '../../../shared/src/filingPackage.js';
 import { describeProvenance, type Provenanced } from '../../../shared/src/provenance.js';
 import { normalizedContainerNumber } from '../../../shared/src/builder.js';
@@ -50,9 +50,55 @@ export function resolvePackageSource(source: string, pkg: FilingPackage, contain
   return null;
 }
 
-function detectionMessage(status: string, matchedWith: string | null, count?: number): string {
+/**
+ * A container-scoped mapping, aimed at one row.
+ *
+ * INTTRA's Particulars section gives every control of container N the same
+ * `-N` suffix, numbered from 1 upward (captured 2026-09-20), so a selector is
+ * written once with `{n}` and pointed at a row here. Substituting before
+ * detection is what keeps a write inside its own row: a row-numbered id
+ * resolves to exactly one control, so container 2's seal can never land in
+ * container 1's box, and a row INTTRA does not have yet resolves to nothing
+ * and is reported rather than written into the wrong row.
+ *
+ * Rows are 1-based, matching what the portal numbers them.
+ *
+ * Beyond the first row, a candidate that carries no row number is DROPPED
+ * rather than tried. This is the trap the filter exists for: filling
+ * container 2 on a draft that has one block would otherwise fall through the
+ * ladder to a label or a class, match the one control on the screen, and
+ * write container 2's number into container 1's box. A selector that cannot
+ * name a row cannot be aimed at one, so for row 2 and beyond only the
+ * row-numbered selectors are tried, and a row the screen does not have is
+ * reported instead of written.
+ */
+export function mappingsForRow(mappings: InttraFieldMapping[], row: number): InttraFieldMapping[] {
+  return mappings.map((mapping) => ({
+    ...mapping,
+    candidates: mapping.candidates
+      .filter((candidate) => row === 1 || carriesRowToken(candidate))
+      .map((candidate) => ({
+        ...candidate,
+        ...(candidate.selector === undefined ? {} : { selector: withRowNumber(candidate.selector, row) }),
+        ...(candidate.within === undefined ? {} : { within: withRowNumber(candidate.within, row) }),
+      })),
+  }));
+}
+
+function carriesRowToken(candidate: InttraFieldMapping['candidates'][number]): boolean {
+  return (candidate.selector ?? '').includes(ROW_TOKEN) || (candidate.within ?? '').includes(ROW_TOKEN);
+}
+
+function detectionMessage(status: string, matchedWith: string | null, count?: number, row?: number): string {
   if (status === 'AMBIGUOUS') return `${count ?? 2} controls matched "${matchedWith}". Not written; the mapping needs a more specific selector.`;
   if (status === 'NOT_WRITABLE') return 'The matching control is disabled or read-only right now.';
+  // A container-scoped field is aimed at one numbered row, and the commonest
+  // reason it resolves to nothing is that the row is not on the screen: every
+  // draft carries a different number of containers, and the helper never
+  // presses Add Container (automationPolicy.ts).
+  if (row !== undefined) {
+    return `Nothing on this screen matched row ${row}. Either INTTRA has fewer container blocks than the package has containers - add them in INTTRA, the helper never presses Add Container - or this field's selector is still a placeholder (see Diagnostics).`;
+  }
   return 'No control on this screen matched the mapping. Its selectors are placeholders until captured from the live portal (see Diagnostics).';
 }
 
@@ -67,7 +113,8 @@ export function fillInttraFields(request: InttraFillRequest, doc: Document = doc
     return tallyInttraReport(report);
   }
 
-  const mappings = resolveInttraFields(page, scope, request.overrides ?? null);
+  const resolved = resolveInttraFields(page, scope, request.overrides ?? null);
+  const mappings = scope === 'container' ? mappingsForRow(resolved, containerIndex + 1) : resolved;
   if (!mappings.length) {
     report.outcomes.push({ key: 'page', label: 'Page', status: 'warning', message: `No ${scope} fields are mapped for this INTTRA screen.` });
     return tallyInttraReport(report);
@@ -96,7 +143,8 @@ function fillOne(mapping: InttraFieldMapping, request: InttraFillRequest, contai
 
   const detection = detectField(mapping, { root: doc });
   if (detection.status !== 'FOUND' || !detection.element) {
-    return { ...base, status: 'warning', message: detectionMessage(detection.status, detection.matchedWith, detection.ambiguousCount), written: finalValue, matchedWith: detection.matchedWith, confidence: detection.confidence };
+    const row = request.scope === 'container' ? (request.containerIndex ?? 0) + 1 : undefined;
+    return { ...base, status: 'warning', message: detectionMessage(detection.status, detection.matchedWith, detection.ambiguousCount, row), written: finalValue, matchedWith: detection.matchedWith, confidence: detection.confidence };
   }
   base.selector = detection.matchedWith ?? base.selector;
 

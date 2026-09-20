@@ -13,9 +13,21 @@
  * a contenteditable element or something else is decided per cell at write
  * time by setInttraFieldValue.
  *
- * Nothing here is captured from the live DOM. The grid root candidates and
- * the header aliases are guesses; docs/INTTRA-INTEGRATION.md lists the eleven
- * things to copy from DevTools to make them exact.
+ * Seen on the live modal on 2026-09-20 (Copy Container Details, opened by
+ * "Copy container details from spreadsheet" in Particulars): the header row
+ * reads Container Number | Carrier Seal # | Shipper Seal # | Cargo
+ * Description | Marks & Numbers | HS Code, with more columns to the right of
+ * a horizontal scrollbar, which is the order below. Two controls sit ABOVE
+ * the grid and apply to every row: Container Type, and Unit of Measure
+ * (Weight, Volume). So a weight cell is a bare number in the unit chosen
+ * there, never a number with a unit in it, and the operator sets the unit.
+ * The grid also renders after a spinner, so it is worth pressing refresh in
+ * the helper once it is on screen.
+ *
+ * The column selectors themselves are still not captured: columns are found
+ * by the wording of the header row (gridWriter.ts), which is what the live
+ * runs proved out. docs/INTTRA-INTEGRATION.md lists what to copy from
+ * DevTools to make the rest exact.
  */
 
 import type { PackageContainerField } from '../../../shared/src/filingPackage.js';
@@ -37,8 +49,10 @@ export interface GridColumnSpec {
 
 export const GRID_COLUMNS: GridColumnSpec[] = [
   { key: 'ContainerNumber', label: 'Container Number', headerAliases: ['containernumber', 'containerno', 'container', 'equipmentnumber', 'containerid'], source: 'containerNumber', transforms: ['text', 'upper'], maxLength: 11, expected: true },
-  { key: 'CarrierSeal', label: 'Carrier Seal #', headerAliases: ['carrierseal', 'carriersealno', 'carriersealnumber', 'lineseal', 'customsseal'], source: 'carrierSeal', transforms: ['text', 'upper'], maxLength: 15 },
-  { key: 'ShipperSeal', label: 'Shipper Seal #', headerAliases: ['shipperseal', 'shippersealno', 'shippersealnumber', 'sealno', 'sealnumber', 'seal'], source: 'shipperSeal', transforms: ['text', 'upper'], maxLength: 15, expected: true },
+  // 79 characters, and the form's label reads "Seal Number(s)": INTTRA takes
+  // several seal numbers in one cell (captured 2026-09-20).
+  { key: 'CarrierSeal', label: 'Carrier Seal #', headerAliases: ['carrierseal', 'carriersealno', 'carriersealnumber', 'carriersealnumbers', 'lineseal', 'customsseal'], source: 'carrierSeal', transforms: ['text', 'upper'], maxLength: 79 },
+  { key: 'ShipperSeal', label: 'Shipper Seal #', headerAliases: ['shipperseal', 'shippersealno', 'shippersealnumber', 'shippersealnumbers', 'sealno', 'sealnumber', 'seal'], source: 'shipperSeal', transforms: ['text', 'upper'], maxLength: 79, expected: true },
   { key: 'CargoDescription', label: 'Cargo Description', headerAliases: ['cargodescription', 'descriptionofgoods', 'goodsdescription', 'description'], source: 'cargoDescription', transforms: ['text'], maxLength: 512 },
   { key: 'MarksAndNumbers', label: 'Marks & Numbers', headerAliases: ['marksnumbers', 'marksandnumbers', 'marksnos', 'marks'], source: 'marksAndNumbers', transforms: ['text'], maxLength: 512 },
   { key: 'HsCode', label: 'HS Code', headerAliases: ['hscode', 'hs', 'harmonizedcode', 'htscode', 'commoditycode'], source: 'hsCode', transforms: ['text'], maxLength: 12 },

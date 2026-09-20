@@ -177,6 +177,7 @@ check; `tests/invariants.test.ts` pins it to that request type, built in
 | a spreadsheet column | `src/excel/columnAliases.ts` |
 | an ACE field | `src/ace/mappings/<page>.ts` |
 | an INTTRA field | `inttra-extension/src/mappings/<screen>.ts` (placeholders until captured live) |
+| a selector for a control that repeats per container | write it once with `{n}` (the row token, `src/ace/selectors/overrides.ts`); `mappingsForRow` in `inttra-extension/src/content/filler.ts` aims it at the row. Never the class: it is the same on every row |
 | a grid column on Copy Container Details | `GRID_COLUMNS` in `inttra-extension/src/mappings/containerGrid.ts` |
 | a grid heading that is a dropdown, or the shape of the paste block | `readHeaderCell` and `gridPasteBlock` in `inttra-extension/src/content/gridWriter.ts`, shared by both helpers |
 | how the container grid is found when it is not a table | `findHeaderRowByText` and `findContainerGrid` in `inttra-extension/src/content/gridWriter.ts`; the detector and both content scripts go through `findContainerGrid` |
@@ -273,10 +274,31 @@ stay honestly described:
    (`bill-*.xml`, `vendor-query.xml`, `account-query.xml`) are hand-written to
    the documented schema, not captured.
 
-3. The INTTRA Helper has **two captured selectors and no captured field
-   selector**. Every FIELD selector in `inttra-extension/src/mappings/` is
-   still `placeholder(...)`, so on the live portal the form screens fill
-   nothing. What was captured from the live DOM on 2026-09-17 is structural:
+3. The INTTRA Helper has **three captured field selectors, all on the
+   container block**, and two captured structural ones. Captured from the live
+   DOM on 2026-09-20 (Create Shipping Instruction -> Particulars): every
+   control of container N carries the same `-N` suffix, numbered from 1
+   upward, with `id` and `name` holding the same string, so Container Number
+   is `#cont-num-{n}`, Carrier Seal is `#carr-seal-{n}` and Shipper Seal is
+   `#ship-seal-{n}`. `{n}` is the ROW TOKEN (`src/ace/selectors/overrides.ts`),
+   substituted with the container's row number before detection by
+   `mappingsForRow` in `inttra-extension/src/content/filler.ts`. Two rules
+   there are load-bearing: the CLASS is never the selector, because it is
+   identical on every row and would match them all; and beyond row 1 a
+   candidate that carries no row number is DROPPED rather than tried, because
+   filling container 2 on a draft that has one block would otherwise fall
+   through to a label, match the only control on the screen, and write
+   container 2 into container 1's box. A row the draft does not have is
+   reported by its number, never written elsewhere; the helper does not press
+   Add Container. The live seal boxes take 79 characters and are labelled
+   "Seal Number(s)", so a seal is never truncated at 15. Also learned that
+   day: the live portal has **no separate Container & Cargo screen** - Create
+   Shipping Instruction is one page carrying General Details, the routing and
+   the Particulars blocks, which is why `INTTRA_MAPPINGS_BY_PAGE` serves both
+   scopes on `generalDetails`. Every OTHER field selector is still
+   `placeholder(...)`; `unverifiedInttraFieldKeys()` is the list and
+   `tests/inttra.test.ts` pins it, so it can only shrink. What was captured
+   from the live DOM on 2026-09-17 is structural:
    the Copy Container Details modal root `#siCopyContainerWrapperDiv` and the
    grid container `#editableGridWrapper`, now a page marker and the first
    grid-root rung. Also confirmed that day: the hostname
@@ -338,8 +360,10 @@ stay honestly described:
 6. The Quickfill Helper has **never been used on a real shipment**, and it
    improves nothing in items 1 to 4: it shares the same mapping tables, so it
    fills exactly what the other two fill, which on the live INTTRA portal is
-   currently nothing on the form screens and, on the container grid, the same
-   paste block the INTTRA Helper copies. Its read-as line counts the
+   the three captured container fields per row (item 3), nothing else on the
+   form screens, and, on the container grid, the same paste block the INTTRA
+   Helper copies. Its container button walks every container block in one
+   press, because the number of containers differs per draft. Its read-as line counts the
    containers that carry a seal (a count, not a check), and its Copy rows
    line names the pasted columns and any left blank. On an INTTRA page the
    detector cannot name it offers Copy rows alone, in the default column
