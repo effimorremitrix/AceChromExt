@@ -49,6 +49,30 @@ export function scheduleBDigits(input: unknown): string {
   return cleanText(input).replace(/[^0-9]/g, '');
 }
 
+/**
+ * An HS code as INTTRA's box will take it: digits only.
+ *
+ * The package derives `hsCode` as the first six digits of the Schedule B
+ * number, dot included ("0802.12"), because that is how a tariff code is
+ * written on paper. The live INTTRA Create Shipping Instruction screen
+ * answered that with "Field cannot contain decimal points." on 2026-09-20, so
+ * the separators come off at fill time and the canonical value keeps its dot.
+ *
+ * Only separators are removed. A code with letters in it (some national
+ * tariffs have them) keeps them, because dropping a character that is part of
+ * the code would be a silent change of value rather than a change of format.
+ */
+export function hsCodeDigits(input: unknown): CodeResult {
+  const text = cleanText(input);
+  if (text === '') return plain('');
+  const stripped = text.replace(/[.\-\s]/g, '');
+  return {
+    value: stripped,
+    transform: stripped === text ? null : 'Separators removed (INTTRA rejects decimal points in HS Code)',
+    note: null,
+  };
+}
+
 const COUNTRY_NAMES: Record<string, string> = {
   'united states': 'US',
   'united states of america': 'US',

@@ -11,7 +11,13 @@
  *   5. placeholder text        -> confidence low
  *
  * Rules that keep this safe:
- *   - a query matching several visible controls is AMBIGUOUS and is never written;
+ *   - a query matching several visible controls is AMBIGUOUS and is never
+ *     written, UNLESS exactly one of them is of the kind the mapping declares
+ *     (see `controlKind`), which is a fact about the control, not its
+ *     position;
+ *   - an AMBIGUOUS verdict names every control it matched, so the operator can
+ *     paste the right one into the selector overrides instead of being told
+ *     only that there were two;
  *   - a match from an unverified candidate is degraded one confidence level;
  *   - no positional heuristics ("the third textbox") exist anywhere in this file.
  */
@@ -309,6 +315,66 @@ function findNearby(root: ParentNode, containerSelector: string, within: string)
   return [...new Set(found)];
 }
 
+/**
+ * One control, as a human would recognise it in DevTools.
+ *
+ * Used only to explain an AMBIGUOUS verdict. It reads attributes; it never
+ * writes, focuses or clicks.
+ */
+export function describeControl(element: Element): string {
+  const parts: string[] = [element.tagName.toLowerCase()];
+  const type = element.getAttribute('type');
+  if (type) parts[0] = `${parts[0]}[type=${type}]`;
+  if (element.id) parts.push(`#${element.id}`);
+  const name = element.getAttribute('name');
+  if (name && name !== element.id) parts.push(`name=${name}`);
+  const label = labelTextFor(element);
+  if (label) parts.push(`label "${label}"`);
+  const placeholder = element.getAttribute('placeholder');
+  if (placeholder) parts.push(`placeholder "${placeholder}"`);
+  const aria = element.getAttribute('aria-label');
+  if (aria && !label) parts.push(`aria-label "${aria}"`);
+  return parts.join(' ');
+}
+
+/** The visible label text of a control, for `describeControl`. */
+function labelTextFor(element: Element): string {
+  const doc = element.ownerDocument;
+  if (element.id && doc) {
+    const forLabel = safeQueryAll(doc, `label[for='${cssEscape(element.id)}']`)[0];
+    if (forLabel) return (forLabel.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  }
+  const wrapping = element.closest?.('label');
+  if (wrapping) return (wrapping.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  return '';
+}
+
+/** Quote an id for use inside an attribute selector. */
+function cssEscape(value: string): string {
+  return value.replace(/['\\]/g, '\\$&');
+}
+
+/**
+ * The matches that are of the kind the mapping declares.
+ *
+ * This is the one narrowing allowed among several matches, and it is a fact
+ * about the control rather than its place on the page: a field declared as a
+ * dropdown cannot be a text box, and a field declared as a number cannot be
+ * the dropdown beside it. The live INTTRA screen is exactly why it exists -
+ * "Package Count/Type (Outermost)" is ONE label over TWO controls, a count
+ * input and a type dropdown, so a label match there is always two matches and
+ * neither field could ever be filled.
+ *
+ * When the narrowing leaves anything other than exactly one control, the
+ * caller still reports AMBIGUOUS. Confidence is degraded when it is used.
+ */
+function ofKind(elements: Element[], kind: DetectableField['controlKind']): Element[] {
+  if (!kind) return [];
+  if (kind === 'select') return elements.filter((element) => element.tagName === 'SELECT');
+  if (kind === 'textarea') return elements.filter((element) => element.tagName === 'TEXTAREA');
+  return elements.filter((element) => element.tagName === 'INPUT');
+}
+
 function baseConfidence(candidate: AceSelectorCandidate): FieldDetection['confidence'] {
   switch (candidate.strategy) {
     case 'id':
@@ -340,6 +406,15 @@ export interface DetectableField {
   key: string;
   label: string;
   candidates: AceSelectorCandidate[];
+  /**
+   * What kind of control this field is, when the mapping knows.
+   *
+   * Optional, and absent on every ACE mapping, so ACE detection is unchanged.
+   * The INTTRA mappings derive it from their declared field type
+   * (mappings/types.ts), which is what lets one label over two controls
+   * resolve - see `ofKind`.
+   */
+  controlKind?: 'select' | 'input' | 'textarea';
 }
 
 export interface DetectOptions {
@@ -397,6 +472,30 @@ export function detectField(field: DetectableField, options: DetectOptions = {})
     }
 
     if (usable.length > 1) {
+      // One label over two controls is ordinary on a live portal. If exactly
+      // one of the matches is the kind of control the mapping declares, that
+      // is the field - a fact about the control, not a guess at its position.
+      const narrowed = ofKind(usable, field.controlKind);
+      if (narrowed.length === 1) {
+        attempts[attempts.length - 1] = {
+          strategy: candidate.strategy,
+          query: `${query} (matched ${usable.length}, one ${field.controlKind})`,
+          matches: 1,
+          verified: candidate.verified,
+        };
+        return {
+          key: field.key,
+          label: field.label,
+          status: 'FOUND',
+          element: narrowed[0] as HTMLElement,
+          matchedBy: candidate.strategy,
+          matchedWith: query,
+          confidence: degrade(candidate.verified ? baseConfidence(candidate) : degrade(baseConfidence(candidate))),
+          attempts,
+          narrowedBy: `${usable.length} controls matched, and exactly one is a ${field.controlKind === 'select' ? 'dropdown' : field.controlKind === 'textarea' ? 'text area' : 'text box'}`,
+          ambiguousMatches: usable.map((element) => describeControl(element)),
+        };
+      }
       return {
         key: field.key,
         label: field.label,
@@ -407,6 +506,7 @@ export function detectField(field: DetectableField, options: DetectOptions = {})
         confidence: 'none',
         attempts,
         ambiguousCount: usable.length,
+        ambiguousMatches: usable.map((element) => describeControl(element)),
       };
     }
 

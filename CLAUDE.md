@@ -180,6 +180,9 @@ check; `tests/invariants.test.ts` pins it to that request type, built in
 | a selector for a control that repeats per container | write it once with `{n}` (the row token, `src/ace/selectors/overrides.ts`); `mappingsForRow` in `inttra-extension/src/content/filler.ts` aims it at the row. Never the class: it is the same on every row |
 | a grid column on Copy Container Details | `GRID_COLUMNS` in `inttra-extension/src/mappings/containerGrid.ts` |
 | a grid heading that is a dropdown, or the shape of the paste block | `readHeaderCell` and `gridPasteBlock` in `inttra-extension/src/content/gridWriter.ts`, shared by both helpers |
+| how a value is presented to a portal box (HS code without its dot, a weight rounded) | a transformer in `src/ace/transformers/` + its name in the mapping's `transforms`. The canonical value never changes: `0802.12` stays `0802.12` in the package and goes in as `080212` because INTTRA said "Field cannot contain decimal points" |
+| what the detector may do when one query matches several controls | `ofKind` in `src/content/fieldDetector.ts`, driven by the mapping's `controlKind` (derived from the INTTRA field `type` in `mappings/types.ts`). It is the ONLY narrowing: a `select` field takes the one dropdown, a `number` field the one box. Nothing positional, and everything else is still AMBIGUOUS and still refused |
+| how a type-ahead is written (the ports) | `type: 'lookup'` on the mapping; `fillOne` in `inttra-extension/src/content/filler.ts` then writes it with no `change`, no `blur` and no focus, because each of those makes INTTRA empty the box |
 | how the container grid is found when it is not a table | `findHeaderRowByText` and `findContainerGrid` in `inttra-extension/src/content/gridWriter.ts`; the detector and both content scripts go through `findContainerGrid` |
 | what Diagnostics says about the page's structure (frame, markers, what is around "Container Number") | `inttra-extension/src/content/structureProbe.ts` |
 | what identifies an INTTRA screen, and what each kind of evidence is worth | `EVIDENCE` and `detectInttraPage` in `inttra-extension/src/content/pageDetector.ts`; `pages.ts` stays free of DOM code because the dashboard imports it |
@@ -315,9 +318,42 @@ stay honestly described:
    Number and Carrier are AMBIGUOUS with two matches each, and Shipper's
    Reference, Package Type and Number of Packages are not found. Diagnostics
    now probes a container field on ROW 1, because probing `{n}` literally
-   matched nothing and read as a failed capture. Every OTHER field selector is still
+   matched nothing and read as a failed capture.
+   A **recorded end-to-end fill**, later the same day, answered five more
+   things (`docs/INTTRA-INTEGRATION.md` section 5e; "fourth" and "fifth run"
+   further down count the 2026-09-17 grid attempts, which are a different
+   tally). Of seven header fields two filled. **Port of Loading and Port of Discharge
+   are TYPE-AHEADS**: both were written and INTTRA emptied both, so they are
+   now `type: 'lookup'` and go in with no `change`, no `blur` and no focus
+   (focusing the next field is itself a blur on this one), reported as "pick
+   the match" with the UN/LOCODE named as the search term. Nothing is
+   clicked; the operator picks. **Booking Number's ambiguity was our own
+   ladder**: the live label is "Carrier Booking Number", the screen carries a
+   plain "Booking Number" elsewhere, and one `byLabel` with four wordings
+   matched both - so every label rung now holds exactly ONE wording, most
+   specific first (`labelLadder` in `mappings/types.ts`). **Carrier is still
+   ambiguous**, and every ambiguity now NAMES its matching controls in the
+   report (tag, id, name, label), so the right id is a copy away from the
+   selector overrides instead of "2 controls matched". **"Package Count/Type
+   (Outermost)" is ONE label over TWO controls**, which is why `controlKind`
+   exists: the one narrowing the detector may do among several matches, by
+   the kind the mapping declares, never by position. **INTTRA refuses a
+   decimal point in HS Code**, in its own words, so the `hsCode` transformer
+   takes the separators off at fill time and the package keeps `0802.12`.
+   The whole live Particulars wording was read off the screen that day and is
+   in the ladders - but **no id was captured on that run**, and a label
+   cannot name a row, so those fields fill container block 1 only and the
+   outcome says exactly that rather than blaming INTTRA for a missing block.
+   The grid was detected correctly on that run and STILL went unused, because
+   "use the Containers tab" was grey text under four disabled buttons; the
+   Fill tab now shows a notice and a **Go to Containers** button, and the
+   Containers tab spells the paste out in five numbered steps. The paste has
+   still never been performed on the live grid.
+   Every OTHER field selector is still
    `placeholder(...)`; `unverifiedInttraFieldKeys()` is the list and
-   `tests/inttra.test.ts` pins it, so it can only shrink. What was captured
+   `tests/inttra.test.ts` pins it, so it can only shrink. It pins the two
+   kinds of capture apart: a captured ID names a row, a captured LABEL
+   wording does not, and a label capture may never carry a verified id. What was captured
    from the live DOM on 2026-09-17 is structural:
    the Copy Container Details modal root `#siCopyContainerWrapperDiv` and the
    grid container `#editableGridWrapper`, now a page marker and the first
@@ -380,9 +416,9 @@ stay honestly described:
 6. The Quickfill Helper has **never been used on a real shipment**, and it
    improves nothing in items 1 to 4: it shares the same mapping tables, so it
    fills exactly what the other two fill, which on the live INTTRA portal is
-   the three captured container fields per row (item 3), nothing else on the
-   form screens, and, on the container grid, the same paste block the INTTRA
-   Helper copies. Its container button walks every container block in one
+   the three captured container fields per row plus, in container block 1
+   only, the fields whose label wording was read off the screen (item 3), and,
+   on the container grid, the same paste block the INTTRA Helper copies. Its container button walks every container block in one
    press, because the number of containers differs per draft. Its read-as line counts the
    containers that carry a seal (a count, not a check), and its Copy rows
    line names the pasted columns and any left blank. On an INTTRA page the

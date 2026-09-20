@@ -643,6 +643,11 @@ function renderReport(report: InttraFillReport): HTMLElement {
       outcome.written ? el('code', { text: outcome.written }) : null,
       outcome.provenance ? el('span', { className: 'muted', text: ` (${outcome.provenance})` }) : null,
       outcome.message ? el('div', { className: 'outcome-message', text: outcome.message }) : null,
+      // When several controls matched, name them. "2 controls matched" is a
+      // dead end; the ids are what the operator pastes into the overrides.
+      outcome.matches?.length
+        ? el('ul', { className: 'outcome-matches small mono' }, outcome.matches.map((match) => el('li', { text: match })))
+        : null,
     ]);
     if (outcome.status !== 'skipped') {
       const jump = el('button', { className: 'link-button', text: 'show field', attrs: { type: 'button' } });
@@ -715,7 +720,20 @@ function renderFill(): HTMLElement {
   section.append(el('div', { className: 'actions' }, actions));
 
   if (!pageReady) section.append(el('p', { className: 'small warn', text: 'Fill is disabled until an INTTRA Shipping Instructions screen is detected. Use "refresh" in the header after navigating.' }));
-  else if (onGridPage) section.append(el('p', { className: 'small muted', text: 'This is the Copy Container Details grid: use the Containers tab.' }));
+  else if (onGridPage) {
+    // The grid is not a form, so every button above is disabled here. Saying
+    // so in grey text under four dead buttons is what a live run got stuck
+    // on; the way forward leads instead.
+    section.append(
+      el('div', { className: 'notice notice-warn' }, [
+        el('strong', { text: 'This is the Copy Container Details grid. ' }),
+        el('span', {
+          text: 'Its cells hold no control until they are clicked, and the helper never clicks, so Fill cannot type into them. The route is Copy rows and one paste of your own, on the Containers tab.',
+        }),
+      ]),
+      el('div', { className: 'actions' }, [actionButton('Go to Containers', 'containers', true)]),
+    );
+  }
 
   const clearHighlights = el('button', { className: 'button button-small', text: 'Clear INTTRA highlighting', attrs: { type: 'button' } });
   clearHighlights.addEventListener('click', () => {
@@ -823,8 +841,15 @@ function renderContainers(): HTMLElement {
         ? 'The grid on the INTTRA tab can be typed into, so Fill writes it cell by cell and reads every cell back.'
         : 'The grid on the INTTRA tab opens an editor when a cell is clicked, so nothing can be typed into it: Copy rows is the route.';
   section.append(
-    el('p', { className: 'small muted', text: gridNote }),
-    el('p', { className: 'small muted', text: 'Copy rows asks the INTTRA tab for the grid\'s column order and copies one cell per grid column, blank where the package has nothing for that column. In INTTRA, click the first Container Number cell of the first empty row and paste (Ctrl+V). The helper presses nothing: the paste is yours.' }),
+    el('p', { className: `small ${state.grid?.found ? 'muted' : 'warn'}`, text: gridNote }),
+    el('p', { className: 'small muted', text: 'Copy rows asks the INTTRA tab for the grid\'s column order and copies one cell per grid column, blank where the package has nothing for that column. The helper presses nothing: the paste is yours.' }),
+    el('ol', { className: 'steps small' }, [
+      el('li', { text: 'In INTTRA, open "Copy container details from spreadsheet" in Particulars and wait for the grid to draw.' }),
+      el('li', { text: 'Press refresh in this helper\'s header, so it reads the grid\'s own column order.' }),
+      el('li', { text: `Press Copy rows: ${current.containers.length} row(s) go to the clipboard, one cell per grid column.` }),
+      el('li', { text: 'Click the first Container Number cell of the first empty row, then paste (Ctrl+V).' }),
+      el('li', { text: 'Check every pasted cell, then press Create Containers in INTTRA yourself.' }),
+    ]),
   );
   if (state.gridReport) section.append(renderGridReport(state.gridReport));
   return section;

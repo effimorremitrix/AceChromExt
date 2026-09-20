@@ -22,8 +22,27 @@
  * INTTRA accepts several seal numbers in one box, which is why nothing here
  * truncates a seal at 15.
  *
- * The rest of the block (Container Type, Package Count/Type, Cargo Gross
- * Weight and its unit, Cargo Gross Volume) has not been captured yet.
+ * The rest of the block has no captured id, but its LABEL WORDING was read
+ * off the same live screen on 2026-09-20 and is in the ladders below:
+ *
+ *   Container 1            Container Number, Container Type,
+ *                          Container Supplier, Container Tare Weight,
+ *                          Wood Declaration, Carrier Seal Number(s),
+ *                          Shipper Seal Number(s)
+ *   Cargo 1                Package Count/Type (Outermost), Print on B/L as,
+ *                          HS Code, Schedule B Number, Cargo Description,
+ *                          NCM Code(s), Marks & Numbers, CUS Code
+ *   Cargo Gross Weight     Cargo Gross Weight (Cargo + Packaging),
+ *     & Volume             Cargo Gross Volume (Cargo + Packaging)
+ *
+ * Two of those wordings are one label over TWO controls: "Package Count/Type
+ * (Outermost)" heads a count box and a type dropdown. Neither field could
+ * ever resolve from it until the detector learned to keep the match of the
+ * kind the mapping declares (controlKind, fieldDetector.ts).
+ *
+ * A label is not a row, so a captured wording only ever fills ROW 1: beyond
+ * it, `mappingsForRow` drops every candidate that cannot name a row. Filling
+ * container 2's cargo needs the id, in the shape the seals have.
  */
 
 import type { InttraFieldMapping } from '../models/InttraField.js';
@@ -31,6 +50,9 @@ import { capturedLabel, defineInttraField, placeholderLadder, verified } from '.
 
 /** Note carried by every selector copied off the live Particulars block. */
 const CAPTURED = 'Captured from the live INTTRA DOM on 2026-09-20; the row number is substituted for {n} at fill time.';
+
+/** Note carried by every wording read off the live Particulars block. */
+const READ_LIVE = 'Label wording read off the live Particulars block on 2026-09-20; the DOM id is still uncaptured, so it only ever resolves row 1.';
 
 const HINT = (what: string): string =>
   `Container & Cargo -> open one container -> right-click the ${what} box -> Inspect -> Copy outerHTML of the control and its <label>. Also capture the container panel's heading so writes can be scoped to the open container.`;
@@ -48,7 +70,8 @@ export const CONTAINER_CARGO_FIELDS: InttraFieldMapping[] = [
     expected: true,
     candidates: [
       verified('id', '#cont-num-{n}', CAPTURED),
-      ...placeholderLadder('containerNumber', ['Container Number', 'Container No', 'Equipment Number']),
+      capturedLabel(['Container Number'], READ_LIVE),
+      ...placeholderLadder('containerNumber', ['Container No', 'Equipment Number']),
     ],
     devtoolsHint: HINT('Container Number'),
   }),
@@ -95,7 +118,10 @@ export const CONTAINER_CARGO_FIELDS: InttraFieldMapping[] = [
     transforms: ['text'],
     maxLength: 512,
     expected: true,
-    candidates: placeholderLadder('cargoDescription', ['Cargo Description', 'Description of Goods', 'Goods Description', 'Description'], 'textarea'),
+    candidates: [
+      capturedLabel(['Cargo Description'], READ_LIVE),
+      ...placeholderLadder('cargoDescription', ['Description of Goods', 'Goods Description', 'Description'], 'textarea'),
+    ],
     devtoolsHint: HINT('Cargo Description'),
   }),
   defineInttraField({
@@ -105,10 +131,16 @@ export const CONTAINER_CARGO_FIELDS: InttraFieldMapping[] = [
     scope: 'container',
     source: 'container.hsCode',
     type: 'code',
-    transforms: ['text'],
+    // The package derives "0802.12" from the Schedule B number. The live box
+    // answered that on 2026-09-20 with "Field cannot contain decimal points",
+    // so the separators come off here and the canonical value keeps its dot.
+    transforms: ['text', 'hsCode'],
     maxLength: 12,
-    candidates: placeholderLadder('hsCode', ['HS Code', 'Harmonized Code', 'HTS Code', 'Commodity Code']),
-    devtoolsHint: `${HINT('HS Code')} Note whether INTTRA wants the six-digit code with or without the dot.`,
+    candidates: [
+      capturedLabel(['HS Code'], READ_LIVE),
+      ...placeholderLadder('hsCode', ['Harmonized Code', 'HTS Code', 'Commodity Code']),
+    ],
+    devtoolsHint: `${HINT('HS Code')} The box rejects decimal points (live, 2026-09-20), so the six digits go in unseparated. Beside it sits a separate "Schedule B Number" box, which nothing in the package feeds yet.`,
   }),
   defineInttraField({
     key: 'PackageType',
@@ -118,8 +150,13 @@ export const CONTAINER_CARGO_FIELDS: InttraFieldMapping[] = [
     source: 'container.packageType',
     type: 'select',
     transforms: ['text'],
-    candidates: placeholderLadder('packageType', ['Package Type', 'Packaging Type', 'Package Kind', 'Kind of Packages'], 'select'),
-    devtoolsHint: `${HINT('Package Type')} Capture two <option>s so the writer knows whether values are codes (CT) or words (Carton).`,
+    candidates: [
+      // One label, two controls: the count box and this dropdown. The detector
+      // keeps the dropdown because the mapping declares one.
+      capturedLabel(['Package Count/Type (Outermost)'], READ_LIVE),
+      ...placeholderLadder('packageType', ['Package Type', 'Packaging Type', 'Package Kind', 'Kind of Packages'], 'select'),
+    ],
+    devtoolsHint: `${HINT('Package Type')} It shares the label "Package Count/Type (Outermost)" with the count box. Capture two <option>s so the writer knows whether values are codes (CT) or words (Carton).`,
   }),
   defineInttraField({
     key: 'PackageCount',
@@ -129,8 +166,12 @@ export const CONTAINER_CARGO_FIELDS: InttraFieldMapping[] = [
     source: 'container.packageCount',
     type: 'number',
     transforms: ['integer'],
-    candidates: placeholderLadder('packageCount', ['Number of Packages', 'No. of Packages', 'Package Count', 'Packages']),
-    devtoolsHint: HINT('Number of Packages'),
+    candidates: [
+      // The same label as Package Type; this is the count box of the pair.
+      capturedLabel(['Package Count/Type (Outermost)'], READ_LIVE),
+      ...placeholderLadder('packageCount', ['Number of Packages', 'No. of Packages', 'Package Count', 'Packages']),
+    ],
+    devtoolsHint: `${HINT('Number of Packages')} The live label is "Package Count/Type (Outermost)", shared with the type dropdown beside it.`,
   }),
   defineInttraField({
     key: 'GrossWeight',
@@ -140,8 +181,11 @@ export const CONTAINER_CARGO_FIELDS: InttraFieldMapping[] = [
     source: 'container.grossWeightKg',
     type: 'number',
     transforms: ['weight'],
-    candidates: placeholderLadder('grossWeight', ['Gross Weight', 'Gross Weight (KG)', 'Cargo Gross Weight', 'Weight']),
-    devtoolsHint: `${HINT('Gross Weight')} Also capture the unit control beside it: the package holds kilograms.`,
+    candidates: [
+      capturedLabel(['Cargo Gross Weight (Cargo + Packaging)'], READ_LIVE),
+      ...placeholderLadder('grossWeight', ['Gross Weight', 'Gross Weight (KG)', 'Cargo Gross Weight', 'Weight']),
+    ],
+    devtoolsHint: `${HINT('Cargo Gross Weight')} Also capture the unit dropdown beside it, which read "Kgs" on 2026-09-20: the package holds kilograms, and the helper does not touch the unit.`,
   }),
   defineInttraField({
     key: 'MarksAndNumbers',
@@ -152,7 +196,10 @@ export const CONTAINER_CARGO_FIELDS: InttraFieldMapping[] = [
     type: 'text',
     transforms: ['text'],
     maxLength: 512,
-    candidates: placeholderLadder('marksAndNumbers', ['Marks & Numbers', 'Marks and Numbers', 'Marks & Nos', 'Marks'], 'textarea'),
+    candidates: [
+      capturedLabel(['Marks & Numbers'], READ_LIVE),
+      ...placeholderLadder('marksAndNumbers', ['Marks and Numbers', 'Marks & Nos', 'Marks'], 'textarea'),
+    ],
     devtoolsHint: HINT('Marks & Numbers'),
   }),
 ];

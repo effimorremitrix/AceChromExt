@@ -13,6 +13,7 @@ import {
   normalizeCountryCode,
   normalizeEccn,
   normalizeOriginIndicator,
+  hsCodeDigits,
   normalizeScheduleB,
   normalizeShortCode,
   normalizeUom,
@@ -176,6 +177,21 @@ describe('codes', () => {
     expect(normalizeScheduleB('0802.12.0000')).toMatchObject({ value: '0802.12.0000', transform: null });
     expect(normalizeScheduleB('0802 12 0000')).toMatchObject({ value: '0802.12.0000' });
     expect(scheduleBDigits('0802.12.0000')).toBe('0802120000');
+  });
+
+  it('strips the separators out of an HS code, because INTTRA refuses a decimal point', () => {
+    // "Field cannot contain decimal points." - the live Create Shipping
+    // Instruction screen, 2026-09-20, against the package's derived "0802.12".
+    expect(hsCodeDigits('0802.12')).toMatchObject({ value: '080212' });
+    expect(hsCodeDigits('0802.12').transform).toMatch(/Separators removed/);
+    expect(hsCodeDigits('0802 12')).toMatchObject({ value: '080212' });
+    expect(hsCodeDigits('0802-12')).toMatchObject({ value: '080212' });
+    // Already clean: nothing to report.
+    expect(hsCodeDigits('080212')).toMatchObject({ value: '080212', transform: null });
+    expect(hsCodeDigits('')).toMatchObject({ value: '', transform: null });
+    // A letter is part of the code, not a separator: it stays.
+    expect(hsCodeDigits('0802.12A')).toMatchObject({ value: '080212A' });
+    expect(runTransforms('0802.12', ['text', 'hsCode'], { settings: DEFAULT_SETTINGS }).text).toBe('080212');
   });
 
   it('flags a Schedule B number of the wrong length rather than guessing', () => {

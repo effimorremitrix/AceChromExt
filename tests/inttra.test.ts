@@ -486,25 +486,75 @@ describe('mapping tables', () => {
     for (const column of GRID_COLUMNS) expect(PACKAGE_CONTAINER_FIELDS as readonly string[]).toContain(column.source);
   });
 
-  it('names the three fields captured from the live DOM, and ships the rest as placeholders', () => {
-    // Copied off the live Particulars block on 2026-09-20. This list can only
-    // grow as fields are captured; a field marked verified without being added
-    // here fails the test, which is the point.
-    const captured = ['ContainerNumber', 'CarrierSeal', 'ShipperSeal'];
+  it('names what was captured from the live portal, id and wording apart, and ships the rest as placeholders', () => {
+    // Two different facts, and they are worth different things.
+    //
+    // CAPTURED_IDS were copied out of the live Particulars DOM on 2026-09-20.
+    // An id names a ROW, so these are the only container fields that can be
+    // filled beyond block 1.
+    //
+    // CAPTURED_LABELS were READ OFF the live screens the same day - the
+    // wording is known to be INTTRA's, the id is not. A label cannot name a
+    // row, so these fill block 1 and nothing further, and none of them may
+    // carry a verified id: writing `verified` against a guessed selector is
+    // exactly the lie this test exists to catch.
+    //
+    // Both lists can only grow.
+    const capturedIds = ['ContainerNumber', 'CarrierSeal', 'ShipperSeal'];
+    const capturedLabels = ['BookingNumber', 'Carrier', 'ContainerNumber', 'CarrierSeal', 'ShipperSeal', 'CargoDescription', 'HsCode', 'PackageType', 'PackageCount', 'GrossWeight', 'MarksAndNumbers'];
+    const captured = [...new Set([...capturedIds, ...capturedLabels])];
     expect(unverifiedInttraFieldKeys()).toEqual(ALL_INTTRA_MAPPINGS.map((mapping) => mapping.key).filter((key) => !captured.includes(key)));
     for (const mapping of ALL_INTTRA_MAPPINGS) {
       expect(mapping.devtoolsHint).toBeTruthy();
-      if (captured.includes(mapping.key)) {
-        expect(mapping.verificationStatus, mapping.key).toBe('verified');
+      if (!captured.includes(mapping.key)) {
+        expect(mapping.verificationStatus, mapping.key).toBe('placeholder');
+        expect(mapping.candidates.every((candidate) => candidate.verified === false), mapping.key).toBe(true);
+        continue;
+      }
+      expect(mapping.verificationStatus, mapping.key).toBe('verified');
+      if (capturedIds.includes(mapping.key)) {
         // The captured selector is the row-numbered id, not the class: the
         // class is identical on every container block.
         expect(mapping.candidates[0], mapping.key).toMatchObject({ strategy: 'id', verified: true });
         expect(mapping.candidates[0]?.selector, mapping.key).toContain('{n}');
-        continue;
       }
-      expect(mapping.verificationStatus, mapping.key).toBe('placeholder');
-      expect(mapping.candidates.every((candidate) => candidate.verified === false), mapping.key).toBe(true);
+      if (capturedLabels.includes(mapping.key)) {
+        const label = mapping.candidates.find((candidate) => candidate.verified && candidate.strategy === 'label');
+        expect(label, mapping.key).toBeTruthy();
+        // A wording read off the screen outranks every guess below it.
+        expect(mapping.candidates.indexOf(label!), mapping.key).toBe(capturedIds.includes(mapping.key) ? 1 : 0);
+      }
+      // Nothing may claim a verified id it was not given.
+      const fakeId = mapping.candidates.some(
+        (candidate) => candidate.verified && candidate.strategy !== 'label' && !capturedIds.includes(mapping.key),
+      );
+      expect(fakeId, mapping.key).toBe(false);
     }
+  });
+
+  it('asks each captured wording on its own, so a screen carrying two of them is not ambiguous', () => {
+    // The live Create Shipping Instruction screen answered the old four-in-one
+    // Booking Number label query with TWO controls (2026-09-20). Every label
+    // rung now carries exactly one wording, so "Carrier Booking Number" is
+    // asked, and answered, before "Booking Number" is ever tried.
+    for (const mapping of ALL_INTTRA_MAPPINGS) {
+      for (const candidate of mapping.candidates) {
+        if (candidate.strategy !== 'label') continue;
+        expect(candidate.labelText?.length, `${mapping.key}: ${candidate.labelText?.join(' | ')}`).toBe(1);
+      }
+    }
+  });
+
+  it('derives a control kind from the field type, and only where the type implies one', () => {
+    const kindOf = (key: string): string | undefined => ALL_INTTRA_MAPPINGS.find((mapping) => mapping.key === key)?.controlKind;
+    // "Package Count/Type (Outermost)" is one label over two controls; the
+    // declared kind is what tells them apart.
+    expect(kindOf('PackageType')).toBe('select');
+    expect(kindOf('PackageCount')).toBe('input');
+    expect(kindOf('PortOfLoading')).toBe('input');
+    // 'text' implies nothing: Cargo Description is a text area, HS Code a box.
+    expect(kindOf('CargoDescription')).toBeUndefined();
+    expect(kindOf('HsCode')).toBeUndefined();
   });
 
   it('keeps keys unique and scopes container fields to the Container & Cargo screen', () => {
@@ -958,5 +1008,112 @@ describe('naming the live create page', () => {
       expect(report.filled).toBe(0);
       expect(document.querySelectorAll('input')).toHaveLength(0);
     });
+  });
+});
+
+/**
+ * The live Create Shipping Instruction run of 2026-09-20, field by field.
+ *
+ * Seven header fields went in and two came out filled. Every other answer is
+ * pinned here, because each one was a different kind of failure and each got a
+ * different fix.
+ */
+describe('what the live Create Shipping Instruction screen answered', () => {
+  const livePackage = (): FilingPackage => {
+    const pkg = samplePackage();
+    if (pkg.containers.length < 2) throw new Error('fixture needs at least two containers');
+    return {
+      ...pkg,
+      header: {
+        ...pkg.header,
+        carrier: { value: 'MSCU', source: 'excel' as const, detail: 'carrier' },
+        portOfLoading: { value: 'OAKLAND, CA, UNITED STATES (USOAK)', source: 'deckhand' as const, detail: 'POL' },
+        portOfDischarge: { value: 'EVYAP PORT /KOCAELI, TURKEY (TREYP)', source: 'deckhand' as const, detail: 'POD' },
+      },
+      // The same cargo on every container, as the live package had it: one
+      // invoice line across three boxes.
+      containers: pkg.containers.map((item) => ({
+        ...item,
+        // Derived by the package as the first six digits of the Schedule B
+        // number, dot and all.
+        hsCode: { value: '0802.12', source: 'derived' as const, detail: 'first six digits of the Schedule B number' },
+        cargoDescription: { value: 'SHELLED ALMONDS', source: 'excel' as const, detail: 'description' },
+        packageCount: { value: '850', source: 'manual' as const, detail: 'typed by the operator' },
+        packageType: { value: 'CT', source: 'manual' as const, detail: 'typed by the operator' },
+        grossWeightKg: { value: '26500', source: 'manual' as const, detail: 'typed by the operator' },
+      })),
+    };
+  };
+
+  beforeEach(() => {
+    document.body.innerHTML = html('inttra-live-shapes');
+  });
+
+  it('writes the HS code without its decimal point, because the box refuses one', () => {
+    const report = fillInttraFields({ pkg: livePackage(), page: 'containerCargo', scope: 'container' }, document);
+    expect((document.getElementById('hs-code-1') as HTMLInputElement).value).toBe('080212');
+    const hs = report.outcomes.find((outcome) => outcome.key === 'HsCode');
+    expect(hs?.status).toBe('transformed');
+    expect(hs?.message).toContain('Separators removed');
+    // The package keeps the canonical value; only the presentation changed.
+    expect(livePackage().containers[0]?.hsCode.value).toBe('0802.12');
+  });
+
+  it('takes Booking Number from the wording the screen actually uses, not from all four at once', () => {
+    // Both "Carrier Booking Number" and "Booking Number" are on this page, as
+    // they were on the live one. The old single four-wording query matched two
+    // controls and wrote neither.
+    const report = fillInttraFields({ pkg: livePackage(), page: 'generalDetails', scope: 'shipment' }, document);
+    expect((document.getElementById('carr-book-nbr') as HTMLInputElement).value).toBe('EBKG18531408');
+    expect((document.getElementById('hbl-booking') as HTMLInputElement).value).toBe('');
+    expect(report.outcomes.find((outcome) => outcome.key === 'BookingNumber')?.status).toBe('filled');
+  });
+
+  it('picks the carrier dropdown out of two controls whose id ends in "carrier"', () => {
+    const report = fillInttraFields({ pkg: livePackage(), page: 'generalDetails', scope: 'shipment' }, document);
+    expect((document.getElementById('si-carrier') as HTMLSelectElement).value).toBe('MSCU');
+    expect((document.getElementById('nameOfCarrier') as HTMLInputElement).value).toBe('');
+    expect(report.outcomes.find((outcome) => outcome.key === 'Carrier')?.status).toBe('filled');
+  });
+
+  it('tells the count box and the type dropdown apart under one shared label', () => {
+    const report = fillInttraFields({ pkg: livePackage(), page: 'containerCargo', scope: 'container' }, document);
+    expect((document.getElementById('pkg-count-1') as HTMLInputElement).value).toBe('850');
+    expect((document.getElementById('pkg-type-1') as HTMLSelectElement).value).toBe('CT');
+    const count = report.outcomes.find((outcome) => outcome.key === 'PackageCount');
+    expect(count?.message).toContain('exactly one is a text box');
+    expect(count?.matches?.length).toBe(2);
+  });
+
+  it('types into a port look-up without the events that empty it, and says to pick the match', () => {
+    // The live portal took both ports and read back "" a moment later. A
+    // type-ahead discards anything not chosen from its list, and `change` and
+    // `blur` are what make it do so.
+    const seen: string[] = [];
+    const pol = document.getElementById('pol-box') as HTMLInputElement;
+    for (const type of ['input', 'change', 'blur', 'focusout']) {
+      pol.addEventListener(type, () => {
+        seen.push(type);
+        if (type === 'change' || type === 'blur') pol.value = '';
+      });
+    }
+    const report = fillInttraFields({ pkg: livePackage(), page: 'generalDetails', scope: 'shipment' }, document);
+    expect(seen).toEqual(['input']);
+    expect(pol.value).toBe('OAKLAND, CA, UNITED STATES (USOAK)');
+    const outcome = report.outcomes.find((item) => item.key === 'PortOfLoading');
+    expect(outcome?.status).toBe('warning');
+    expect(outcome?.message).toContain('pick it from the suggestions');
+    // The UN/LOCODE is offered as the search term: five characters, not thirty.
+    expect(outcome?.message).toContain('USOAK');
+  });
+
+  it('says a container field has no row-numbered selector, rather than blaming INTTRA for row 2', () => {
+    const pkg = livePackage();
+    const report = fillInttraFields({ pkg, page: 'containerCargo', scope: 'container', containerIndex: 1 }, document);
+    const hs = report.outcomes.find((outcome) => outcome.key === 'HsCode');
+    expect(hs?.status).toBe('warning');
+    expect(hs?.message).toContain('no row-numbered selector yet');
+    // And nothing was written into container 1's boxes.
+    expect((document.getElementById('hs-code-1') as HTMLInputElement).value).toBe('');
   });
 });

@@ -90,7 +90,9 @@ function carriesRowToken(candidate: InttraFieldMapping['candidates'][number]): b
 }
 
 function detectionMessage(status: string, matchedWith: string | null, count?: number, row?: number): string {
-  if (status === 'AMBIGUOUS') return `${count ?? 2} controls matched "${matchedWith}". Not written; the mapping needs a more specific selector.`;
+  if (status === 'AMBIGUOUS') {
+    return `${count ?? 2} controls matched "${matchedWith}". Not written. Copy the right one's id from the list below into Diagnostics -> selector overrides, and this field resolves on the next fill.`;
+  }
   if (status === 'NOT_WRITABLE') return 'The matching control is disabled or read-only right now.';
   // A container-scoped field is aimed at one numbered row, and the commonest
   // reason it resolves to nothing is that the row is not on the screen: every
@@ -100,6 +102,31 @@ function detectionMessage(status: string, matchedWith: string | null, count?: nu
     return `Nothing on this screen matched row ${row}. Either INTTRA has fewer container blocks than the package has containers - add them in INTTRA, the helper never presses Add Container - or this field's selector is still a placeholder (see Diagnostics).`;
   }
   return 'No control on this screen matched the mapping. Its selectors are placeholders until captured from the live portal (see Diagnostics).';
+}
+
+/**
+ * The message for a container field that has no row-numbered selector at all.
+ *
+ * `mappingsForRow` leaves such a mapping with an empty candidate list beyond
+ * row 1, which would otherwise be reported as "nothing matched row 2" - true,
+ * but it reads as an INTTRA problem when it is ours. Three container fields
+ * carry a captured `-{n}` id (Container Number and the two seals); the rest
+ * are label wordings, and a label cannot name a row.
+ */
+function noRowSelectorMessage(label: string, row: number): string {
+  return `${label} has no row-numbered selector yet, so it can only be filled in container block 1; row ${row} was left alone rather than written into another row. Capture this field's id from the live DOM (it should end in "-${row}", the shape the seals have) and paste it into Diagnostics -> selector overrides.`;
+}
+
+/**
+ * The location code inside a port value, when it carries one.
+ *
+ * Deckhand hands over "OAKLAND, CA, UNITED STATES (USOAK)". INTTRA's port
+ * type-ahead is quickest on the UN/LOCODE, so the message names it - the
+ * operator types five characters instead of thirty.
+ */
+export function locationCode(value: string): string | null {
+  const match = /\(([A-Z]{5})\)\s*$/.exec(value.trim());
+  return match ? (match[1] as string) : null;
 }
 
 export function fillInttraFields(request: InttraFillRequest, doc: Document = document): InttraFillReport {
@@ -141,10 +168,24 @@ function fillOne(mapping: InttraFieldMapping, request: InttraFillRequest, contai
   if (truncated) notes.push(`Truncated to ${mapping.maxLength} characters.`);
   const transformText = [item.transform, transformed.transform].filter(Boolean).join('; ') || null;
 
+  const row = request.scope === 'container' ? (request.containerIndex ?? 0) + 1 : undefined;
+  if (!mapping.candidates.length) {
+    // Every candidate was dropped by mappingsForRow: none of them can name a
+    // row, so there is nothing safe to try beyond block 1.
+    return { ...base, status: 'warning', message: noRowSelectorMessage(mapping.label, row ?? 1), written: finalValue };
+  }
+
   const detection = detectField(mapping, { root: doc });
   if (detection.status !== 'FOUND' || !detection.element) {
-    const row = request.scope === 'container' ? (request.containerIndex ?? 0) + 1 : undefined;
-    return { ...base, status: 'warning', message: detectionMessage(detection.status, detection.matchedWith, detection.ambiguousCount, row), written: finalValue, matchedWith: detection.matchedWith, confidence: detection.confidence };
+    return {
+      ...base,
+      status: 'warning',
+      message: detectionMessage(detection.status, detection.matchedWith, detection.ambiguousCount, row),
+      written: finalValue,
+      matchedWith: detection.matchedWith,
+      confidence: detection.confidence,
+      ...(detection.ambiguousMatches?.length ? { matches: detection.ambiguousMatches } : {}),
+    };
   }
   base.selector = detection.matchedWith ?? base.selector;
 
@@ -153,20 +194,49 @@ function fillOne(mapping: InttraFieldMapping, request: InttraFillRequest, contai
     return { ...base, status: 'warning', message: `INTTRA already holds "${existing}". Left untouched; turn on overwrite to replace it.`, written: finalValue, readBack: existing, matchedWith: detection.matchedWith, confidence: detection.confidence };
   }
   if (request.dryRun) {
-    return { ...base, status: transformText ? 'transformed' : 'filled', message: `Dry run: would write "${finalValue}".${notes.length ? ` ${notes.join(' ')}` : ''}`, written: finalValue, matchedWith: detection.matchedWith, confidence: detection.confidence };
+    return { ...base, status: transformText ? 'transformed' : 'filled', message: `Dry run: would write "${finalValue}".${notes.length ? ` ${notes.join(' ')}` : ''}`, written: finalValue, transform: transformText, matchedWith: detection.matchedWith, confidence: detection.confidence };
   }
 
-  const write = setInttraFieldValue(detection.element, finalValue, { blur: request.dispatchBlur ?? true });
+  // A type-ahead is written without the two events that make INTTRA validate
+  // and empty it; the operator picks from the list that is now open.
+  const lookup = mapping.type === 'lookup';
+  const write = setInttraFieldValue(
+    detection.element,
+    finalValue,
+    // Not even focus: focusing the NEXT field blurs this one, and the blur is
+    // what INTTRA throws the typed location away on.
+    lookup ? { blur: false, change: false, focus: false } : { blur: request.dispatchBlur ?? true },
+  );
   const duration = request.highlightDurationMs ?? 6000;
   if (!write.ok) {
     highlightField(detection.element, 'error', duration, mapping.key);
     return { ...base, status: 'error', message: write.reason ?? 'The value could not be written.', written: finalValue, readBack: write.readBack, matchedWith: detection.matchedWith, confidence: detection.confidence };
   }
-  const status: InttraFillOutcome['status'] = transformText || notes.length ? 'transformed' : 'filled';
+  // A look-up is never reported as filled: the text is in the box, but
+  // INTTRA keeps nothing the operator did not pick from its own list.
+  const status: InttraFillOutcome['status'] = lookup ? 'warning' : transformText || notes.length ? 'transformed' : 'filled';
   highlightField(detection.element, status, duration, mapping.key);
   const parts = [...notes];
+  if (transformed.transform) parts.push(`${transformed.transform}.`);
   if (write.reason) parts.push(write.reason);
+  if (lookup) {
+    const code = locationCode(finalValue);
+    parts.push(
+      `Typed into INTTRA's location look-up and left open: INTTRA keeps a location only when it is chosen from its own list, so pick it from the suggestions${code ? ` (searching "${code}" is quickest)` : ''}. Nothing here presses it for you.`,
+    );
+  }
+  if (detection.narrowedBy) parts.push(`${detection.narrowedBy}, so that one was used. Confirm it is the right box.`);
   if (detection.confidence === 'low') parts.push('Matched by a structural fallback; confirm this is the right INTTRA field.');
   if (write.selectedText) parts.push(`Selected "${write.selectedText}".`);
-  return { ...base, status, written: finalValue, readBack: write.readBack, matchedWith: detection.matchedWith, confidence: detection.confidence, ...(parts.length ? { message: parts.join(' ') } : {}) };
+  return {
+    ...base,
+    status,
+    written: finalValue,
+    readBack: write.readBack,
+    transform: transformText,
+    matchedWith: detection.matchedWith,
+    confidence: detection.confidence,
+    ...(detection.ambiguousMatches?.length ? { matches: detection.ambiguousMatches } : {}),
+    ...(parts.length ? { message: parts.join(' ') } : {}),
+  };
 }
