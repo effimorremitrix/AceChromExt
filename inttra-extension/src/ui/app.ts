@@ -886,13 +886,23 @@ function renderDetection(snapshot: InttraDiagnosticsSnapshot): HTMLElement {
     ]),
     el('details', { className: 'diag-block' }, [el('summary', { text: 'Page detection evidence' }), el('ul', { className: 'small' }, snapshot.page.evidence.map((line) => el('li', { text: line }))), el('ul', { className: 'small muted' }, snapshot.page.scores.map((score) => el('li', { text: `${score.page}: score ${score.score}` })))]),
   );
+  // The grid lives in the Copy Container Details modal and nowhere else, so
+  // "not found" is the ordinary answer on every other screen, not a fault.
+  // Listing all nine columns as unidentified when there is no grid at all
+  // reads like a failure, so that list is shown only when a grid was found.
   const grid = snapshot.grid;
   container.append(
     el('div', { className: 'diag-block' }, [
-      el('div', {}, [el('span', { className: 'label', text: 'Container grid: ' }), el('span', { className: `pill pill-${grid.found ? 'green' : 'red'}`, text: grid.found ? `found (${grid.kind}), ${grid.rowCount} row(s)` : 'not found' })]),
+      el('div', {}, [
+        el('span', { className: 'label', text: 'Container grid: ' }),
+        el('span', { className: `pill pill-${grid.found ? 'green' : 'grey'}`, text: grid.found ? `found (${grid.kind}), ${grid.rowCount} row(s)` : 'none on this screen' }),
+      ]),
+      grid.found
+        ? null
+        : el('div', { className: 'small muted', text: 'The grid exists only inside Copy Container Details. Open it from "Copy container details from spreadsheet" in Particulars, wait for the rows to draw, then press refresh in the header. Everything below is what was tried.' }),
       grid.matchedWith ? el('div', { className: 'small', text: `Root matched by ${grid.matchedWith}` }) : null,
       grid.headers.length ? el('ul', { className: 'small mono' }, grid.headers.map((header) => el('li', { text: `col ${header.index}: "${header.text}" -> ${header.column ?? '(not identified)'}${header.options ? ` (dropdown: ${header.options.join(' | ')})` : ''}` }))) : null,
-      grid.missingColumns.length ? el('div', { className: 'small warn', text: `Columns not identified: ${grid.missingColumns.join(', ')}` }) : null,
+      grid.found && grid.missingColumns.length ? el('div', { className: 'small warn', text: `Columns not identified: ${grid.missingColumns.join(', ')}` }) : null,
       el('ol', { className: 'small mono' }, grid.attempts.map((attempt) => el('li', { text: `${attempt.query} -> ${attempt.matches} match(es)${attempt.raw !== undefined && attempt.raw !== attempt.matches ? ` (of ${attempt.raw} in the DOM)` : ''}` }))),
     ]),
   );
@@ -928,7 +938,7 @@ function renderDetection(snapshot: InttraDiagnosticsSnapshot): HTMLElement {
       el('details', { className: 'diag-field' }, [
         el('summary', {}, [el('span', { className: 'diag-key', text: field.key }), el('span', { className: `pill pill-${detection.status === 'FOUND' ? 'green' : detection.status === 'NOT_WRITABLE' ? 'yellow' : 'red'}`, text: detection.status }), field.verificationStatus === 'placeholder' ? el('span', { className: 'pill pill-grey', text: 'selector unverified' }) : null]),
         el('div', { className: 'diag-body' }, [
-          el('div', { className: 'small', text: `${field.label} (${field.scope})` }),
+          el('div', { className: 'small', text: `${field.label} (${field.scope}${field.scope === 'container' ? ', probed on row 1' : ''})` }),
           detection.matchedWith ? el('div', { className: 'small' }, [el('code', { text: `${detection.matchedBy ?? '?'} -> ${detection.matchedWith}` }), el('span', { className: 'muted', text: ` (confidence ${detection.confidence})` })]) : null,
           el('ol', { className: 'small mono' }, detection.attempts.map((attempt) => el('li', { text: `[${attempt.strategy}${attempt.verified ? ', verified' : ''}] ${attempt.query} -> ${attempt.matches} match(es)` }))),
           field.devtoolsHint && detection.status !== 'FOUND' ? el('div', { className: 'hint-box small' }, [el('strong', { text: 'Capture: ' }), el('span', { text: field.devtoolsHint })]) : null,

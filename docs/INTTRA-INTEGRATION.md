@@ -542,6 +542,83 @@ One known rough edge, unchanged by this: a page whose heading merely says
 page. Naming a screen writes nothing, so every field is simply reported as not
 found; sharpening it needs the list page's own heading, which is uncaptured.
 
+## 5d. Fourth live contact, 2026-09-20: the first real diagnostics
+
+An operator exported Diagnostics from the live draft
+(`siworkspace#/create/1789899643548`). It is the first field-by-field answer
+from the real portal, and it corrects one thing this document said.
+
+**Detection, and what really fixed it.** The create page now scores **15**:
+
+```
+Heading reads "general details"          3
+URL contains "siworkspace#/create"       2
+Marker #generalDetails present and visible  10
+```
+
+So `#generalDetails`, shipped as a guessed marker, is **real on the live
+page**, and the marker alone outscores every other signature. A tie could not
+have happened on this document, which means section 5c's fix is not what
+unblocked it: the tie-break and the URL are sound and stay, but the "screen
+not identified" of the third run was most likely a **timing or frame** answer,
+the page not yet drawn when the panel asked. The structure probe shows three
+frames on the page (`(no src)`, `(no src)`, `about:blank`). If it returns,
+press refresh in the header and note whether it clears on its own.
+
+**Which fields resolve, live.** From the same export:
+
+| Field | Live result |
+| --- | --- |
+| Vessel | FOUND by `#vessel` |
+| Voyage | FOUND by `#voyage` |
+| Port of Loading, Port of Discharge | FOUND by label |
+| Cargo Description, HS Code, Gross Weight, Marks & Numbers | FOUND by label, inside the container block |
+| Carrier Seal, Shipper Seal | FOUND by the captured label "Carrier/Shipper Seal Number(s)" |
+| Booking Number | AMBIGUOUS: the label matches 2 controls |
+| Carrier | AMBIGUOUS: `[id$='carrier']` matches 2 |
+| Shipper's Reference, Package Type, Number of Packages | NOT_FOUND |
+
+Two guessed ids, `#vessel` and `#voyage`, turn out to be real. They are still
+carried as placeholders here, because a guess that happens to match is not a
+capture: copy them from the live DOM and they can be marked verified.
+
+**A diagnostics gap the export exposed.** The three captured container
+selectors reported `#cont-num-{n}` -> 0 matches, which reads as "the capture
+does not work". It was diagnostics asking the wrong question: nothing
+substituted a row, so the token was probed literally. Diagnostics now probes
+**row 1** and says so on each container field; the fill path already
+substituted the row of the container being filled.
+
+**The live container block, from the structure probe.** Worth having when the
+next selectors are captured:
+
+```
+div#containersListView-1.containersListView.ng-scope
+  div#container-row-1.row
+    div.well.col-sm-3.infin-well-create-si      "Container 1"
+      span#cont-num-1Lbl  "Container Number"
+      ... Container Type, Reefer Settings, Container Supplier,
+          Container Tare Weight (Kgs), Wood Declaration,
+          "Carrier Seal Number(s) (Up to 5, comma-separated)",
+          "Shipper Seal Number(s) (Up to 5, comma-separated)"
+```
+
+`#container-row-{n}` and `#containersListView-{n}` are row-numbered too, so
+either is a scoping root if one is ever needed.
+
+**Two rules INTTRA states itself**, read off the Copy Container Details
+instructions in the same export:
+
+- "A maximum of **15 characters** will be allowed per entry of Container
+  Number and Seal Number" - in the GRID. The form's seal box takes 79 and
+  says "Up to 5, comma-separated", so the two screens do not agree, and the
+  paste block still carries the whole value rather than cutting it: a cell cut
+  at 15 would silently drop the second seal of a pair, which is worse than a
+  value INTTRA rejects in front of the operator.
+- "Space and dash (-) in the Container Numbers will be removed when you click
+  Create Containers", which is INTTRA doing what `normalizeContainerNumber`
+  already does.
+
 ## 6. The live procedure: capturing the real selectors
 
 Do this once, on the first attended session, with a Shipping Instruction open

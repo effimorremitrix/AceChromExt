@@ -295,16 +295,27 @@ stay honestly described:
    day: the live portal has **no separate Container & Cargo screen** - Create
    Shipping Instruction is one page carrying General Details, the routing and
    the Particulars blocks, which is why `INTTRA_MAPPINGS_BY_PAGE` serves both
-   scopes on `generalDetails`. That one page is also why the first live run of
-   this build read **"INTTRA screen not identified"** and blocked Fill: both
-   signatures matched a heading and TIED, and a tie meant `unknown`. So the
-   create URL is now captured (`siworkspace#/create`, from the live address
-   bar) and a tie between `generalDetails` and `containerCargo` resolves to
-   the create page, whose label is now "Create Shipping Instruction"
-   (`pages.ts`, `detectInttraPage`). Every other tie is still reported as
-   unidentified, and which of the two causes fired on that live run is still
-   unknown, because the Diagnostics evidence block was not captured;
-   `docs/INTTRA-INTEGRATION.md` section 5c. Every OTHER field selector is still
+   scopes on `generalDetails`. A live run of this build read
+   **"INTTRA screen not identified"** and blocked Fill, so the create URL is
+   now captured (`siworkspace#/create`, from the live address bar) and a tie
+   between `generalDetails` and `containerCargo` resolves to the create page,
+   whose label is now "Create Shipping Instruction" (`pages.ts`,
+   `detectInttraPage`); every other tie is still reported as unidentified.
+   The first real Diagnostics export, later the same day, then showed that
+   **neither of those is what had failed**: the create page scores 15 there,
+   because the guessed marker `#generalDetails` is REAL and visible and scores
+   10 on its own, so no tie was possible on that document. The likely cause
+   was timing - the page not yet drawn when the panel asked, with three frames
+   on it. Both changes stay, and a recurrence is a refresh away from being
+   diagnosed. Do not describe the tie-break as the fix for that run;
+   `docs/INTTRA-INTEGRATION.md` sections 5c and 5d. That same export is also
+   the first field-by-field answer from the portal: `#vessel` and `#voyage`
+   resolve (guessed ids that happen to be real, still placeholders until
+   copied from the DOM), the seals resolve by their captured label, Booking
+   Number and Carrier are AMBIGUOUS with two matches each, and Shipper's
+   Reference, Package Type and Number of Packages are not found. Diagnostics
+   now probes a container field on ROW 1, because probing `{n}` literally
+   matched nothing and read as a failed capture. Every OTHER field selector is still
    `placeholder(...)`; `unverifiedInttraFieldKeys()` is the list and
    `tests/inttra.test.ts` pins it, so it can only shrink. What was captured
    from the live DOM on 2026-09-17 is structural:
