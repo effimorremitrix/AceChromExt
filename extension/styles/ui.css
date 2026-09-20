@@ -122,6 +122,12 @@ body.surface-panel #root { max-width: 960px; margin: 0 auto; padding-bottom: 40p
 .outcome { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; padding: 5px 6px; border-radius: 4px; background: var(--surface-alt); }
 .outcome-label { font-weight: 600; }
 .outcome-message { flex-basis: 100%; color: var(--ink-muted); }
+/* The controls behind an AMBIGUOUS verdict: one per line, ready to copy. */
+.outcome-matches { flex-basis: 100%; margin: 4px 0 0; padding-left: 16px; color: var(--ink-muted); }
+.outcome-matches li { margin-bottom: 2px; }
+/* Numbered instructions (Copy rows -> click -> paste). */
+.steps { margin: 4px 0 0; padding-left: 18px; }
+.steps li { margin-bottom: 3px; }
 .outcome-red { background: var(--red-bg); }
 .outcome-yellow { background: var(--yellow-bg); }
 .outcome-green { background: var(--green-bg); }

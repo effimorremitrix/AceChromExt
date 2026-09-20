@@ -173,7 +173,10 @@ describe('into INTTRA', () => {
     expect(rows.map((row) => row.children[1]?.textContent)).toEqual(['SL-4471209', 'SL-4471210', '']);
     expect(rows.map((row) => row.children[2]?.textContent)).toEqual(['SH-001', '', 'SL-9']);
     expect(rows[2]?.children[3]?.textContent).toContain('Almond');
-    expect(rows[2]?.children[4]?.textContent).toBe('0802.12');
+    // The package holds "0802.12"; INTTRA's HS Code box rejects a decimal
+    // point ("Field cannot contain decimal points", live portal 2026-09-20),
+    // so the separator comes off on the way in - grid and form alike.
+    expect(rows[2]?.children[4]?.textContent).toBe('080212');
     expect(report.verifiedCells).toBe(3 + 3 + 1 + 3 + 3);
     const description = report.cells.find((cell) => cell.row === 1 && cell.column === 'CargoDescription');
     expect(description?.provenance).toContain('QuickBooks');

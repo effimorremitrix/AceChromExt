@@ -55,7 +55,9 @@ export const GRID_COLUMNS: GridColumnSpec[] = [
   { key: 'ShipperSeal', label: 'Shipper Seal #', headerAliases: ['shipperseal', 'shippersealno', 'shippersealnumber', 'shippersealnumbers', 'sealno', 'sealnumber', 'seal'], source: 'shipperSeal', transforms: ['text', 'upper'], maxLength: 79, expected: true },
   { key: 'CargoDescription', label: 'Cargo Description', headerAliases: ['cargodescription', 'descriptionofgoods', 'goodsdescription', 'description'], source: 'cargoDescription', transforms: ['text'], maxLength: 512 },
   { key: 'MarksAndNumbers', label: 'Marks & Numbers', headerAliases: ['marksnumbers', 'marksandnumbers', 'marksnos', 'marks'], source: 'marksAndNumbers', transforms: ['text'], maxLength: 512 },
-  { key: 'HsCode', label: 'HS Code', headerAliases: ['hscode', 'hs', 'harmonizedcode', 'htscode', 'commoditycode'], source: 'hsCode', transforms: ['text'], maxLength: 12 },
+  // Separators off: the form's HS Code box rejects decimal points (live,
+  // 2026-09-20), and a pasted block goes into the same column.
+  { key: 'HsCode', label: 'HS Code', headerAliases: ['hscode', 'hs', 'harmonizedcode', 'htscode', 'commoditycode'], source: 'hsCode', transforms: ['text', 'hsCode'], maxLength: 12 },
   { key: 'PackageType', label: 'Package Type', headerAliases: ['packagetype', 'packagingtype', 'packagekind', 'kindofpackages', 'pkgtype'], source: 'packageType', transforms: ['text'] },
   { key: 'PackageCount', label: 'Number of Packages', headerAliases: ['numberofpackages', 'noofpackages', 'packagecount', 'packages', 'qty', 'quantity'], source: 'packageCount', transforms: ['integer'] },
   { key: 'GrossWeight', label: 'Gross Weight', headerAliases: ['grossweight', 'grossweightkg', 'weight', 'weightkg', 'cargogrossweight'], source: 'grossWeightKg', transforms: ['weight'] },

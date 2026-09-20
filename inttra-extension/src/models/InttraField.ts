@@ -29,7 +29,20 @@ export type InttraPageId =
 /** 'shipment' reads `header.<field>`; 'container' reads `container.<field>` of the selected container. */
 export type InttraFieldScope = 'shipment' | 'container';
 
-export type InttraFieldType = 'text' | 'number' | 'date' | 'select' | 'code';
+/**
+ * What kind of control a field is.
+ *
+ * 'lookup' is the one that is not just a label: INTTRA's Port of Loading and
+ * Port of Discharge boxes are type-aheads over its own location list, and a
+ * value typed into one is DISCARDED the moment the box loses focus unless the
+ * operator picked it from the suggestions. Both ports came back from the live
+ * portal on 2026-09-20 as `INTTRA did not keep the value (the control now
+ * reads "")`. A lookup field is therefore written without the blur that
+ * throws the text away, and reported as "typed, now pick it" rather than as a
+ * failure. The helper still presses nothing: choosing the suggestion is the
+ * operator's click.
+ */
+export type InttraFieldType = 'text' | 'number' | 'date' | 'select' | 'code' | 'lookup';
 
 export type InttraSelectorCandidate = AceSelectorCandidate;
 
@@ -41,6 +54,11 @@ export interface InttraFieldMapping {
   /** Dotted path into the filing package: `header.bookingReference`, `container.carrierSeal`. */
   source: string;
   type: InttraFieldType;
+  /**
+   * The control kind the detector may narrow to when one query matches several
+   * controls. Derived from `type` by `defineInttraField`, never declared.
+   */
+  controlKind?: 'select' | 'input' | 'textarea';
   /** Named transformers from src/ace/transformers (text, upper, date, ...). Presentation only. */
   transforms?: string[];
   maxLength?: number;
@@ -62,9 +80,17 @@ export interface InttraFillOutcome {
   selector?: string;
   written?: string;
   readBack?: string;
+  /** What the transformers did on the way in, e.g. "Separators removed". */
+  transform?: string | null;
   message?: string;
   matchedWith?: string | null;
   confidence?: FieldDetection['confidence'];
+  /**
+   * When several controls matched: what each of them is. Shown under the
+   * outcome so the operator can copy the right id into Diagnostics -> selector
+   * overrides instead of being told only that there were two.
+   */
+  matches?: string[];
 }
 
 export interface InttraFillReport {

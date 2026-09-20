@@ -112,6 +112,24 @@ export interface FieldDetection {
   attempts: Array<{ strategy: SelectorStrategy; query: string; matches: number; verified: boolean }>;
   /** Populated when the same query matched several visible controls. */
   ambiguousCount?: number;
+  /**
+   * One line per control behind an AMBIGUOUS verdict: tag, id, name, label,
+   * placeholder.
+   *
+   * "2 controls matched" is a dead end on a live portal - it names neither
+   * control, so the operator cannot tell which one the field wants and cannot
+   * write an override. Describing both turns the refusal into a capture: the
+   * right id is in the report, ready to paste into the selector overrides.
+   * Nothing here is written anywhere; it is text for the report.
+   */
+  ambiguousMatches?: string[];
+  /**
+   * Set when several controls matched the same query and exactly one was of
+   * the kind the mapping declares (a dropdown for a `select` field, an input
+   * for a `number` one), so that one was taken. It names the narrowing in the
+   * report, because the match is a weaker fact than a single hit.
+   */
+  narrowedBy?: string;
 }
 
 export type FillStatus = 'filled' | 'transformed' | 'skipped' | 'warning' | 'error';

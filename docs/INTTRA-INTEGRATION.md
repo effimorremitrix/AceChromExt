@@ -619,6 +619,133 @@ instructions in the same export:
   Create Containers", which is INTTRA doing what `normalizeContainerNumber`
   already does.
 
+## 5e. Fifth live contact, 2026-09-20: a whole fill, recorded
+
+A full attended run on the live draft `siworkspace#/create/1789904042068`,
+with a three-container package whose first container was the only one INTTRA
+had a block for. It is the first end-to-end recording, and it answered five
+things no fixture could.
+
+### The seven header fields
+
+| Field | Live result | What it was |
+| --- | --- | --- |
+| Vessel, Voyage | filled | fine |
+| Port of Loading, Port of Discharge | written, then `the control now reads ""` | a **type-ahead** |
+| Booking Number | 2 controls matched the label ladder | the ladder asked four wordings at once |
+| Carrier | 2 controls matched `[id$='carrier' i]` | the suffix is too loose |
+| Shipper's Reference | nothing matched | still uncaptured |
+
+**The ports are look-ups.** INTTRA validates the typed text against its own
+location list and empties the box for anything not chosen from the
+suggestions. Two events make it do that: `change`, and the `blur` that comes
+from focusing the next field. `PortOfLoading` and `PortOfDischarge` are now
+`type: 'lookup'`, which means the helper writes the text and raises
+**neither** - and does not focus the box either, because focusing the field
+after it is what blurs this one. The value stays visible in the box, the
+outcome is a warning that says to pick the match, and it names the UN/LOCODE
+(`USOAK`) as the quickest search. The helper still presses nothing.
+
+**Booking Number was our own ladder.** The live label reads **"Carrier
+Booking Number"**, in the Carrier panel, above `References (multiples allowed
+ex. 371, 425)`. The screen also carries a plain "Booking Number" elsewhere, so
+`byLabel(['Booking Number', 'Booking No', 'Carrier Booking Number', ...])` -
+one query, four acceptable answers - matched both. Every label rung now
+carries **exactly one wording** (`labelLadder`, `mappings/types.ts`), tried
+most specific first, and `tests/inttra.test.ts` pins it. Nothing is chosen
+between: a rung whose own wording matches two controls is still refused.
+
+**Carrier, and every other ambiguity, now names its matches.** "2 controls
+matched" is a dead end: it names neither control, so the operator cannot write
+an override. The detection result carries `ambiguousMatches` - tag, id, name,
+label, placeholder, one line per control - and the fill report prints them
+under the outcome, ready to paste into Diagnostics -> selector overrides.
+
+### One label over two controls
+
+The live Cargo block heads a count box **and** a type dropdown with the single
+label **"Package Count/Type (Outermost)"**. No label match there can ever be
+one control, which is why Package Type and Number of Packages had never
+resolved. The detector now keeps the match of the kind the mapping declares
+(`controlKind`, derived from the field type): a `select` field takes the
+dropdown, a `number` field takes the box. This is the one narrowing allowed
+among several matches, it is a fact about the control rather than its
+position, the confidence is degraded, and the outcome says so. Anything else
+is still AMBIGUOUS and still refused.
+
+### "Field cannot contain decimal points."
+
+INTTRA's own message, under the HS Code box, against the package's derived
+`0802.12`. The canonical value keeps its dot - it is how a tariff code is
+written - and the separators come off at fill time (`hsCode` transformer,
+`src/ace/transformers/codes.ts`), on the form field and in the grid paste
+block alike. Beside it the live screen carries a separate **Schedule B
+Number** box, which nothing in the filing package feeds yet.
+
+### What the live Particulars block is called
+
+Every wording below was read off the screen and is now in the ladders. None of
+these is a capture of an **id**, so each one only ever resolves **row 1**:
+beyond it `mappingsForRow` drops any candidate that cannot name a row, and the
+outcome now says exactly that instead of blaming INTTRA for a missing block.
+
+```
+Container N   Container Number, Container Type, Add Reefer Settings,
+              Container Supplier, Container Tare Weight (Kgs),
+              Wood Declaration,
+              Carrier Seal Number(s)   (Up to 5, comma-separated)
+              Shipper Seal Number(s)   (Up to 5, comma-separated)
+              [Add Container Details]
+Cargo N       Package Count/Type (Outermost), Print on B/L as, HS Code,
+              Schedule B Number, Cargo Description, NCM Code(s),
+              Marks & Numbers, CUS Code
+Cargo Gross   Cargo Gross Weight (Cargo + Packaging) [Kgs],
+  Weight &    Cargo Gross Volume (Cargo + Packaging) [Cbm],
+  Volume      Cargo Actions, Container Actions
+```
+
+The Carrier panel, in General Details: `Carrier` (a dropdown reading "Select
+One"), `Carrier Booking Number`, `References`. Around them: Shipper,
+Forwarder, Consignee, Notify Party, then Cargo Identification Numbers (PCIN,
+CSN, ACID Number/MCIN), Customs Compliance (Government Tax IDs, EORI) and the
+ICS2 Entry Summary Declaration.
+
+### The grid: found, and then a dead end
+
+Copy Container Details opened, the grid drew, and detection got it right -
+the panel read **"This is the Copy Container Details grid: use the Containers
+tab."** Then nothing happened, because that sentence was small grey text under
+four disabled buttons. Detection was never the problem; the route was.
+
+The Fill tab now leads instead of explaining: on the grid page it shows a
+notice saying the cells hold no control until they are clicked, and a primary
+**Go to Containers** button. The Containers tab spells the route out in five
+numbered steps, ending at Create Containers, which the operator presses.
+
+The live header row, for the record:
+
+```
+*Container Number | Carrier Seal # (dropdown) | Shipper Seal # (dropdown)
+| Cargo Description | Marks & Numbers | HS Code | ... (horizontal scroll)
+```
+
+Above it: `Container Type`, and `Unit of Measure` (Weight `Kgs`, Volume
+`Cbm`). Below it: `Reset`, `Create Containers`, `Cancel`.
+
+### Still open after this run
+
+- No **id** was captured on this run, so every field above that resolves by
+  wording resolves row 1 only. The five cargo fields need ids in the shape the
+  seals have (`-{n}`) before containers 2 and 3 can be filled from the form.
+- Shipper's Reference is still unmapped. It is probably the Carrier panel's
+  `References` block, which is a repeating type-and-value pair, not a box;
+  capture the whole block before mapping it.
+- Cargo Gross Weight came back FOUND in diagnostics and empty on the screen
+  after the fill. The captured wording `Cargo Gross Weight (Cargo + Packaging)`
+  is now first in its ladder; watch it on the next run.
+- The paste into the grid was never performed, so the paste block has still
+  never met the live grid.
+
 ## 6. The live procedure: capturing the real selectors
 
 Do this once, on the first attended session, with a Shipping Instruction open
@@ -702,11 +829,15 @@ the way that grid gets filled.
   (section 5b). Those three have run against the mock of the captured markup,
   not yet against the live page: what is proven is the shape of the id, not a
   live write.
-- Whether the ports are type-ahead controls that want INTTRA's own formatted
-  value: the live Port of Load reads `OAKLAND, CA, UNITED STATES (USOAK)`,
-  which the package's plain city name will not match.
-- Whether dropdowns are native `<select>`s or widgets; whether ports are
-  type-ahead controls and what a typed value does to them.
+- What a chosen port suggestion leaves in the DOM. The ports ARE type-aheads:
+  the live run wrote both and INTTRA emptied both (section 5e), so they are
+  now written without `change`, `blur` or focus and reported as "pick the
+  match". What has never been observed is INTTRA's own stored value after a
+  suggestion is picked - capture it, and the helper could one day pre-select
+  by UN/LOCODE instead of asking.
+- Whether dropdowns are native `<select>`s or widgets. The Carrier control
+  reads "Select One" like a native one, but no dropdown write has been seen
+  to take on the live portal.
 - The grid: what it is built from (not a table and not an ARIA grid, and the
   wording rung that finds such a grid has run only against mocks), its header
   row's outerHTML (the seal headings are dropdowns), its cell editors, row
@@ -720,8 +851,15 @@ the way that grid gets filled.
   setter plus `input`/`change`, or wants a key event sequence; the writer
   dispatches `keyup` as well, and the read-back will say if a value was
   reverted.
-- The unit of Gross Weight and the format of HS Code (six digits with or
-  without the dot).
+- The unit of Gross Weight. (The HS Code format is settled: INTTRA answered
+  "Field cannot contain decimal points", so six digits unseparated -
+  section 5e.)
+- Whether the two ambiguous header fields resolve once their real ids are
+  pasted into the selector overrides. The fill report now names both matching
+  controls, so the capture is a copy away.
+- Whether the five cargo fields in a container block carry a row-numbered id
+  like the seals do. Until they do, they fill block 1 only, and the helper
+  says so rather than writing into another row.
 
 Until these are done the helper will report most fields as "not found" on a
 real screen, which is the designed behaviour: a field that does not resolve

@@ -19,6 +19,7 @@ import { formatNumber, parseNumeric, roundHalfUp } from './numbers.js';
 import { normalizeDate } from './dates.js';
 import { cleanText, upperCase } from './text.js';
 import {
+  hsCodeDigits,
   normalizeCountryCode,
   normalizeEccn,
   normalizeOriginIndicator,
@@ -133,6 +134,18 @@ export const TRANSFORMERS: Record<string, Transformer> = {
   scheduleBDigits: (input) => {
     const digits = scheduleBDigits(input);
     return out(digits, digits === input ? null : 'Separators removed');
+  },
+
+  /**
+   * HS code without separators.
+   *
+   * INTTRA's HS Code box refuses "0802.12" with "Field cannot contain decimal
+   * points" (live portal, 2026-09-20). The canonical value keeps the dot; this
+   * is the presentation the box accepts.
+   */
+  hsCode: (input) => {
+    const result = hsCodeDigits(input);
+    return out(result.value, result.transform);
   },
 
   origin: (input) => {

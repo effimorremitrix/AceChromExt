@@ -1,0 +1,126 @@
+<!--
+  The shapes the live Create Shipping Instruction screen showed on 2026-09-20,
+  and only the shapes.
+
+  Every LABEL here was read off the real screen; not one id was. The file
+  exists because three of those shapes each defeated a field on that run, and
+  each needs a regression test:
+
+    1. "Booking Number" and "Carrier Booking Number" both on one page. Asking
+       for four booking wordings at once matched two controls and the field
+       was refused.
+    2. Two controls whose id ends in "carrier" - the carrier dropdown and a
+       carrier-name box. `[id$='carrier' i]` matched both.
+    3. "Package Count/Type (Outermost)": ONE label over a count box and a type
+       dropdown, so a label match is always two matches.
+
+  Also here: the ports, which the live portal emptied again after every write,
+  and the HS Code box that answered "Field cannot contain decimal points". The
+  clearing itself is wired up in the test, not in this file.
+-->
+<div id="si-live-shapes">
+  <ol class="steps">
+    <li class="step active"><span>1</span> Create Shipping Instruction</li>
+    <li class="step"><span>2</span> Review Shipping Instruction</li>
+  </ol>
+  <h1>Create Shipping Instruction</h1>
+
+  <h2>General Details</h2>
+
+  <div class="panel" id="panel-carrier">
+    <div class="panel-heading">Carrier</div>
+    <div class="form-group">
+      <label for="si-carrier">Carrier</label>
+      <select id="si-carrier" name="si-carrier">
+        <option value="">Select One</option>
+        <option value="MSCU">MSCU - MSC Mediterranean Shipping Company</option>
+        <option value="MAEU">MAEU - Maersk Line</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="nameOfCarrier">Carrier Name</label>
+      <input type="text" id="nameOfCarrier" name="nameOfCarrier" placeholder="Enter Name..." />
+    </div>
+    <div class="form-group">
+      <label for="carr-book-nbr">Carrier Booking Number</label>
+      <input type="text" id="carr-book-nbr" name="carr-book-nbr" placeholder="Enter Number..." />
+      <p class="help">(multiples allowed ex. 371, 425)</p>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-house-bl">
+    <div class="panel-heading">House B/L</div>
+    <div class="form-group">
+      <label for="hbl-booking">Booking Number</label>
+      <input type="text" id="hbl-booking" name="hbl-booking" placeholder="Enter Number..." />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="vsl-nm">Vessel</label>
+    <input type="text" id="vsl-nm" name="vsl-nm" placeholder="Enter Name..." />
+  </div>
+  <div class="form-group">
+    <label for="voy-nbr">Voyage</label>
+    <input type="text" id="voy-nbr" name="voy-nbr" placeholder="Enter Number..." />
+  </div>
+
+  <div class="form-group">
+    <label for="pol-box">Port of Loading</label>
+    <input type="text" id="pol-box" name="pol-box" autocomplete="off" placeholder="Enter Location..." />
+  </div>
+  <div class="form-group">
+    <label for="pod-box">Port of Discharge</label>
+    <input type="text" id="pod-box" name="pod-box" autocomplete="off" placeholder="Enter Location..." />
+  </div>
+
+  <h2>Particulars</h2>
+  <div class="row row-5-gutter" id="container-block-1">
+    <div class="form-group">
+      <label for="cont-num-1">Container Number</label>
+      <input type="text" class="form-control input-sm cont-num-1" id="cont-num-1" name="cont-num-1" maxlength="11" />
+    </div>
+    <div class="form-group">
+      <label for="carr-seal-1">Carrier Seal Number(s)</label>
+      <input type="text" class="form-control input-sm carr-seal-1" id="carr-seal-1" name="carr-seal-1" maxlength="79" />
+    </div>
+    <div class="form-group">
+      <label for="ship-seal-1">Shipper Seal Number(s)</label>
+      <input type="text" class="form-control input-sm ship-seal-1" id="ship-seal-1" name="ship-seal-1" maxlength="79" />
+    </div>
+
+    <div class="form-group">
+      <label for="pkg-count-1">Package Count/Type (Outermost)</label>
+      <input type="text" id="pkg-count-1" name="pkg-count-1" placeholder="Enter Count..." />
+      <label for="pkg-type-1">Package Count/Type (Outermost)</label>
+      <select id="pkg-type-1" name="pkg-type-1">
+        <option value="">Enter Type...</option>
+        <option value="CT">CT - Carton</option>
+        <option value="BG">BG - Bag</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="hs-code-1">HS Code</label>
+      <input type="text" id="hs-code-1" name="hs-code-1" placeholder="Enter Code..." />
+      <label for="sched-b-1">Schedule B Number</label>
+      <input type="text" id="sched-b-1" name="sched-b-1" placeholder="Enter Number..." />
+    </div>
+
+    <div class="form-group">
+      <label for="cargo-desc-1">Cargo Description</label>
+      <textarea id="cargo-desc-1" name="cargo-desc-1"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="gross-wt-1">Cargo Gross Weight (Cargo + Packaging)</label>
+      <input type="text" id="gross-wt-1" name="gross-wt-1" placeholder="Enter Weight..." />
+      <select id="gross-wt-uom-1" name="gross-wt-uom-1"><option value="KGS" selected>Kgs</option></select>
+    </div>
+
+    <div class="form-group">
+      <label for="marks-1">Marks &amp; Numbers</label>
+      <textarea id="marks-1" name="marks-1"></textarea>
+    </div>
+  </div>
+</div>

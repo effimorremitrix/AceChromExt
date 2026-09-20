@@ -322,12 +322,25 @@ describe('field detection', () => {
     expect(detection.element).toBeNull();
   });
 
-  it('reports ambiguity instead of picking one of several matches', () => {
+  it('reports ambiguity instead of picking one of several matches, and names both controls', () => {
     mount('ace-ambiguous');
     const detection = detectField(fieldByKey('ShippingWeight') as AceFieldMapping);
     expect(detection.status).toBe('AMBIGUOUS');
     expect(detection.ambiguousCount).toBe(2);
     expect(detection.element).toBeNull();
+    // "2 controls matched" is a dead end on a live portal: the ids are what
+    // the operator pastes into the selector overrides.
+    expect(detection.ambiguousMatches).toEqual([
+      'input[type=text] #w1 label "Shipping Weight (whole Kilograms) \u25c6"',
+      'input[type=text] #w2 label "Shipping Weight (whole Kilograms) \u25c6"',
+    ]);
+  });
+
+  it('leaves ACE detection alone: no ACE mapping declares a control kind, so nothing is narrowed', () => {
+    // The kind narrowing exists for INTTRA, where one label sits over a count
+    // box and a type dropdown. ACE mappings carry no controlKind, so two
+    // matches stay two matches here.
+    expect(ALL_MAPPINGS.every((mapping) => !('controlKind' in mapping))).toBe(true);
   });
 
   it('records every candidate it tried, for diagnostics', () => {

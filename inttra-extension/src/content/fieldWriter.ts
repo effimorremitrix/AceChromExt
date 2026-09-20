@@ -30,6 +30,19 @@ export interface InttraWriteOptions {
   focus?: boolean;
   /** Dispatch keyup after input; some grids commit on it. Default true. */
   keyup?: boolean;
+  /**
+   * Dispatch `change` after `input`. Default true.
+   *
+   * Turned off for a type-ahead. INTTRA's Port of Loading and Port of
+   * Discharge boxes validate the typed text against their own location list
+   * and empty the control when it was not picked from the suggestions; the
+   * live portal answered both with `the control now reads ""` on 2026-09-20.
+   * `change` and `blur` are the two events that trigger that, so a lookup
+   * write raises neither: the text stays in the box with the suggestion list
+   * open under the cursor, and the operator picks. The helper still presses
+   * nothing.
+   */
+  change?: boolean;
 }
 
 export interface InttraWriteResult {
@@ -133,7 +146,7 @@ function dispatchAll(element: Element, options: Required<InttraWriteOptions>): v
       // KeyboardEvent may be unavailable in a minimal environment; keyup is a courtesy, not a requirement.
     }
   }
-  dispatch(element, 'change');
+  if (options.change) dispatch(element, 'change');
   if (options.blur) {
     dispatch(element, 'blur', { bubbles: false });
     dispatch(element, 'focusout');
@@ -165,7 +178,12 @@ function verify(control: InttraControlKind, readBack: string, wanted: string): I
 
 /** Write `value` into an INTTRA control, make the page notice, and verify the read-back. Never throws. */
 export function setInttraFieldValue(element: Element | null, value: string, options: InttraWriteOptions = {}): InttraWriteResult {
-  const opts: Required<InttraWriteOptions> = { blur: options.blur ?? true, focus: options.focus ?? true, keyup: options.keyup ?? true };
+  const opts: Required<InttraWriteOptions> = {
+    blur: options.blur ?? true,
+    focus: options.focus ?? true,
+    keyup: options.keyup ?? true,
+    change: options.change ?? true,
+  };
   const resolved = resolveInttraControl(element);
   const target = resolved.element;
   if (!target || resolved.kind === 'none') {
