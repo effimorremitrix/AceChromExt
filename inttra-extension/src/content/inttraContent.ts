@@ -23,7 +23,7 @@ import { debug, setDebugLogging, warn } from '../core/logger.js';
 import { loadInttraOverrides, onInttraOverridesChanged } from '../core/overridesStore.js';
 import { inttraFieldsForPage, resolveInttraFields } from '../mappings/index.js';
 import { detectInttraPage, hasStructuralEvidence } from './pageDetector.js';
-import { fillInttraFields } from './filler.js';
+import { fillInttraFields, mappingsForRow } from './filler.js';
 import { detectGrid, fillContainerGrid, gridAcceptsTyping, gridPasteBlock } from './gridWriter.js';
 import { probeStructure } from './structureProbe.js';
 
@@ -43,10 +43,19 @@ function log(kind: 'fill' | 'diagnostics' | 'note', message: string, detail?: st
   }
 }
 
+/** The container row the diagnostics probe uses. Every draft has a first block. */
+const DIAGNOSTICS_ROW = 1;
+
 function buildDiagnostics(): InttraDiagnosticsSnapshot {
   const page = detectInttraPage();
   const fields: InttraDiagnosticsSnapshot['fields'] = [];
-  for (const mapping of resolveInttraFields(page.page, undefined, overrides)) {
+  // A container-scoped selector carries the row token, and probing `{n}`
+  // literally matches nothing, which reads as "the capture does not work" when
+  // the truth is "diagnostics asked the wrong question". Row 1 is the row
+  // every draft has, so that is what is probed here; the fill path substitutes
+  // the row of the container being filled (filler.ts).
+  for (const resolved of resolveInttraFields(page.page, undefined, overrides)) {
+    const mapping = resolved.scope === 'container' ? mappingsForRow([resolved], DIAGNOSTICS_ROW)[0] ?? resolved : resolved;
     const detection = detectField(mapping, { root: document });
     const { element: _element, unwritableElement: _unwritable, ...rest } = detection;
     void _element;

@@ -13,7 +13,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { detectInttraPage, EVIDENCE, hasStructuralEvidence } from '../inttra-extension/src/content/pageDetector.js';
 import { isInttraVisible, readInttraFieldValue, resolveInttraControl, setInttraFieldValue } from '../inttra-extension/src/content/fieldWriter.js';
-import { fillInttraFields, resolvePackageSource } from '../inttra-extension/src/content/filler.js';
+import { fillInttraFields, mappingsForRow, resolvePackageSource } from '../inttra-extension/src/content/filler.js';
+import { detectField } from '../src/content/fieldDetector.js';
 import { detectGrid, fillContainerGrid, findContainerGrid, findHeaderRowByText, gridAcceptsTyping, gridPasteBlock, gridRowsAsTsv, normalizeHeading, readHeaderCell } from '../inttra-extension/src/content/gridWriter.js';
 import { probeStructure } from '../inttra-extension/src/content/structureProbe.js';
 import { ALL_INTTRA_MAPPINGS, GRID_COLUMNS, inttraFieldsForPage, resolveInttraFields, unverifiedInttraFieldKeys } from '../inttra-extension/src/mappings/index.js';
@@ -844,6 +845,19 @@ describe('one container per row', () => {
     expect(value('ship-seal-1')).toBe('');
     expect(report.filled).toBe(0);
     expect(report.outcomes.find((outcome) => outcome.key === 'ContainerNumber')?.message).toContain('row 2');
+  });
+
+  it('is probed on row 1 by diagnostics, because a literal row token matches nothing', () => {
+    // What the live diagnostics reported before this: `#cont-num-{n}` -> 0
+    // matches, which read as "the captured selector does not work" when the
+    // truth was that nothing had substituted a row.
+    const raw = inttraFieldsForPage('generalDetails', 'container').find((mapping) => mapping.key === 'ContainerNumber');
+    expect(detectField(raw!, { root: document }).attempts[0]).toMatchObject({ query: '#cont-num-{n}', matches: 0 });
+
+    const probed = mappingsForRow([raw!], 1)[0];
+    const detection = detectField(probed!, { root: document });
+    expect(detection.status).toBe('FOUND');
+    expect(detection.matchedWith).toContain('#cont-num-1');
   });
 
   it('keeps a multi-seal value whole, because the live box takes 79 characters', () => {
