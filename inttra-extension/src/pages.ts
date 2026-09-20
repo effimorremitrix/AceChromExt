@@ -33,13 +33,23 @@ export interface InttraPageSignature {
 
 export const INTTRA_PAGE_SIGNATURES: InttraPageSignature[] = [
   {
+    // The whole create page, not just its first section. The live portal
+    // (2026-09-20) draws General Details, the routing, Customs Compliance and
+    // the Particulars container blocks on ONE page, so this signature covers
+    // it and `INTTRA_MAPPINGS_BY_PAGE` serves both scopes here. The id stays
+    // `generalDetails` because the stored packages, the dashboard and the
+    // override files already speak it.
     page: 'generalDetails',
-    label: 'General Details',
+    label: 'Create Shipping Instruction',
     tabText: ['general details', 'general'],
     headingText: ['general details', 'shipping instruction', 'shipping instructions'],
-    urlHints: ['general', 'si/details', 'shippinginstruction'],
+    // `siworkspace#/create` was copied from the live address bar on
+    // 2026-09-20: ship.inttra.e2open.com/siact/siworkspace#/create/<draft id>.
+    // It is what tells this page apart from the workspace list, which carries
+    // no filing fields. The edit and amend URLs are not captured yet.
+    urlHints: ['siworkspace#/create', 'general', 'si/details', 'shippinginstruction'],
     markerSelectors: ["[data-step='generalDetails']", '#generalDetails'],
-    captureHint: 'Open General Details. Copy the outerHTML of the active step tab (the highlighted one in the step strip) and of the screen heading.',
+    captureHint: 'Open the draft. Copy the outerHTML of the active step tab (the highlighted one in the step strip) and of the screen heading.',
   },
   {
     page: 'containerCargo',

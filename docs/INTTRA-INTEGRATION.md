@@ -493,6 +493,55 @@ What is still NOT captured on the container block: Container Type, Package
 Count and Type, Cargo Gross Weight and its unit, Cargo Gross Volume, tare
 weight, and everything on the other screens.
 
+## 5c. Third live contact, 2026-09-20: the screen had no name
+
+The operator loaded the build with the captured container selectors, opened a
+real draft, and the panel header read **"INTTRA screen not identified"**. Fill
+was blocked before a single selector was tried: the detector returns `unknown`
+and the UI refuses to fill on an unnamed screen, which is the designed
+behaviour and was, here, the wrong answer.
+
+Reproduced against a page shaped like that draft: **two signatures matched a
+heading and scored equally**, and an equal score read as ambiguity.
+
+```
+generalDetails  score 3  Heading reads "general details"
+containerCargo  score 3  Heading reads "container details"
+-> Ambiguous page, confidence none, Fill blocked
+```
+
+Which is the same fact as section 5b seen from the other side: it is ONE page.
+"General Details" and the container blocks are sections of the create page, so
+both signatures matching is not a contradiction to be reported, it is the
+create page being itself. Two changes, and either one alone would have named
+the screen:
+
+- **The create URL is now captured.** `siworkspace#/create` was copied from the
+  live address bar (`ship.inttra.e2open.com/siact/siworkspace#/create/<draft
+  id>`), so the page scores the URL rung as well and no longer ties. The edit
+  and amend URLs are still uncaptured.
+- **A tie between `generalDetails` and `containerCargo` resolves to the create
+  page** rather than to `unknown`, because the mappings serve both scopes
+  there, so naming it loses nothing. Every other tie is still reported as
+  unidentified.
+
+The signature's label is now **Create Shipping Instruction**, which is what the
+portal calls the page; the page id stays `generalDetails`, because stored
+packages, the dashboard and override files already speak it.
+
+What is still not known: WHICH of the two causes produced the live message.
+The panel's Diagnostics has the answer (**Run detection on the INTTRA tab**,
+then the "Page detection evidence" block, or **Export diagnostics**), and it
+was not captured on that run. Both causes are handled, and the evidence block
+is worth reading on the next live run anyway, because it also says whether the
+page's section titles are real headings or styled `<div>`s: the detector reads
+`h1`-`h6`, `legend` and `role="heading"` only.
+
+One known rough edge, unchanged by this: a page whose heading merely says
+"Shipping Instruction", such as the workspace list, can be named the create
+page. Naming a screen writes nothing, so every field is simply reported as not
+found; sharpening it needs the list page's own heading, which is uncaptured.
+
 ## 6. The live procedure: capturing the real selectors
 
 Do this once, on the first attended session, with a Shipping Instruction open

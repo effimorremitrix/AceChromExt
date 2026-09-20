@@ -864,3 +864,85 @@ describe('one container per row', () => {
     expect(value('cont-num-2')).toBe('');
   });
 });
+
+/**
+ * The live create page, third live run (2026-09-20).
+ *
+ * The operator ran the build against a real draft and the header read "INTTRA
+ * screen not identified", so Fill was blocked before any selector was tried.
+ * The cause is in these tests: one page carries both "General Details" and
+ * the container blocks, so two signatures match a heading and score equally,
+ * and an equal score used to mean "unknown".
+ */
+describe('naming the live create page', () => {
+  const atUrl = (path: string, run: () => void): void => {
+    const before = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.history.replaceState({}, '', path);
+    try {
+      run();
+    } finally {
+      window.history.replaceState({}, '', before);
+    }
+  };
+
+  beforeEach(() => {
+    document.body.innerHTML = html('inttra-create-si');
+  });
+
+  it('names it instead of reporting two screens', () => {
+    atUrl('/siact/siworkspace#/create/1789899643548', () => {
+      const detection = detectInttraPage(document);
+      expect(detection.page).toBe('generalDetails');
+      expect(detection.label).toBe('Create Shipping Instruction');
+      expect(detection.confidence).toBe('medium');
+      expect(detection.evidence.join(' ')).toContain('siworkspace#/create');
+    });
+  });
+
+  it('still names it when only the headings match, which is the tie that blocked Fill', () => {
+    atUrl('/siact/siworkspace#/elsewhere/42', () => {
+      const detection = detectInttraPage(document);
+      expect(detection.page).toBe('generalDetails');
+      expect(detection.confidence).not.toBe('none');
+      expect(detection.evidence.join(' ')).toContain('container blocks are on this page too');
+    });
+  });
+
+  it('names it from the captured URL alone, when no heading matches at all', () => {
+    document.body.innerHTML = '<div><div class="not-a-heading">Shipping Instructions</div></div>';
+    atUrl('/siact/siworkspace#/create/1789899643548', () => {
+      const detection = detectInttraPage(document);
+      expect(detection.page).toBe('generalDetails');
+      expect(detection.confidence).toBe('low');
+    });
+  });
+
+  it('yields to the grid when Copy Container Details opens over it', () => {
+    document.body.innerHTML += [
+      '<div role="dialog"><table><tr>',
+      '<th>Container Number</th><th>Carrier Seal #</th><th>Shipper Seal #</th><th>HS Code</th>',
+      '</tr><tr><td><input /></td><td><input /></td><td><input /></td><td><input /></td></tr></table></div>',
+    ].join('');
+    atUrl('/siact/siworkspace#/create/1789899643548', () => {
+      expect(detectInttraPage(document).page).toBe('copyContainerDetails');
+    });
+  });
+
+  /**
+   * The workspace list says "Shipping Instruction" in its own heading, so it
+   * can be named the create page. That is an old behaviour, not a new one,
+   * and it is harmless because naming a screen writes nothing: the fields are
+   * not there, so every one of them is reported as not found. Capturing the
+   * list page's heading is what would sharpen it, and it has not been
+   * captured.
+   */
+  it('writes nothing on a page that only sounds like the create page', () => {
+    document.body.innerHTML = '<h1>Shipping Instruction Workspace</h1><table><tr><th>Booking</th></tr></table>';
+    atUrl('/siact/siworkspace#', () => {
+      const pkg = samplePackage();
+      const report = fillInttraFields({ pkg, page: detectInttraPage(document).page, scope: 'container', containerIndex: 0 }, document);
+      expect(report.filled).toBe(0);
+      expect(document.querySelectorAll('input')).toHaveLength(0);
+    });
+  });
+});
