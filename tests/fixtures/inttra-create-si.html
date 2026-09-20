@@ -1,0 +1,38 @@
+<!--
+  Mock of the live Create Shipping Instruction page, trimmed.
+
+  Shaped after the real draft seen on 2026-09-20: one page carrying the step
+  strip, the template heading, General Details, the container blocks and the
+  cargo sections. The point of this fixture is the page DETECTOR, not the
+  selectors: two signatures match a heading here, which is what used to read
+  as "screen not identified" and block Fill.
+-->
+<div id="si-create">
+  <ol class="steps">
+    <li class="step active"><span>1</span> Create Shipping Instruction</li>
+    <li class="step"><span>2</span> Review Shipping Instruction</li>
+    <li class="step"><span>3</span> Shipping Instruction Submitted</li>
+  </ol>
+
+  <h1>Shipping Instructions - Template</h1>
+  <p><strong>SI Requestor Company:</strong> GALCO INTERNATIONAL, INC.</p>
+
+  <h2>General Details</h2>
+  <div class="form-group">
+    <label for="carr-book-nbr">Carrier Booking Number</label>
+    <input type="text" id="carr-book-nbr" name="carr-book-nbr" placeholder="Enter Number..." />
+  </div>
+
+  <h2>Container Details</h2>
+  <div class="row row-5-gutter" id="container-block-1">
+    <label for="cont-num-1">Container Number</label>
+    <input type="text" class="form-control input-sm cont-num-1" id="cont-num-1" name="cont-num-1" maxlength="11" />
+    <label for="carr-seal-1">Carrier Seal Number(s)</label>
+    <input type="text" class="form-control input-sm carr-seal-1" id="carr-seal-1" name="carr-seal-1" maxlength="79" />
+    <label for="ship-seal-1">Shipper Seal Number(s)</label>
+    <input type="text" class="form-control input-sm ship-seal-1" id="ship-seal-1" name="ship-seal-1" maxlength="79" />
+  </div>
+
+  <h2>Cargo Details</h2>
+  <h2>Particulars</h2>
+</div>

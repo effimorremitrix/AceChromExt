@@ -88,7 +88,7 @@ describe('INTTRA readiness', () => {
     expect(inttra.gate?.ok).toBe(true);
     expect(inttra.grid.rows[1]?.cells.find((cell) => cell.key === 'ShipperSeal')?.status).toBe('missing');
     const general = inttra.screens.find((screen) => screen.page === 'generalDetails')!;
-    expect(general.label).toBe('General Details');
+    expect(general.label).toBe('Create Shipping Instruction');
     const booking = general.fields.find((field) => field.key === 'BookingNumber')!;
     expect(booking).toMatchObject({ value: 'EBKG18531408', status: 'ready' });
     expect(booking.provenance).toContain('Deckhand, confirmed by QuickBooks');

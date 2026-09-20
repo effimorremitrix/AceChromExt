@@ -114,7 +114,8 @@ describe('the dashboard page', () => {
     expect(text()).toContain('submit, in ACE yourself');
 
     tab('inttra');
-    expect(text()).toContain('General Details');
+    // The create page's label, as the portal names it (pages.ts).
+    expect(text()).toContain('Create Shipping Instruction');
     expect(text()).toContain('Copy Container Details');
     expect(text()).toContain('placeholders');
     expect(text()).toContain('submit in INTTRA yourself');

@@ -171,6 +171,29 @@ export function detectInttraPage(doc: Document = document): InttraPageDetection 
 
   const best = scores[0];
   const runnerUp = scores[1];
+  // One page, two section headings.
+  //
+  // The live create page carries "General Details" AND the container blocks
+  // (2026-09-20), so both signatures score their heading and tie, and the tie
+  // used to read as "screen not identified" with Fill blocked - the third live
+  // run. A tie between exactly these two is not ambiguity, it is the create
+  // page: `INTTRA_MAPPINGS_BY_PAGE` serves both scopes there, so naming it
+  // loses nothing. Every other tie is still reported as unidentified.
+  const tiedOnOnePage =
+    best && runnerUp && best.score === runnerUp.score && best.score > 0 &&
+    [best.page, runnerUp.page].every((page) => page === 'generalDetails' || page === 'containerCargo');
+  if (tiedOnOnePage) {
+    const create = scores.find((entry) => entry.page === 'generalDetails');
+    if (create) {
+      return {
+        page: 'generalDetails',
+        label: inttraSignatureFor('generalDetails')?.label ?? 'Create Shipping Instruction',
+        confidence: create.score >= 7 ? 'high' : create.score >= 4 ? 'medium' : 'low',
+        evidence: [...create.reasons, 'The container blocks are on this page too, which is why both signatures matched.'],
+        scores,
+      };
+    }
+  }
   if (!best || best.score === 0) {
     return { page: 'unknown', label: 'Unknown page', confidence: 'none', evidence: ['No INTTRA screen could be identified from the tabs, headings, URL, marker elements, or a container grid.'], scores };
   }
