@@ -420,6 +420,79 @@ works in the default order, and the Page structure block says what the grid
 is made of, which is the next thing to read. The rung has run against mocks
 of that shape only.
 
+## 5b. Second live contact, 2026-09-20: the container blocks
+
+The operator captured the container controls from the live DOM. This is the
+first time any INTTRA FIELD selector has been read off the real portal, and it
+changed three things.
+
+**One page, not six screens.** Create Shipping Instruction
+(`#/create/<draft id>`) is a single long page: General Details, the routing
+(Vessel, Voyage, IMO, Origin, Port of Load, Port of Discharge, Destination,
+Move Type, Shipment Type), Customs Compliance, House B/L, Cargo
+Identification Numbers, and then **Particulars**, which repeats a block per
+container: Container N (number, type, seals, tare weight) beside Cargo N and
+its Cargo Gross Weight and Volume. There is no separate Container & Cargo
+screen, so `INTTRA_MAPPINGS_BY_PAGE` serves both the shipment scope and the
+container scope on `generalDetails`; `containerCargo` stays as the workflow's
+own name for the block.
+
+**The row number is in every id.** Container N's controls all carry the same
+`-N` suffix, numbered from 1 upward, and `id` and `name` hold the same string:
+
+```html
+<input class="form-control input-sm cont-num-1"  id="cont-num-1"  name="cont-num-1"  maxlength="11" placeholder="Enter Number...">
+<input class="form-control input-sm carr-seal-1" id="carr-seal-1" name="carr-seal-1" maxlength="79" placeholder="Enter Number(s)...">
+<input class="form-control input-sm ship-seal-1" id="ship-seal-1" name="ship-seal-1" maxlength="79" placeholder="Enter Number(s)...">
+<label for="carr-seal-1" id="carr-seallbl-1" class="carr-seal-numlbl">Carrier Seal Number(s)</label>
+<label for="ship-seal-1" id="ship-seallbl-1" class="ship-seal-NumLbl">Shipper Seal Number(s)</label>
+```
+
+So a container-scoped selector is written ONCE with `{n}`, the row token
+(`src/ace/selectors/overrides.ts`), and `mappingsForRow`
+(`inttra-extension/src/content/filler.ts`) substitutes the row before the
+detector runs. Pasted overrides may use it too; the paste-time CSS syntax
+check runs on the substituted form, because `{n}` is not valid CSS.
+
+Three consequences, and each one is a rule rather than a detail:
+
+- **The class is never the selector.** `class="... cont-num-1"` is identical on
+  every row, so it matches them all and the detector refuses the write as
+  ambiguous. The id carries the row; the class does not.
+- **Beyond row 1, a candidate with no row number is dropped, not tried.**
+  Every draft carries a different number of containers. Filling container 2 on
+  a draft that has one block would otherwise fall through the ladder to the
+  label "Container Number", match the one control on the screen, and write
+  container 2 into container 1's box. A selector that cannot name a row cannot
+  be aimed at one.
+- **A row the draft does not have is reported by its number.** The helper never
+  presses Add Container (`automationPolicy.ts`), so the report says which row
+  is missing and the operator adds the block in INTTRA.
+
+**Seals take 79 characters, and the label says "Number(s)".** INTTRA accepts
+several seal numbers in one box, so nothing truncates a seal at 15 any more,
+on the form or in the grid paste block.
+
+Both helpers therefore fill container rows in one press: **Fill all
+containers** in the panel, and the single container button in Quickfill, which
+walks every block because the count differs per draft. The single-container
+fill stays for a correction.
+
+**The grid, seen properly at last.** Copy Container Details is opened by the
+link **"Copy container details from spreadsheet"** at the top right of
+Particulars. The modal carries two controls ABOVE the grid that apply to every
+row: Container Type, and Unit of Measure (Weight, Volume). The header row
+reads Container Number | Carrier Seal # | Shipper Seal # | Cargo Description |
+Marks & Numbers | HS Code, with more columns behind a horizontal scrollbar,
+which is the order `GRID_COLUMNS` already had. Its buttons are Reset, Create
+Containers and Cancel, and the grid renders after a spinner, so press refresh
+in the helper once it is on screen. A weight cell is therefore a bare number
+in the unit chosen above the grid, and the unit is the operator's to set.
+
+What is still NOT captured on the container block: Container Type, Package
+Count and Type, Cargo Gross Weight and its unit, Cargo Gross Volume, tare
+weight, and everything on the other screens.
+
 ## 6. The live procedure: capturing the real selectors
 
 Do this once, on the first attended session, with a Shipping Instruction open
@@ -496,8 +569,16 @@ the way that grid gets filled.
 ## 7. What still needs live testing
 
 - The hostname of the SI screens, against the two manifest patterns.
-- Every page signature: tab wording, headings, URL fragments.
-- Every field selector on every screen.
+- Every page signature: tab wording, headings, URL fragments. Note that the
+  create page carries General Details and the container blocks together
+  (section 5b), so "which screen" is really "which section is on screen".
+- Every field selector except the three container ones captured on 2026-09-20
+  (section 5b). Those three have run against the mock of the captured markup,
+  not yet against the live page: what is proven is the shape of the id, not a
+  live write.
+- Whether the ports are type-ahead controls that want INTTRA's own formatted
+  value: the live Port of Load reads `OAKLAND, CA, UNITED STATES (USOAK)`,
+  which the package's plain city name will not match.
 - Whether dropdowns are native `<select>`s or widgets; whether ports are
   type-ahead controls and what a typed value does to them.
 - The grid: what it is built from (not a table and not an ARIA grid, and the

@@ -83,17 +83,41 @@ function readString(value: unknown, where: string, max = MAX_SELECTOR_LENGTH): s
 }
 
 /**
+ * The row token, for a control that repeats once per container.
+ *
+ * INTTRA's Particulars section gives every control of container N the same
+ * `-N` suffix, numbered from 1 upward (captured from the live DOM on
+ * 2026-09-20: `cont-num-1`, `carr-seal-1`, `ship-seal-1`). A container-scoped
+ * selector may therefore be written once, with `{n}` where the row number
+ * goes, and the INTTRA filler substitutes the row before the detector runs
+ * (inttra-extension/src/content/filler.ts).
+ *
+ * Nothing on the ACE side substitutes it: an ACE selector carrying `{n}`
+ * simply matches nothing and the next candidate is tried, which is the same
+ * thing that happens to any selector ACE has moved on from.
+ */
+export const ROW_TOKEN = '{n}';
+
+/** `#cont-num-{n}` + row 2 -> `#cont-num-2`. */
+export function withRowNumber(selector: string, row: number): string {
+  return selector.split(ROW_TOKEN).join(String(row));
+}
+
+/**
  * Refuse a selector the browser cannot parse.
  *
  * `doc` is optional so the parser is testable in Node, where there is no
  * document; when it is absent the syntax check is simply skipped and
  * `safeQueryAll` catches the problem at fill time as it always has.
+ *
+ * The check runs on the row-substituted form, because `{n}` is not valid CSS
+ * and a template selector would otherwise be rejected at paste time.
  */
 function assertUsableSelector(selector: string, where: string, doc?: Document): void {
   if (selector === '') throw new OverrideError(`${where}.selector must not be empty.`);
   if (!doc) return;
   try {
-    doc.querySelector(selector);
+    doc.querySelector(withRowNumber(selector, 1));
   } catch {
     throw new OverrideError(`${where}.selector is not a valid CSS selector: ${selector}`);
   }

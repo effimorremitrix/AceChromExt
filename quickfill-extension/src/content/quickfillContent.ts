@@ -155,19 +155,39 @@ function handleMessage(message: QuickfillContentRequest): QuickfillContentRespon
       if (screen.page === 'unknown' || screen.confidence === 'none') {
         return { ok: false, error: 'This is not one of the INTTRA Shipping Instructions screens, so nothing was filled.' };
       }
-      const report = fillInttraFields(
-        {
-          pkg: message.package,
-          page: screen.page,
-          scope: message.scope,
-          ...(message.containerIndex === undefined ? {} : { containerIndex: message.containerIndex }),
-          overwrite: true,
-          highlightDurationMs: DEFAULT_SETTINGS.highlightDurationMs,
-          dispatchBlur: DEFAULT_SETTINGS.dispatchBlur,
-        },
-        document,
+      // A container-scoped fill with no index means every container: the live
+      // page repeats the Particulars block per container, numbered from 1
+      // upward, so one press fills every row and each row's number and seals
+      // travel together (inttra-extension/src/content/filler.ts).
+      const rows =
+        message.scope === 'container' && message.containerIndex === undefined
+          ? message.package.containers.map((_, index) => index)
+          : [message.containerIndex];
+      const counts = rows.map((containerIndex) =>
+        countOf(
+          fillInttraFields(
+            {
+              pkg: message.package,
+              page: screen.page,
+              scope: message.scope,
+              ...(containerIndex === undefined ? {} : { containerIndex }),
+              overwrite: true,
+              highlightDurationMs: DEFAULT_SETTINGS.highlightDurationMs,
+              dispatchBlur: DEFAULT_SETTINGS.dispatchBlur,
+            },
+            document,
+          ),
+        ),
       );
-      return { ok: true, type: 'content/count', payload: countOf(report) };
+      return {
+        ok: true,
+        type: 'content/count',
+        payload: {
+          filled: counts.reduce((sum, count) => sum + count.filled, 0),
+          total: counts.reduce((sum, count) => sum + count.total, 0),
+          missed: [...new Set(counts.flatMap((count) => count.missed))],
+        },
+      };
     }
 
     case 'content/fillGrid': {

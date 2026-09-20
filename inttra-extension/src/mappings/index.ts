@@ -9,7 +9,15 @@ import { BL_DOCUMENTS_FIELDS } from './blDocuments.js';
 import { NOTIFICATION_EMAILS_FIELDS } from './notificationEmails.js';
 
 export const INTTRA_MAPPINGS_BY_PAGE: Record<Exclude<InttraPageId, 'unknown'>, InttraFieldMapping[]> = {
-  generalDetails: GENERAL_DETAILS_FIELDS,
+  /**
+   * The live portal has no separate Container & Cargo screen (2026-09-20):
+   * Create Shipping Instruction is one long page carrying General Details,
+   * the routing, and the Particulars blocks (Container N / Cargo N). So the
+   * create page serves both scopes, and a container-scoped fill works on the
+   * screen the detector actually names. `containerCargo` stays because it is
+   * the workflow's own name for the block and the dashboard labels it.
+   */
+  generalDetails: [...GENERAL_DETAILS_FIELDS, ...CONTAINER_CARGO_FIELDS],
   containerCargo: CONTAINER_CARGO_FIELDS,
   /** The grid is written by gridWriter.ts from GRID_COLUMNS, not field by field. */
   copyContainerDetails: [],

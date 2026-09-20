@@ -233,8 +233,14 @@ function renderButtons(): void {
     }
     buttons.append(fillButton('Fill this screen', () => run({ type: 'content/fillInttra', package: pkg, scope: 'shipment' })));
     if (pkg.containers.length) {
+      // One press per screen, not per container: the live page repeats the
+      // Particulars block per container and numbers the rows from 1 upward, so
+      // the helper walks them. No index means every container.
       buttons.append(
-        fillButton('Fill container 1', () => run({ type: 'content/fillInttra', package: pkg, scope: 'container', containerIndex: 0 })),
+        fillButton(
+          pkg.containers.length === 1 ? 'Fill container 1' : `Fill all ${pkg.containers.length} containers`,
+          () => run({ type: 'content/fillInttra', package: pkg, scope: 'container' }),
+        ),
       );
     }
     return;

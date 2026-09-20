@@ -45,6 +45,8 @@ interface AppState {
   /** What the tab said about its container grid the last time it was asked; null until then. */
   grid: InttraGridStatus | null;
   report: InttraFillReport | null;
+  /** One report per container, from "Fill all containers". */
+  reports: InttraFillReport[] | null;
   gridReport: GridFillReport | null;
   diagnostics: InttraDiagnosticsSnapshot | null;
   status: { text: string; tone: StatusTone } | null;
@@ -63,6 +65,7 @@ const state: AppState = {
   page: null,
   grid: null,
   report: null,
+  reports: null,
   gridReport: null,
   diagnostics: null,
   status: null,
@@ -171,6 +174,7 @@ async function onFileChosen(file: File): Promise<void> {
       sourceName: file.name,
     });
     state.report = null;
+    state.reports = null;
     state.gridReport = null;
     await appendLog('import', `Loaded ${file.name}: package ${loaded.packageId}, ${loaded.containers.length} container(s), Deckhand ${loaded.review.deckhand}.`);
     await refreshLog();
@@ -238,9 +242,73 @@ async function fill(scope: 'shipment' | 'container', dryRun: boolean): Promise<v
   }
   if (response.type !== 'content/fillReport') return;
   state.report = response.payload;
+  state.reports = null;
   await refreshLog();
   const { filled, skipped, warnings, errors } = response.payload;
   setStatus(`${dryRun ? 'Dry run (nothing written)' : 'Done'}: filled ${filled}, skipped ${skipped}, warnings ${warnings}${errors ? `, errors ${errors}` : ''}. Review every field in INTTRA before you save or submit.`, errors ? 'error' : warnings ? 'warn' : 'ok');
+  render();
+}
+
+/**
+ * Fill every container block on the screen, one row each.
+ *
+ * The live portal repeats the Particulars block per container and numbers its
+ * controls from 1 upward, so container k in the package is written into row
+ * k+1 and each row's number and seals travel together. One pass per row, each
+ * reported on its own: a row INTTRA does not have yet is reported as not
+ * found, never written somewhere else.
+ */
+async function fillAllContainers(dryRun: boolean): Promise<void> {
+  const current = pkg();
+  const ready = readyToFill();
+  if (!current || !ready.ok) {
+    setStatus(ready.reason, 'warn');
+    return;
+  }
+  if (!current.containers.length) {
+    setStatus('This package has no containers.', 'warn');
+    return;
+  }
+  await refreshTab();
+  if (!state.tab) {
+    setStatus('No INTTRA tab is open. Open your Shipping Instruction in INTTRA, then try again.', 'error');
+    render();
+    return;
+  }
+  if (!state.page || state.page.page === 'unknown') {
+    setStatus('The INTTRA screen could not be identified, so nothing was filled. Open a Shipping Instructions screen and press refresh in the header.', 'error');
+    render();
+    return;
+  }
+  const overwrite = (document.getElementById('overwrite') as HTMLInputElement | null)?.checked ?? false;
+  const reports: InttraFillReport[] = [];
+  for (let index = 0; index < current.containers.length; index += 1) {
+    const response = await sendToTab(state.tab.id, {
+      type: 'content/fill',
+      scope: 'container',
+      containerIndex: index,
+      package: current,
+      ...(dryRun ? { dryRun: true } : {}),
+      ...(overwrite ? { overwrite: true } : {}),
+    });
+    if (!response.ok) {
+      setStatus(`${response.error} Stopped after ${reports.length} container(s).`, 'error');
+      break;
+    }
+    if (response.type === 'content/fillReport') reports.push(response.payload);
+  }
+  state.reports = reports;
+  state.report = null;
+  await refreshLog();
+  if (reports.length) {
+    const filled = reports.reduce((sum, report) => sum + report.filled, 0);
+    const warnings = reports.reduce((sum, report) => sum + report.warnings, 0);
+    const errors = reports.reduce((sum, report) => sum + report.errors, 0);
+    setStatus(
+      `${dryRun ? 'Dry run (nothing written)' : 'Done'}: ${reports.length} container(s), filled ${filled}, warnings ${warnings}${errors ? `, errors ${errors}` : ''}. Read every row in INTTRA before you save or submit.`,
+      errors ? 'error' : warnings ? 'warn' : 'ok',
+    );
+  }
   render();
 }
 
@@ -619,7 +687,7 @@ function renderFill(): HTMLElement {
       select.append(option);
     });
     select.addEventListener('change', () => void store({ ...state.stored, selectedContainer: Number(select.value) }).then(render));
-    section.append(el('label', { className: 'field' }, [el('span', { text: 'Container for the Container & Cargo form' }), select]));
+    section.append(el('label', { className: 'field' }, [el('span', { text: 'Container for a single-container fill' }), select]));
   }
 
   const overwrite = el('input', { attrs: { type: 'checkbox', id: 'overwrite' } });
@@ -629,7 +697,22 @@ function renderFill(): HTMLElement {
   fillPage.addEventListener('click', () => void fill(onContainerPage ? 'container' : 'shipment', false));
   const dryRun = el('button', { className: 'button', text: 'Dry run (write nothing)', attrs: { type: 'button', ...(pageReady && !onGridPage ? {} : { disabled: 'disabled' }) } });
   dryRun.addEventListener('click', () => void fill(onContainerPage ? 'container' : 'shipment', true));
-  section.append(el('div', { className: 'actions' }, [fillPage, dryRun]));
+  const actions = [fillPage, dryRun];
+  // The live Create Shipping Instruction page repeats a Particulars block per
+  // container, numbered from 1 upward, so filling them is a loop and not a
+  // choice of one. The single-container fill stays for a correction.
+  if (current.containers.length && !onGridPage) {
+    const all = el('button', {
+      className: 'button button-primary',
+      text: `Fill all containers (${current.containers.length})`,
+      attrs: { type: 'button', ...(pageReady && ready.ok ? {} : { disabled: 'disabled' }) },
+    });
+    all.addEventListener('click', () => void fillAllContainers(false));
+    const allDry = el('button', { className: 'button', text: 'Dry run all containers', attrs: { type: 'button', ...(pageReady ? {} : { disabled: 'disabled' }) } });
+    allDry.addEventListener('click', () => void fillAllContainers(true));
+    actions.push(all, allDry);
+  }
+  section.append(el('div', { className: 'actions' }, actions));
 
   if (!pageReady) section.append(el('p', { className: 'small warn', text: 'Fill is disabled until an INTTRA Shipping Instructions screen is detected. Use "refresh" in the header after navigating.' }));
   else if (onGridPage) section.append(el('p', { className: 'small muted', text: 'This is the Copy Container Details grid: use the Containers tab.' }));
@@ -641,6 +724,13 @@ function renderFill(): HTMLElement {
   section.append(clearHighlights);
   section.append(el('p', { className: 'small muted', text: 'Every selector shipped in this build is a placeholder until captured from the live portal; a field that does not resolve is reported, never guessed. See Diagnostics.' }));
   if (state.report) section.append(renderReport(state.report));
+  for (const report of state.reports ?? []) {
+    const container = report.containerIndex === undefined ? null : current.containers[report.containerIndex];
+    section.append(
+      el('h3', { className: 'small', text: `Container ${(report.containerIndex ?? 0) + 1}${container?.containerNumber.value ? ` - ${container.containerNumber.value}` : ''} (row ${(report.containerIndex ?? 0) + 1} in INTTRA)` }),
+      renderReport(report),
+    );
+  }
   return section;
 }
 
