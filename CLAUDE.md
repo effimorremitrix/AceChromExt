@@ -96,6 +96,7 @@ repository outside the one history note in `docs/DECKHAND.md`. Keep it that way.
 | Command | Use |
 | --- | --- |
 | `npm run verify` | typecheck + tests + template + all three extension builds + their three bundle checks + companion build + dashboard build + its bundle check. Run before every push. |
+| `npm run build:all` | build all three extensions in one press: `dist/`, `dist-inttra/`, `dist-quickfill/`. Builds only - no typecheck, no tests, no bundle check, and not the playgrounds, the companion or the dashboard. It is the reload-in-Chrome shortcut; `npm run verify` is still the gate before a push |
 | `npm run build` / `build:watch` | build `dist/` (the ACE Helper) |
 | `npm run build:playground` | build `dist-ace-playground/`: the same ACE Helper bundles under a manifest that matches local files only, plus the four mock ACE steps and the example workbook (`docs/USER-GUIDE.md` section 4). `check:bundle:playground` runs the bundle check on it |
 | `npm run build:inttra` | build `dist-inttra/` (the INTTRA Helper) |

@@ -42,10 +42,22 @@ dist/
   icons/          templates/ACE_Import_Template.xlsx
 ```
 
+Rebuilding after a change, once the first `verify` has passed:
+
+```bash
+npm run build:all   # all three extensions, no checks
+```
+
+Then press the reload button on each extension's card in `chrome://extensions`
+and check the `build ...` stamp in the helper's header, which carries the git
+commit and build time: an unpacked build that was not reloaded looks identical
+until you read it.
+
 Individual steps, if you prefer:
 
 | Command | What it does |
 | --- | --- |
+| `npm run build:all` | builds all three of the below in one press |
 | `npm run build` | builds `dist/` (ACE Helper) |
 | `npm run build:inttra` | builds `dist-inttra/` (INTTRA Helper) |
 | `npm run build:quickfill` | builds `dist-quickfill/` (Quickfill Helper) |

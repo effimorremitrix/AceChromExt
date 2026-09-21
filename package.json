@@ -8,6 +8,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:watch": "node scripts/build.mjs --watch",
+    "build:all": "npm run build && npm run build:inttra && npm run build:quickfill",
     "build:playground": "node scripts/build.mjs --playground",
     "build:companion": "node scripts/build-companion.mjs",
     "template": "node scripts/generate-template.mjs",
