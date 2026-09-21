@@ -20,7 +20,7 @@ import { probeStructure } from '../inttra-extension/src/content/structureProbe.j
 import { ALL_INTTRA_MAPPINGS, GRID_COLUMNS, inttraFieldsForPage, resolveInttraFields, unverifiedInttraFieldKeys } from '../inttra-extension/src/mappings/index.js';
 import { INTTRA_PAGE_SIGNATURES } from '../inttra-extension/src/pages.js';
 import { isInttraUrl } from '../inttra-extension/src/ui/tabs.js';
-import { parseOverrides } from '../src/ace/selectors/overrides.js';
+import { hasCapturedSelector, parseOverrides, starterOverrides } from '../src/ace/selectors/overrides.js';
 import { PACKAGE_CONTAINER_FIELDS, PACKAGE_HEADER_FIELDS } from '../shared/src/filingPackage.js';
 import { approveDeckhand, buildFilingPackage, setManualContainer, type FilingPackage } from '../shared/src/index.js';
 import { extractWithRules } from '../deckhand/src/index.js';
@@ -1115,5 +1115,55 @@ describe('what the live Create Shipping Instruction screen answered', () => {
     expect(hs?.message).toContain('no row-numbered selector yet');
     // And nothing was written into container 1's boxes.
     expect((document.getElementById('hs-code-1') as HTMLInputElement).value).toBe('');
+  });
+});
+
+/**
+ * The capture template asks for the work that is left.
+ *
+ * The live complaint, 2026-09-21: the Diagnostics selector editor printed
+ * `#REPLACE_WITH_THE_ID_FROM_INTTRA_FOR_ShipperSeal` over a build that already
+ * ships `#ship-seal-{n}`, captured from the live DOM the day before, with the
+ * operator looking at that exact box. Asking again for work that is done reads
+ * as the capture never landed.
+ */
+describe('the INTTRA selector starter template', () => {
+  it('leaves out the three container selectors captured on 2026-09-20', () => {
+    const keys = Object.keys(starterOverrides(ALL_INTTRA_MAPPINGS, [], 'INTTRA').fields);
+    for (const key of ['ContainerNumber', 'CarrierSeal', 'ShipperSeal']) {
+      expect(keys, `${key} is captured and must not be asked for again`).not.toContain(key);
+    }
+  });
+
+  it('asks for every field with no captured id, label wording or not', () => {
+    // A captured LABEL is not a captured selector: it was read off the live
+    // screen and is worth keeping, but it cannot name a row, so those fields
+    // resolve container block 1 only and still need an id. They belong in the
+    // template, which is why it is longer than `unverifiedInttraFieldKeys`.
+    const keys = Object.keys(starterOverrides(ALL_INTTRA_MAPPINGS, [], 'INTTRA').fields).sort();
+    const needsId = ALL_INTTRA_MAPPINGS.filter((field) => !hasCapturedSelector(field)).map((field) => field.key).sort();
+    expect(keys).toEqual(needsId);
+    // Nothing captured at all: in the template, and in the panel's count.
+    for (const key of unverifiedInttraFieldKeys()) expect(keys).toContain(key);
+    expect(keys).toContain('Vessel');
+    // A label read off the live Particulars block on 2026-09-20, no id yet.
+    const labelOnly = ALL_INTTRA_MAPPINGS.filter((field) => !hasCapturedSelector(field) && field.verificationStatus === 'verified');
+    expect(labelOnly.length).toBeGreaterThan(0);
+    for (const field of labelOnly) expect(keys, `${field.key} has a label but no id`).toContain(field.key);
+  });
+
+  it('still asks for a captured selector that did not resolve on the screen', () => {
+    // A capture that stopped working is the one worth capturing again.
+    const keys = Object.keys(starterOverrides(ALL_INTTRA_MAPPINGS, ['ShipperSeal'], 'INTTRA').fields);
+    expect(keys).toEqual(['ShipperSeal']);
+  });
+
+  it('sends the operator to a screen the live portal actually has', () => {
+    // There is no separate Container & Cargo screen (2026-09-20): the container
+    // blocks are the Particulars section of Create Shipping Instruction.
+    const hints = ALL_INTTRA_MAPPINGS.map((field) => field.devtoolsHint ?? '').join('\n');
+    expect(hints).not.toContain('Container & Cargo ->');
+    const shipperSeal = ALL_INTTRA_MAPPINGS.find((field) => field.key === 'ShipperSeal');
+    expect(shipperSeal?.devtoolsHint).toContain('Particulars');
   });
 });

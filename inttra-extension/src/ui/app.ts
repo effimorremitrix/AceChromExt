@@ -19,7 +19,7 @@ import { el, byId, buildStamp, clear, show } from '../../../src/ui/dom.js';
 import { renderDeckhandTab } from '../../../src/ui/deckhandTab.js';
 import { renderPackageTab } from '../../../src/ui/packageTab.js';
 import { formatLog, type SessionLogEntry, type SessionLogKind } from '../../../src/core/sessionLog.js';
-import { emptyOverrides, serializeOverrides, starterOverrides, type SelectorOverrides } from '../../../src/ace/selectors/overrides.js';
+import { emptyOverrides, hasCapturedSelector, serializeOverrides, starterOverrides, type SelectorOverrides } from '../../../src/ace/selectors/overrides.js';
 import { buildFilingPackage, fillGate, filingPackageFileName, parseFilingPackageJson, serializeFilingPackage, type FilingPackage } from '../../../shared/src/index.js';
 import { DEFAULT_INTTRA_SETTINGS, loadInttraSettings, saveInttraSettings, type InttraHelperSettings } from '../core/settings.js';
 import type { InttraDiagnosticsSnapshot, InttraGridStatus } from '../core/messages.js';
@@ -978,10 +978,34 @@ function renderDetection(snapshot: InttraDiagnosticsSnapshot): HTMLElement {
 function renderSelectorEditor(): HTMLElement {
   const card = el('details', { className: 'card' });
   const captured = Object.keys(state.overrides.fields);
+  // Three counts, and they have to agree with the template below or the
+  // operator cannot tell whether their capture landed (2026-09-21, looking at
+  // the Shipper Seal box they had captured the day before):
+  //   - a captured ID: built in, resolves any container row, done;
+  //   - a captured LABEL and no id: resolves container block 1 only, so it is
+  //     still work, and it is still in the template;
+  //   - neither: what `unverifiedInttraFieldKeys` counts.
+  const capturedIds = ALL_INTTRA_MAPPINGS.filter((field) => hasCapturedSelector(field));
+  const labelOnly = ALL_INTTRA_MAPPINGS.filter((field) => !hasCapturedSelector(field) && field.verificationStatus === 'verified');
+  const needsId = ALL_INTTRA_MAPPINGS.length - capturedIds.length;
   card.append(
-    el('summary', {}, [el('strong', { text: 'INTTRA selectors' }), el('span', { className: `pill pill-${captured.length ? 'green' : 'yellow'}`, text: captured.length ? `${captured.length} captured` : `${unverifiedInttraFieldKeys().length} placeholders` })]),
+    el('summary', {}, [
+      el('strong', { text: 'INTTRA selectors' }),
+      el('span', { className: `pill pill-${captured.length ? 'green' : 'yellow'}`, text: captured.length ? `${captured.length} captured` : `${needsId} still need an id` }),
+    ]),
     el('p', { className: 'small muted', text: 'Paste captured selectors here as JSON. They are tried first, take effect on the next fill, and need no rebuild. Same format as the ACE Helper.' }),
   );
+  if (capturedIds.length) {
+    const labelNote = labelOnly.length
+      ? ` ${labelOnly.length} more carry a label wording read off the live screen but no id, so they resolve container block 1 only and are still in the template.`
+      : '';
+    card.append(
+      el('p', {
+        className: 'small muted',
+        text: `Already captured from the live portal and built in, so they are not in the template: ${capturedIds.map((field) => field.label).join(', ')}.${labelNote} Run detection first if one of them stops resolving; the template then asks for exactly what did not resolve.`,
+      }),
+    );
+  }
   const unresolved = state.diagnostics ? state.diagnostics.fields.filter((field) => field.detection.status !== 'FOUND').map((field) => field.key) : [];
   const draft = state.overridesDraft ?? (captured.length ? serializeOverrides(state.overrides) : serializeOverrides(starterOverrides(ALL_INTTRA_MAPPINGS, unresolved, 'INTTRA')));
   const textarea = el('textarea', { className: 'input mono textarea', attrs: { rows: '12', spellcheck: 'false' } }) as HTMLTextAreaElement;

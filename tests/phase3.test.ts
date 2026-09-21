@@ -19,13 +19,14 @@ import { DEFAULT_SETTINGS } from '../src/core/settings.js';
 import {
   applyOverrides,
   emptyOverrides,
+  hasCapturedSelector,
   OverrideError,
   parseOverrides,
   serializeOverrides,
   starterOverrides,
   unknownOverrideKeys,
 } from '../src/ace/selectors/overrides.js';
-import { ALL_MAPPINGS, fieldsForPage, resolveFields } from '../src/ace/mappings/index.js';
+import { ALL_MAPPINGS, fieldsForPage, fieldsWithoutCapturedSelector, resolveFields } from '../src/ace/mappings/index.js';
 import { detectField } from '../src/content/fieldDetector.js';
 import { fillFields } from '../src/content/filler.js';
 import {
@@ -191,6 +192,46 @@ describe('selector overrides', () => {
     expect(serializeOverrides(starter)).toContain('REPLACE_WITH_THE_ID_FROM_ACE_FOR_ScheduleB');
     // And it round-trips through the parser, apart from the placeholder text.
     expect(() => parseOverrides(serializeOverrides(starter))).not.toThrow();
+  });
+
+  it('never asks again for a selector that is already captured', () => {
+    // The live complaint, 2026-09-21: the INTTRA panel printed
+    // "#REPLACE_WITH_THE_ID_FROM_INTTRA_FOR_ShipperSeal" over a build that
+    // ships #ship-seal-{n}, captured from the live DOM on 2026-09-20. Asking
+    // for work that is done reads as the capture never landed.
+    const starter = starterOverrides(ALL_MAPPINGS);
+    const keys = Object.keys(starter.fields);
+    expect(keys.length).toBeGreaterThan(0);
+    // Exactly the fields the mapping table itself calls uncaptured, no more.
+    expect(keys.sort()).toEqual(fieldsWithoutCapturedSelector().slice().sort());
+    for (const captured of ALL_MAPPINGS.filter((field) => hasCapturedSelector(field))) {
+      expect(keys, `${captured.key} is already captured`).not.toContain(captured.key);
+    }
+    // The six ACE ids copied from the live DOM on 2026-09-16 are the proof
+    // that the filter has something to filter.
+    expect(ALL_MAPPINGS.filter((field) => hasCapturedSelector(field)).length).toBeGreaterThanOrEqual(6);
+  });
+
+  it('asks again for a captured selector that did not resolve on the screen', () => {
+    // The other half of it: a capture that stopped working is exactly the one
+    // worth capturing again, so an explicit unresolved list still wins.
+    const captured = ALL_MAPPINGS.find((field) => hasCapturedSelector(field));
+    expect(captured).toBeDefined();
+    const key = captured?.key ?? '';
+    expect(Object.keys(starterOverrides(ALL_MAPPINGS, [key]))).toBeDefined();
+    expect(Object.keys(starterOverrides(ALL_MAPPINGS, [key]).fields)).toEqual([key]);
+  });
+
+  it('counts a captured LABEL wording as still needing an id', () => {
+    // A label was read off the live screen and is worth keeping, but it cannot
+    // name a row and it is not what the capture procedure asks for. Twenty ACE
+    // fields match by label alone, and they belong in the template.
+    const labelOnly = ALL_MAPPINGS.filter(
+      (field) => !hasCapturedSelector(field) && field.candidates.some((candidate) => candidate.verified === true),
+    );
+    expect(labelOnly.length).toBeGreaterThan(0);
+    const keys = Object.keys(starterOverrides(ALL_MAPPINGS).fields);
+    for (const field of labelOnly) expect(keys, `${field.key} has a captured label but no captured id`).toContain(field.key);
   });
 
   it('keeps selectors out of the mapping files', () => {
