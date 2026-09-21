@@ -146,8 +146,21 @@ of these, so do not work around them - fix the cause:
 only place the *deliberate* removals are written down: it asserts no eval, no
 network, no credential, no browser storage outside `chrome.storage.session`, no
 `.click()`/`.submit()` in its content layer, exactly the five portal hosts and
-`permissions: ["storage"]` - and it deliberately does NOT assert a preview, a
-check or a gate, because Quickfill has none by design. It also asserts that
+`permissions: ["storage", "scripting"]` - and it deliberately does NOT assert a
+preview, a check or a gate, because Quickfill has none by design. `scripting`
+was added on 2026-09-21 and is the one permission beyond storage any of the
+three asks for: Chrome injects a content script when a page LOADS, so a portal
+tab that was open before the helper was loaded or rebuilt runs nothing, and on
+the live create page that emptied the popup in front of the grid the operator
+was filling. The popup starts the script itself rather than asking for a page
+reload that closes the modal. What it may inject is pinned as tightly as the
+permission is broad: one caller (`src/ui/popup.ts`), this bundle's own
+`quickfillContent.js` by name, and never a `func`, an `args`, a `world` (so
+never the page's own world), a `registerContentScripts` or an `insertCSS`.
+Do not widen it, and do not add `scripting` to the other two without the same
+decision; `docs/QUICKFILL.md` section 5b. `tests/webInvariants.test.ts` holds
+the expected permission set of all three manifests in one place. It also
+asserts that
 `quickfill-extension/` declares no `mappings/` or `selectors/` folder of its own
 and imports neither field writer directly, so the code sharing cannot quietly
 stop. The three walkers are hardcoded to `src/`, `inttra-extension/` and
@@ -452,7 +465,25 @@ stay honestly described:
    unidentified screen is filled as Create Shipping Instruction and the result
    line says so; Auto still refuses it, because guessing a mapping table
    silently is not the helper's call. Neither the two-route popup nor the
-   toggle has been run against the live portal. A playground build
+   toggle has been run against the live portal - the sixth live run
+   (2026-09-21) never reached the page: the INTTRA tab had been open since
+   before that build was loaded, so no frame of it was running the content
+   script, and the popup withdrew every route in front of the grid the
+   operator was filling, including Copy rows, which needs nothing from the
+   page. Chrome injects a content script when a page LOADS, and reloading the
+   extension orphans every open portal tab. So the popup now **starts the
+   script itself** (`chrome.scripting.executeScript`, its own
+   `quickfillContent.js`, every frame of the active tab) and asks again, the
+   content script registers its listener once per frame so a second injection
+   cannot answer twice, and **Copy rows no longer depends on the tab**: the
+   block is built in the popup in `GRID_COLUMNS` order when the grid cannot be
+   read, and the result line says which order it used. A tab that cannot be
+   reached is also no longer reported as a tab on the wrong page: `tab.url` is
+   populated only where the extension has host permission, so its absence is
+   what tells the two apart, and it costs no `tabs` permission.
+   `docs/QUICKFILL.md` section 5b. Nothing about the fill itself was learned
+   on that run: no field was written and no paste was performed. A playground
+   build
    (`dist-quickfill-playground/`, local files only, never a portal) fills the
    four mock ACE steps from the example workbook; it proves the mechanics on
    the captured labels and ids, not the live portal. What is new about it is

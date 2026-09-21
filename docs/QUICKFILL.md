@@ -33,6 +33,7 @@ tab and no per-field report. Paste, click, look at the form, submit.
 4. [How it shares code with the other two](#4-how-it-shares-code-with-the-other-two)
 5. [Build, check, install](#5-build-check-install)
 5a. [Practising without the portal: the playground](#5a-practising-without-the-portal-the-playground)
+5b. [The tab that was already open](#5b-the-tab-that-was-already-open)
 6. [What is not verified](#6-what-is-not-verified)
 7. [The dashboard, and why nothing was added to it](#7-the-dashboard-and-why-nothing-was-added-to-it)
 
@@ -60,8 +61,12 @@ filing is the filer's, because the filing is the filer's legal declaration.
 `tests/quickfillInvariants.test.ts` asserts it of this extension's own content
 layer too, and that the extension declares no third policy file of its own.
 
-Permissions: exactly `["storage"]`. CSP: `connect-src 'none'`. No network API
-of any kind, asserted against the source and again against the built bundle.
+Permissions: `["storage", "scripting"]`, and nothing else. CSP:
+`connect-src 'none'`. No network API of any kind, asserted against the source
+and again against the built bundle. `scripting` is the popup starting this
+extension's own content script in a tab that has none, on the five hosts the
+manifest already asks for; what it may inject is pinned field by field in
+`tests/quickfillInvariants.test.ts` and explained in section 5b.
 
 ## 2. The one box
 
@@ -316,6 +321,77 @@ selects; twenty of the twenty-six fields still match by label wording only;
 ACE's own validation is absent. A fill that works here is the mechanics
 working, not the portal.
 
+## 5b. The tab that was already open
+
+Chrome injects a content script when a page **loads**. Load the extension, or
+press Reload on its card after `npm run build:quickfill`, and every portal tab
+that is already open keeps running nothing: the manifest still matches it, and
+the script that was injected into it before the reload is gone. The tab looks
+completely normal, so there is nothing to see.
+
+That is the whole of the live run on **2026-09-21**. The operator had the
+Create Shipping Instruction page open at
+`ship.inttra.e2open.com/siact/siworkspace#/create/...` with the Copy Container
+Details modal over it and an empty grid on the screen, pasted a carrier email
+(`Read as: carrier email · 7 containers · 7 with a seal`), pinned the toggle to
+INTTRA, and got:
+
+```
+Quickfill is not running in this tab. Open an ACE or INTTRA screen and reload the page.
+Open an ACE or INTTRA screen in this tab.
+```
+
+Two things were wrong with that, and both are fixed.
+
+**The advice was to do what the operator had already done.** The second line is
+what the popup says when it has no portal to offer, and it printed under a line
+that had already said the real reason. A tab that cannot be reached is not a
+tab that is on the wrong page, and the popup now tells them apart: `tab.url` is
+populated by Chrome only for a tab the extension has host permission for, so
+its absence *is* the answer that this is not a portal tab, and it costs no
+`tabs` permission to read.
+
+**Every route was withdrawn, including the one that needs no page.** Copy rows
+builds its block out of the package's own containers; it asks the tab only for
+the grid's column order, and `gridPasteBlock` has always had a fallback for a
+page with no grid on it. So the block is now built in the popup when the tab
+cannot be asked, in `GRID_COLUMNS` order, which is the order the live grid was
+read in on 2026-09-20 (Container Number, Carrier Seal #, Shipper Seal #, Cargo
+Description, Marks & Numbers, HS Code). The result line says which order it
+used. On that run the operator would have had their seven rows on the
+clipboard, with the grid to paste them into already on the screen.
+
+**And the popup now starts the script itself.** On a failed ping it calls
+`chrome.scripting.executeScript` for this extension's own
+`quickfillContent.js`, into every frame of the active tab, and asks again.
+The modal stays open; nothing is reloaded.
+
+This is why the manifest asks for `scripting`, which is a permission the
+extension deliberately did without until then:
+
+| | |
+| --- | --- |
+| What it can inject | `quickfillContent.js`, the file in this bundle. Never a function, never a string, never a file named by a message |
+| Where | The five hosts in `host_permissions`. Chrome refuses anywhere else, and the popup does not ask where it has no `tab.url` |
+| Which world | The extension's isolated world, the default. Never `MAIN`, which would put our code in the page's own world beside the portal's |
+| How long | The tab's lifetime. Never `registerContentScripts`, which would outlive the popup |
+| What the operator sees | Nothing new. `host_permissions` already grant the five portal hosts, and `scripting` adds no install warning of its own |
+
+`tests/quickfillInvariants.test.ts` asserts every row of that table against the
+source, and `tests/webInvariants.test.ts` holds the expected permission set of
+all three manifests in one place, so a fourth permission can only ever arrive
+by editing a line that says what it is for.
+
+The content script registers its listener **once per frame** and remembers that
+on the frame, because a frame that already had the script would otherwise
+answer every message twice, which Chrome reports as "Could not send response
+more than once".
+
+What this does not fix: a page the portal is still drawing, and a frame whose
+own listener throws before it answers. The listener now treats a failed read of
+the page as "not this frame" rather than as silence, so one slow frame cannot
+make the whole tab look dead.
+
 ## 6. What is not verified
 
 Quickfill inherits `README.md`'s caveats whole and resolves none of them.
@@ -342,8 +418,8 @@ Quickfill inherits `README.md`'s caveats whole and resolves none of them.
    mapping tables are the thing that needs capturing, and they are shared - but
    it must not be described as working. `docs/INTTRA-INTEGRATION.md` sections 6
    and 7.
-4. **Quickfill has been opened once on the live INTTRA portal** (2026-09-17)
-   and has still never completed a real shipment. That one run confirmed the
+4. **Quickfill has been opened on the live INTTRA portal on two days**
+   (2026-09-17 and 2026-09-21) and has still never completed a real shipment. That one run confirmed the
    hostname and the shape of the Copy Container Details screen, and found two
    bugs that are now fixed and pinned by tests: a container manifest was
    thrown away because it was tabular but not an invoice, and the grid screen
@@ -361,7 +437,15 @@ Quickfill inherits `README.md`'s caveats whole and resolves none of them.
    by the wording of its header row, Quickfill offers Copy rows alone on an
    INTTRA page it cannot name, and the INTTRA Helper's Diagnostics describes
    the page's structure for the capture. None of that has run on the live
-   portal yet. The trade-offs in
+   portal yet. A sixth run, on 2026-09-21, never reached the page at all: the
+   tab had been open since before that build was loaded, so no frame of it was
+   running the content script, and the popup withdrew every route - including
+   Copy rows, which needs nothing from the page - in front of the grid the
+   operator was trying to fill. The popup now starts the script itself, and
+   Copy rows no longer depends on the tab (section 5b). **Nothing about the
+   fill itself was learned on that run**: no field was written, no paste was
+   performed, and the three captured container selectors and the label ladders
+   are exactly as unproven as they were on 2026-09-20. The trade-offs in
    section 3 have still never been tested against an operator in a hurry,
    which is exactly the condition under which dropping the checks matters
    most.

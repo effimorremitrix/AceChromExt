@@ -22,11 +22,20 @@ import type {
   StoredPaste,
   Where,
 } from '../core/messages.js';
-import { CONTENT_NOT_READY } from '../core/messages.js';
+import { CONTENT_NOT_READY, NOT_A_PORTAL_TAB } from '../core/messages.js';
+// The paste block, built here when the tab cannot be asked for its column
+// order. This is not a second write path - `gridPasteBlock` writes nothing,
+// it returns the text to put on the clipboard - and it is the same function
+// the content script calls, so the two cannot drift.
+import { gridPasteBlock } from '../../../inttra-extension/src/content/gridWriter.js';
 import type { FilingPackage } from '../../../shared/src/filingPackage.js';
+
+/** Whether the tab can be talked to at all, which is a different question from what is on it. */
+type Reach = 'ok' | 'notRunning' | 'offPortal';
 
 let stored: StoredPaste | null = null;
 let mode: FillMode = 'auto';
+let reach: Reach = 'ok';
 let place: Where = { portal: 'none', label: 'Looking...', hasLines: false, canFillForm: false, hasGrid: false, gridWritable: false };
 
 const box = el('textarea', {
@@ -65,14 +74,74 @@ async function toBackground(message: QuickfillBackgroundRequest): Promise<Quickf
   return (await chrome.runtime.sendMessage(message)) as QuickfillBackgroundResponse;
 }
 
+async function ask(tabId: number, message: QuickfillContentRequest): Promise<QuickfillContentResponse | null> {
+  try {
+    return (await chrome.tabs.sendMessage(tabId, message)) as QuickfillContentResponse;
+  } catch {
+    // No frame answered: either the script is not in this tab at all, or every
+    // frame's listener closed its port without a reply. Null, not an error,
+    // because the caller has one more thing to try.
+    return null;
+  }
+}
+
+/**
+ * Start the content script in a tab that has none.
+ *
+ * Chrome injects a content script when a page LOADS. An operator who rebuilds
+ * the helper and presses Reload on chrome://extensions has every open portal
+ * tab silently orphaned: the manifest still matches them, and not one of them
+ * is running the script. On 2026-09-21 that emptied the popup in front of a
+ * live Copy Container Details grid with seven containers in the box.
+ *
+ * So the popup starts it. The only thing it ever injects is this extension's
+ * own bundled file, into the five hosts the manifest already asks for - never
+ * a function, never a string, never the page's own world. Chrome refuses the
+ * call on any other host, which is the check doing its job rather than a case
+ * to handle.
+ */
+async function startInTab(tabId: number): Promise<boolean> {
+  try {
+    await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['quickfillContent.js'] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Re-render when the tab's reachability changes, because it decides which buttons are honest. */
+function setReach(next: Reach): void {
+  if (reach === next) return;
+  reach = next;
+  renderButtons();
+}
+
 async function toContent(message: QuickfillContentRequest): Promise<QuickfillContentResponse> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return { ok: false, error: 'No active tab.' };
-  try {
-    return (await chrome.tabs.sendMessage(tab.id, message)) as QuickfillContentResponse;
-  } catch {
-    return { ok: false, error: CONTENT_NOT_READY };
+
+  const answer = await ask(tab.id, message);
+  if (answer) {
+    setReach('ok');
+    return answer;
   }
+
+  // `tab.url` is populated only for a tab this extension has host permission
+  // for, so its absence says the tab is not a portal at all - no reload would
+  // help, and nothing is injected into it.
+  const onAPortal = typeof tab.url === 'string' && tab.url !== '';
+  if (!onAPortal || !(await startInTab(tab.id))) {
+    setReach(onAPortal ? 'notRunning' : 'offPortal');
+    return { ok: false, error: onAPortal ? CONTENT_NOT_READY : NOT_A_PORTAL_TAB };
+  }
+
+  const second = await ask(tab.id, message);
+  if (second) {
+    setReach('ok');
+    return second;
+  }
+  setReach('notRunning');
+  return { ok: false, error: CONTENT_NOT_READY };
 }
 
 function say(text: string, tone: 'plain' | 'error' = 'plain'): void {
@@ -124,19 +193,28 @@ function report(count: FillCount): void {
  */
 async function copyRows(pkg: FilingPackage): Promise<void> {
   const response = await toContent({ type: 'content/gridRows', package: pkg });
-  if (!response.ok) {
-    say(response.error, 'error');
-    return;
-  }
-  if (response.type !== 'content/rows') return;
-  const block = response.payload;
+  // The tab is asked because only it can see the grid's own column order. When
+  // it cannot be reached the block is built here instead, in GRID_COLUMNS
+  // order - which is the order the live grid was read in on 2026-09-20
+  // (Container Number, Carrier Seal #, Shipper Seal #, Cargo Description,
+  // Marks & Numbers, HS Code). This is the one route that needs nothing from
+  // the page, and withdrawing it because the page could not be asked was the
+  // whole cost of the 2026-09-21 run: the grid was on the screen, the seven
+  // containers were in the box, and the popup offered no way to move them.
+  if (response.ok && response.type !== 'content/rows') return;
+  const fromTab = response.ok;
+  const block = response.ok ? response.payload : gridPasteBlock(pkg, null);
   try {
     await navigator.clipboard.writeText(block.tsv);
     // One line, but it names the columns: the operator can see whether the
     // seal is in it before pasting, which is the whole check Quickfill keeps.
     const headings = block.columns.map((column) => column.heading).join(', ');
     const blank = block.blank.length ? ` Blank: ${block.blank.join(', ')}.` : '';
-    const order = block.fromGrid ? '' : ' No grid was found, so this is the default order.';
+    const order = block.fromGrid
+      ? ''
+      : fromTab
+        ? ' No grid was found, so this is the default order.'
+        : ' Quickfill is not running in this tab, so the grid could not be read and this is the default order.';
     say(`${block.rows} row(s) copied as ${headings}.${blank}${order} Click the first Container Number cell of the first empty row in INTTRA and paste.`);
   } catch {
     say('Could not write to the clipboard.', 'error');
@@ -205,7 +283,7 @@ async function locate(): Promise<void> {
   place =
     found.ok && found.type === 'content/where'
       ? found.payload
-      : { portal: 'none', label: CONTENT_NOT_READY, hasLines: false, canFillForm: false, hasGrid: false, gridWritable: false };
+      : { portal: 'none', label: found.ok ? CONTENT_NOT_READY : found.error, hasLines: false, canFillForm: false, hasGrid: false, gridWritable: false };
   renderButtons();
 }
 
@@ -327,12 +405,49 @@ function inttraButtons(pkg: FilingPackage): void {
   }
 }
 
+/**
+ * The tab could not be reached, and one route survives that.
+ *
+ * Copy rows needs nothing from the page: the block is the package's own
+ * containers in the grid's default column order. On 2026-09-21 it was
+ * withdrawn along with everything else because ONE message failed, and the
+ * operator was left in front of the grid they were trying to fill with no way
+ * in. It is offered here, and the line says plainly what does not work and
+ * what fixes it - never "open an ACE or INTTRA screen", which on that run was
+ * advice to do what the operator had already done.
+ */
+function unreachableButtons(pkg: FilingPackage): void {
+  // The line above already says what happened, so this one says only what it
+  // costs. Two sentences saying the same thing is the wart being fixed.
+  if (reach === 'offPortal' || !pkg.containers.length) {
+    buttons.append(
+      el('span', {
+        className: 'where',
+        text: reach === 'offPortal' ? 'Open an ACE or INTTRA screen in this tab.' : 'The paste has no containers, so there is nothing to copy either.',
+      }),
+    );
+    return;
+  }
+  buttons.append(fillButton('Copy rows', () => copyRows(pkg), 'primary'));
+  buttons.append(
+    el('span', {
+      className: 'where grid-note',
+      text: 'Quickfill could not start in this tab, so nothing on the page can be read or filled. Copy rows still copies the container block, in the default column order, for Copy Container Details. Reload the page to fill fields.',
+    }),
+  );
+}
+
 function renderButtons(): void {
   clear(buttons);
   whereLine.textContent = place.label;
 
   if (!stored) {
     buttons.append(el('span', { className: 'where', text: 'Paste something above to fill.' }));
+    return;
+  }
+
+  if (reach !== 'ok') {
+    unreachableButtons(stored.package);
     return;
   }
 

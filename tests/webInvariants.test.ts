@@ -116,10 +116,24 @@ describe('the dashboard reuses the domain code and nothing runtime-specific', ()
     }
   });
 
-  it('leaves every extension manifest storage-only, portal hosts only, no dashboard host', () => {
-    for (const manifestPath of [join(ROOT, 'extension', 'manifest.json'), join(ROOT, 'inttra-extension', 'manifest.json'), join(ROOT, 'quickfill-extension', 'manifest.json')]) {
+  it('leaves every extension manifest on its own permissions, portal hosts only, no dashboard host', () => {
+    // One expected set per manifest, so a permission can only ever be added by
+    // editing this line. Quickfill's `scripting` is the popup starting its own
+    // content script in a tab that has none, and nothing else: what it may
+    // inject is pinned in tests/quickfillInvariants.test.ts.
+    const expected: Array<[string, string[]]> = [
+      [join(ROOT, 'extension', 'manifest.json'), ['storage']],
+      [join(ROOT, 'inttra-extension', 'manifest.json'), ['storage']],
+      [join(ROOT, 'quickfill-extension', 'manifest.json'), ['storage', 'scripting']],
+    ];
+    for (const [manifestPath, permissions] of expected) {
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
-      expect(manifest['permissions']).toEqual(['storage']);
+      expect(manifest['permissions'], manifestPath).toEqual(permissions);
+      // Whatever a manifest may ask for, none of them may reach the network,
+      // hold a cookie, watch the browser, or talk to the dashboard.
+      for (const never of ['cookies', 'webRequest', 'webRequestBlocking', 'declarativeNetRequest', 'downloads', 'history', 'management', 'nativeMessaging', 'proxy', 'tabs', 'debugger']) {
+        expect(manifest['permissions'], `${manifestPath} asks for ${never}`).not.toContain(never);
+      }
       const csp = (manifest['content_security_policy'] as { extension_pages: string }).extension_pages;
       expect(csp).toContain("connect-src 'none'");
       expect(JSON.stringify(manifest)).not.toMatch(/workers\.dev|pages\.dev|dashboard|externally_connectable|<all_urls>/);

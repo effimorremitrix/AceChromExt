@@ -24,6 +24,13 @@ let reply: QuickfillContentResponse;
 let sent: QuickfillContentRequest[];
 let session: StoredPaste | null;
 let sessionMode: FillMode;
+/** Whether the content script is in the tab. False is a tab that was open before the helper was loaded. */
+let running: boolean;
+/** Whether Chrome lets the popup start it. False is a page that refuses the injection. */
+let injectionWorks: boolean;
+/** What `chrome.tabs.query` reports; undefined is a tab this extension has no host permission for. */
+let tabUrl: string | undefined;
+let injected: string[][];
 
 /**
  * What the tab answers. `canFillForm` defaults to true for a named portal,
@@ -80,6 +87,10 @@ beforeEach(async () => {
   sent = [];
   session = null;
   sessionMode = 'auto';
+  running = true;
+  injectionWorks = true;
+  tabUrl = 'https://aesdirect.cbp.dhs.gov/filing';
+  injected = [];
 
   vi.stubGlobal('chrome', {
     runtime: {
@@ -100,11 +111,24 @@ beforeEach(async () => {
       }),
     },
     tabs: {
-      query: vi.fn(async () => [{ id: 7 }]),
+      // Chrome populates `url` only for a tab the extension has host
+      // permission for, which is how the popup tells a portal tab it cannot
+      // talk to from a tab it may not touch at all.
+      query: vi.fn(async () => [tabUrl === undefined ? { id: 7 } : { id: 7, url: tabUrl }]),
       sendMessage: vi.fn(async (_id: number, message: QuickfillContentRequest) => {
+        // What Chrome throws when no frame in the tab is listening.
+        if (!running) throw new Error('Could not establish connection. Receiving end does not exist.');
         sent.push(message);
         if (message.type === 'content/where') return { ok: true, type: 'content/where', payload: place };
         return reply;
+      }),
+    },
+    scripting: {
+      executeScript: vi.fn(async ({ files }: { target: { tabId: number; allFrames?: boolean }; files: string[] }) => {
+        injected.push(files);
+        if (!injectionWorks) throw new Error('Cannot access contents of the page.');
+        running = true;
+        return [];
       }),
     },
   });
@@ -448,6 +472,101 @@ describe('the two INTTRA page types', () => {
     const fill = sent.find((message) => message.type === 'content/fillInttra' && message.scope === 'container');
     expect(fill).toMatchObject({ type: 'content/fillInttra', scope: 'container', mode: 'auto' });
     expect(fill && 'containerIndex' in fill ? fill.containerIndex : undefined).toBeUndefined();
+  });
+});
+
+/**
+ * A tab the popup cannot talk to.
+ *
+ * The live run on 2026-09-21: the operator rebuilt the helper, pressed Reload
+ * on chrome://extensions, and opened the popup over an INTTRA create page that
+ * had been open the whole time - with the Copy Container Details grid on the
+ * screen and seven containers in the box. Chrome injects a content script when
+ * a page LOADS, so that tab was running nothing, and the popup answered
+ * "Quickfill is not running in this tab. Open an ACE or INTTRA screen and
+ * reload the page" over a second line telling the operator to open the screen
+ * they were already looking at. Every route was withdrawn, Copy rows included,
+ * although the block it copies needs nothing from the page at all.
+ */
+describe('a tab that is not running the helper', () => {
+  function clipboard(): string[] {
+    const written: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => void written.push(value) } });
+    return written;
+  }
+
+  it('starts the content script itself, rather than asking for a page reload', async () => {
+    running = false;
+    const box = await mount();
+    await paste(box, email);
+    expect(injected).toEqual([['quickfillContent.js']]);
+    // Recovered: the tab answered the retry, so the ordinary buttons are back
+    // and no modal was closed to get them.
+    expect(buttonLabels()).toEqual(['Fill this page']);
+    expect(text('.where')).toBe('Step 4: Transportation');
+  });
+
+  it('injects nothing into a tab that answers', async () => {
+    const box = await mount();
+    await paste(box, email);
+    expect(injected).toEqual([]);
+  });
+
+  it('keeps Copy rows when the tab cannot be started, because the block needs no page', async () => {
+    // A portal tab where the injection is refused: whatever else is lost, the
+    // container block is not, and it goes out in the default column order,
+    // which is the order the live grid was read in on 2026-09-20.
+    running = false;
+    injectionWorks = false;
+    place = at('inttra', 'Copy Container Details', { canFillForm: false, hasGrid: true });
+    const written = clipboard();
+    const box = await mount();
+    await paste(box, email);
+    expect(buttonLabels()).toEqual(['Copy rows']);
+    expect(text('.where')).toContain('Quickfill could not start in this tab');
+    expect(text('.grid-note')).toContain('Copy rows still copies the container block');
+    press('Copy rows');
+    await settle();
+    expect(written).toHaveLength(1);
+    expect(written[0]?.split('\r\n')).toHaveLength(3);
+    expect(text('.result')).toContain('3 row(s) copied as Container Number, Carrier Seal #, Shipper Seal #.');
+    expect(text('.result')).toContain('Quickfill is not running in this tab, so the grid could not be read and this is the default order.');
+  });
+
+  it('never tells the operator to open the screen they are already on', async () => {
+    running = false;
+    injectionWorks = false;
+    place = at('inttra', 'Create Shipping Instruction', { canFillForm: true, hasGrid: true });
+    const box = await mount();
+    await paste(box, email);
+    expect(document.body.textContent).not.toContain('Open an ACE or INTTRA screen in this tab.');
+  });
+
+  it('says a tab it has no permission for is not a portal, and does not try to inject into it', async () => {
+    // No `url` from chrome.tabs.query means no host permission for this tab.
+    // Reloading it would change nothing, so the popup does not suggest it.
+    running = false;
+    tabUrl = undefined;
+    const box = await mount();
+    await paste(box, email);
+    expect(injected).toEqual([]);
+    expect(text('.where')).toContain('not an ACE or INTTRA screen');
+    expect(buttonLabels()).toEqual([]);
+    expect(text('.button-row-actions')).toContain('Open an ACE or INTTRA screen in this tab.');
+  });
+
+  it('offers the route again as soon as the tab answers', async () => {
+    // The operator reloads the page with the popup still open: the next press
+    // finds the tab and the popup stops apologising.
+    running = false;
+    injectionWorks = false;
+    const box = await mount();
+    await paste(box, email);
+    expect(buttonLabels()).toEqual(['Copy rows']);
+    running = true;
+    pressMode('ACE');
+    await settle();
+    expect(buttonLabels()).toEqual(['Fill this page']);
   });
 });
 

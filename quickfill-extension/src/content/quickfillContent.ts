@@ -325,24 +325,58 @@ function handleMessage(message: QuickfillContentRequest): QuickfillContentRespon
 /** How long an INTTRA frame with nothing structural on it waits before answering, so a frame that has the screen answers first. */
 const QUIET_FRAME_DELAY_MS = 150;
 
-// The script runs in every frame of the tab and the popup keeps the first
-// reply. On an INTTRA tab a frame that holds the screen (a visible container
-// grid, or a captured marker) answers at once and a frame that holds neither
-// answers after a moment, so the frame with the screen wins whichever frame
-// the portal drew it in. A CBP tab answers at once: the ACE steps are never
-// in a child frame.
-chrome.runtime.onMessage.addListener((message: QuickfillContentRequest, _sender, sendResponse) => {
-  const respond = (): void => {
+/**
+ * One listener per frame, however many times this script is started.
+ *
+ * Chrome injects a content script when a page LOADS, so a tab that was already
+ * open when this build was loaded or rebuilt has none - and on 2026-09-21 that
+ * was the whole of the live run: the popup could reach no frame and withdrew
+ * every route, including Copy rows, which needs nothing from the page. The
+ * popup now starts this script itself in a tab that has none
+ * (`chrome.scripting.executeScript`, docs/QUICKFILL.md section 6b). A frame
+ * that already had it would then register a SECOND listener, both would answer
+ * the same message, and Chrome would report "Could not send response more than
+ * once" - so the flag below is the whole of the idempotence. It lives in the
+ * extension's isolated world, one per frame, invisible to the page.
+ */
+interface QuickfillFrame {
+  __quickfillListening?: boolean;
+}
+
+const frame = globalThis as unknown as QuickfillFrame;
+
+if (!frame.__quickfillListening) {
+  frame.__quickfillListening = true;
+
+  // The script runs in every frame of the tab and the popup keeps the first
+  // reply. On an INTTRA tab a frame that holds the screen (a visible container
+  // grid, or a captured marker) answers at once and a frame that holds neither
+  // answers after a moment, so the frame with the screen wins whichever frame
+  // the portal drew it in. A CBP tab answers at once: the ACE steps are never
+  // in a child frame.
+  chrome.runtime.onMessage.addListener((message: QuickfillContentRequest, _sender, sendResponse) => {
+    const respond = (): void => {
+      try {
+        sendResponse(handleMessage(message));
+      } catch (error) {
+        sendResponse({ ok: false, error: `Quickfill failed: ${(error as Error).message}` } satisfies QuickfillContentResponse);
+      }
+    };
+    // Reading the page can throw in a frame the portal is still drawing, and a
+    // listener that throws closes its port without answering. With every frame
+    // silent the popup reads the tab as not running and starts a second copy of
+    // this script into it, which is a worse answer than "not this frame".
+    let structural = false;
     try {
-      sendResponse(handleMessage(message));
-    } catch (error) {
-      sendResponse({ ok: false, error: `Quickfill failed: ${(error as Error).message}` } satisfies QuickfillContentResponse);
+      structural = onCbpHost() || hasStructuralEvidence();
+    } catch {
+      structural = false;
     }
-  };
-  if (onCbpHost() || hasStructuralEvidence()) {
-    respond();
-    return false;
-  }
-  setTimeout(respond, QUIET_FRAME_DELAY_MS);
-  return true;
-});
+    if (structural) {
+      respond();
+      return false;
+    }
+    setTimeout(respond, QUIET_FRAME_DELAY_MS);
+    return true;
+  });
+}

@@ -144,9 +144,16 @@ npm run verify
 ```
 
 Then click the reload arrow on the ACE Helper card in `chrome://extensions`,
-and reload any open ACE tab. The same for the INTTRA and Quickfill cards. The
-`build` stamp in each header changes with every build; if it did not, the
-reload did not take.
+and reload any open ACE tab. The same for the INTTRA card. The `build` stamp in
+each header changes with every build; if it did not, the reload did not take.
+
+Reloading the card is what orphans an open tab: Chrome injects a content script
+when a page **loads**, so a portal tab that was open across the reload keeps
+running nothing, and the helper's panel or popup cannot reach it. It looks like
+an ordinary page, which is why this is worth knowing. **The Quickfill card is
+the exception**: its popup starts its own content script in a tab that is not
+running one, so a rebuild costs no page reload and no open modal
+(`docs/QUICKFILL.md` section 5b). The other two still need the tab reloaded.
 
 ## 7. Uninstalling
 
