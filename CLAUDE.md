@@ -229,6 +229,7 @@ check; `tests/invariants.test.ts` pins it to that request type, built in
 | a validation rule | `src/excel/validator.ts` |
 | the Shipment Reference Number sequence | `src/core/referenceCounter.ts`. The filer's own running integer, in `chrome.storage.local` beside the settings. It RESERVES rather than increments, because the sequence may have no gaps: a number is handed out and handed out again until "Mark as filed" retires it. Do not make it advance on fill |
 | a selector that ACE changed | the mapping's `candidates`, per `docs/ACE-MAPPING.md` |
+| what the Diagnostics capture template asks for | `starterOverrides` + `hasCapturedSelector` in `src/ace/selectors/overrides.ts`, shared by both panels. It asks only for fields with NO captured id/name/attribute, because printing `#REPLACE_WITH_THE_ID_FROM_INTTRA_FOR_ShipperSeal` over a build that ships `#ship-seal-{n}` reads as the capture never landed (2026-09-21, the operator looking at that box). A captured LABEL does not count as captured: it cannot name a row, so those fields resolve container block 1 only and stay in the template, which is why the template is longer than `unverifiedInttraFieldKeys()`. An explicit `unresolved` list from a detection run still wins over both |
 | a qbXML element to read | `builtInCandidates` in `companion/src/mapping/qbToCanonical.ts` |
 | a QuickBooks custom field | `customFields` in the user's `ace-export.config.json`, no code |
 | another invoice source | implement `InvoiceSourceAdapter` in `companion/src/adapter/` |

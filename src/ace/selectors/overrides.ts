@@ -248,15 +248,40 @@ export function serializeOverrides(overrides: SelectorOverrides): string {
 }
 
 /**
+ * Does this field already hold a selector copied from the live DOM?
+ *
+ * An id, name or attribute query that was really copied off the portal, which
+ * is a different thing from a captured LABEL wording: a label was read off the
+ * screen and is worth keeping, but it cannot name a row and it is not what the
+ * capture procedure asks for. The one definition of "already captured", used
+ * by the starter template and by `fieldsWithoutCapturedSelector`.
+ */
+export function hasCapturedSelector(field: OverridableField): boolean {
+  return field.candidates.some(
+    (candidate) => candidate.verified === true && (candidate.strategy === 'id' || candidate.strategy === 'name' || candidate.strategy === 'attribute'),
+  );
+}
+
+/**
  * A starter file listing every field that still needs capturing, so the
  * operator edits rather than composes. `unresolved` comes from a diagnostics
- * run: fields ACE Helper could not find on the page the operator is looking at.
+ * run: fields the helper could not find on the page the operator is looking at.
+ *
+ * A field whose selector was ALREADY captured is left out. Printing
+ * `#REPLACE_WITH_THE_ID_FROM_INTTRA_FOR_ShipperSeal` over a build that ships
+ * `#ship-seal-{n}`, captured from the live DOM on 2026-09-20, reads as the
+ * capture never landed, and it did: the operator said so on 2026-09-21,
+ * looking at that exact box. The template is the work that is LEFT.
+ *
+ * `unresolved` still wins where it is given, and that is the point of it: a
+ * captured selector that did not resolve on the screen in front of the
+ * operator is precisely the one worth capturing again.
  */
 export function starterOverrides(mappings: OverridableField[], unresolved?: string[], portal = 'ACE'): SelectorOverrides {
   const wanted = unresolved && unresolved.length ? new Set(unresolved) : null;
   const fields: Record<string, AceSelectorCandidate[]> = {};
   for (const mapping of mappings) {
-    if (wanted && !wanted.has(mapping.key)) continue;
+    if (wanted ? !wanted.has(mapping.key) : hasCapturedSelector(mapping)) continue;
     fields[mapping.key] = [
       {
         strategy: 'id',

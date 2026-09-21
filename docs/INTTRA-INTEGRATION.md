@@ -797,6 +797,28 @@ anything of ours to process, and the font itself is INTTRA's to repair.
 Do this once, on the first attended session, with a Shipping Instruction open
 for a shipment that is going to be filed anyway.
 
+**The template asks for what is left.** Diagnostics -> INTTRA selectors starts
+you off with a JSON stub per field, and since 2026-09-21 it leaves OUT any
+field whose selector was already captured and built in: on that day it printed
+`#REPLACE_WITH_THE_ID_FROM_INTTRA_FOR_ShipperSeal` over a build that ships
+`#ship-seal-{n}`, captured from the live DOM the day before, with the operator
+looking at that exact box. Asking again for work that is done reads as the
+capture never landed. The line above the box names what is already in, and the
+count beside the heading is the number of fields that **still need an id**.
+
+That count is larger than the "placeholders" number quoted elsewhere, and the
+difference is the point: a captured LABEL wording is not a captured selector.
+A label was read off the live screen and is worth keeping, but it cannot name a
+container row, so those fields resolve container block 1 only and are still in
+the template. `hasCapturedSelector` in `src/ace/selectors/overrides.ts` is the
+one definition of "already captured", shared by the template and by
+`fieldsWithoutCapturedSelector`.
+
+Once a field IS captured and then stops resolving, press **Run detection on the
+INTTRA tab** first. The template then asks for exactly what did not resolve,
+captured or not, because a capture that stopped working is the one worth making
+again.
+
 **For every screen** (General Details, Container & Cargo, Copy Container
 Details, Print Instructions, B/L Documents, Notification Emails):
 

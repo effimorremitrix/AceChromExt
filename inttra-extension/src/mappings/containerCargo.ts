@@ -54,8 +54,12 @@ const CAPTURED = 'Captured from the live INTTRA DOM on 2026-09-20; the row numbe
 /** Note carried by every wording read off the live Particulars block. */
 const READ_LIVE = 'Label wording read off the live Particulars block on 2026-09-20; the DOM id is still uncaptured, so it only ever resolves row 1.';
 
+// The live portal has NO separate Container & Cargo screen (2026-09-20): the
+// container blocks are the Particulars section of Create Shipping Instruction,
+// numbered from 1. Sending an operator to a screen that does not exist is a
+// capture that never happens.
 const HINT = (what: string): string =>
-  `Container & Cargo -> open one container -> right-click the ${what} box -> Inspect -> Copy outerHTML of the control and its <label>. Also capture the container panel's heading so writes can be scoped to the open container.`;
+  `Create Shipping Instruction -> Particulars -> the block of container 1 -> right-click the ${what} box -> Inspect -> Copy outerHTML of the control and its <label>. Capture the same box in container 2 as well: what differs between the two is the row number, which is what {n} stands for.`;
 
 export const CONTAINER_CARGO_FIELDS: InttraFieldMapping[] = [
   defineInttraField({

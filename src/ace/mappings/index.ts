@@ -1,7 +1,7 @@
 /** Mapping registry. The only place that knows which fields belong to which page. */
 
 import type { AceFieldMapping, AceFieldScope, AcePageId } from '../../models/AceField.js';
-import { applyOverrides, type SelectorOverrides } from '../selectors/overrides.js';
+import { applyOverrides, hasCapturedSelector, type SelectorOverrides } from '../selectors/overrides.js';
 import { SHIPMENT_FIELDS } from './shipment.js';
 import { PARTIES_FIELDS } from './parties.js';
 import { COMMODITY_FIELDS } from './commodities.js';
@@ -63,12 +63,8 @@ export function unverifiedFieldKeys(): string[] {
  * a label? Those are the ones left to capture in DevTools.
  */
 export function fieldsWithoutCapturedSelector(): string[] {
-  return ALL_MAPPINGS.filter(
-    (field) =>
-      !field.candidates.some(
-        (candidate) =>
-          candidate.verified === true &&
-          (candidate.strategy === 'id' || candidate.strategy === 'name' || candidate.strategy === 'attribute'),
-      ),
-  ).map((field) => field.key);
+  // `hasCapturedSelector` is the one definition, shared with the starter
+  // template, so a field can never count as captured in one place and as still
+  // needing capture in the other.
+  return ALL_MAPPINGS.filter((field) => !hasCapturedSelector(field)).map((field) => field.key);
 }
