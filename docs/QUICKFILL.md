@@ -28,6 +28,7 @@ tab and no per-field report. Paste, click, look at the form, submit.
 
 1. [What it does, and what it still never does](#1-what-it-does-and-what-it-still-never-does)
 2. [The one box](#2-the-one-box)
+2a. [The two INTTRA page types, and the portal toggle](#2a-the-two-inttra-page-types-and-the-portal-toggle)
 3. [What it drops, and what that costs](#3-what-it-drops-and-what-that-costs)
 4. [How it shares code with the other two](#4-how-it-shares-code-with-the-other-two)
 5. [Build, check, install](#5-build-check-install)
@@ -48,6 +49,8 @@ tab and no per-field report. Paste, click, look at the form, submit.
 | Says "Filled 11 of 14" | Shows a report, a preview, a provenance row, or a colour-coded mark |
 | Holds the paste in `chrome.storage.session` for the browsing session | Writes a shipment to disk, `localStorage`, a cookie, or a server |
 | Highlights each field it wrote, so the eye finds them | Anything else |
+| Offers every route the page has: the fields, the grid, the clipboard block | Hides one because the detector named the screen something else |
+| Lets the operator pin the portal (Auto / ACE / INTTRA) | Lets a pin write anything the selectors do not resolve |
 | — | **Presses Save, Save Line, Add Line, Add Row, Continue, Submit or Certify** |
 
 That last row is the one thing being fast does not buy. Quickfill fills through
@@ -90,28 +93,104 @@ The seal count is a count, not a check: nothing is gated on it. It is there
 because a manifest read as eleven containers and no seals would otherwise
 look, in this line, exactly like one that parsed whole.
 
-The buttons shown depend on the page in the tab: the ACE pair on a CBP host
-that resolves to one of the four AESDirect steps, the INTTRA pair on a
-Shipping Instructions screen, and on the container grid **Copy rows** and
-**Fill container grid**, Copy rows first when the grid's cells cannot be
-typed into (the live portal's cannot). On such a grid Copy rows is the only
-blue button, Fill container grid is a plain one, and a line under the pair
-says, before either is pressed, that the grid opens an editor when a cell is
-clicked so Fill would write 0 cells. Fill stays available anyway: a grid that
-answers the question wrongly must not become a grid the operator cannot fill.
-After Copy rows the result line names
-the columns pasted, in the grid's own order, and any left blank because no
-package column matches the heading, so the operator can see the seal is in the
-block before pasting it. On an INTTRA page the detector cannot name, **Copy
-rows** alone, in the default column order (Container Number, Carrier Seal #,
-Shipper Seal #, ...), and the result line says the order is the default one.
-The fifth live run (2026-09-17) is why: the grid was of a shape the detector
-had never been shown, and a popup that offered nothing there left the operator
-with the one helper that had the fallback.
+Which buttons appear is section 2a.
 
 `quickfill-extension/src/paste.ts` is pure - no DOM, no `chrome.*` - so the
 whole input path is unit-testable without a browser, and
 `tests/quickfill.test.ts` exercises all four branches.
+
+## 2a. The two INTTRA page types, and the portal toggle
+
+The live portal has two things to fill, and the operator meets both on the
+same page: the **per-container Particulars blocks** on Create Shipping
+Instruction, and the **Copy Container Details grid**, which is a modal drawn
+over it. The INTTRA Helper reaches both because it has two tabs that are
+always there (Fill INTTRA, Containers). Quickfill has one row of buttons, so
+it has to reach both from that row.
+
+### The mistake this replaced
+
+`detectInttraPage` returns ONE screen. On the live create page with the modal
+open it returns the **create page**: `#generalDetails` is a real, visible
+marker worth 10, plus its heading (3) and its URL (2), against the grid's 10.
+A popup that asked that one answer "is this the grid screen?" therefore said
+no, and offered no grid route at all while the grid filled the screen.
+
+So the routes are asked about separately, and whichever exists is offered:
+
+| Question | Answered by | Buttons |
+| --- | --- | --- |
+| Does the named screen have fields? | `inttraFieldsForPage(page).length` - `copyContainerDetails` has none, because the grid is written from `GRID_COLUMNS`, not field by field | **Fill this screen**, **Fill all N containers** |
+| Is a container grid on the page? | `detectGrid`, the grid writer's own reading, whatever the screen was named | **Fill container grid** |
+| Does the paste have containers? | the package alone | **Copy rows** |
+
+Both of the first two can be true at once, and on the live create page with
+the modal open both are.
+
+### Which one leads
+
+Exactly one button in the row is blue, and it is the one that works:
+
+| The page | Order | Blue |
+| --- | --- | --- |
+| A grid that cannot be typed into (the live portal's) | Copy rows, Fill container grid, then the form pair | Copy rows |
+| A grid that can be typed into | Fill container grid, Copy rows, then the form pair | Fill container grid |
+| No grid | Fill this screen, Fill all N containers, Copy rows | Fill this screen |
+| No fields and no grid | Copy rows alone | Copy rows |
+
+A grid the cells of which hold no control until they are clicked also carries a
+line under the pair saying so **before** either button is pressed: the live
+portal, 2026-09-17, where two equal blue buttons read as two equal routes, Fill
+was pressed first, wrote nothing, and only then explained itself. Fill stays
+available anyway: a grid that answers the question wrongly must not become a
+grid the operator cannot fill. After Copy rows the result line names the
+columns pasted, in the grid's own order, and any left blank because no package
+column matches the heading, so the operator can see the seal is in the block
+before pasting it. Where no grid was found the order is the default one
+(Container Number, Carrier Seal #, Shipper Seal #, ...) and the line says so -
+the fifth live run (2026-09-17), where the grid was of a shape the detector had
+never been shown and a popup that offered nothing there left the operator with
+the one helper that had the fallback.
+
+### The toggle: Auto | ACE | INTTRA
+
+A segmented control above the box, held in `chrome.storage.session` for the
+browsing session, under its own key so **Clear empties the box without
+un-pinning the portal**.
+
+| State | What it does |
+| --- | --- |
+| **Auto** (default) | The page decides, exactly as the popup behaved before the toggle existed. The host says which detector speaks first; the page's content gives the answer. |
+| **ACE** | The ACE route, whatever the page looks like. The four AESDirect steps have no "primary" one to assume, so a page that is none of them says so and offers nothing: a pin does not invent a form. |
+| **INTTRA** | The INTTRA route, whatever the page looks like. A screen the detector cannot name is filled as **Create Shipping Instruction**, and both the line above the buttons and the result line say so. |
+
+The pin exists because the operator can see the portal when the detector
+cannot. The third live run read "INTTRA screen not identified" and blocked Fill
+on the very page being filled (`docs/INTTRA-INTEGRATION.md` section 5c). A fill
+has to aim at some mapping table, and guessing one silently is not the helper's
+call to make - which is why Auto still refuses. Pinning is the operator making
+that call, so the create page's fields are tried and the answer names the
+assumption:
+
+```
+The screen was not identified, so the Create Shipping Instruction fields were tried. Filled 2 of 7.
+```
+
+**What a pin cannot do.** It changes which buttons are offered and which
+mapping table an unnamed screen is filled from. It does not change what a write
+is allowed to do: every value still goes through the same detector-resolved
+selectors, a selector that matches several controls is still refused as
+AMBIGUOUS, a container row the screen does not have is still reported rather
+than written into another row, and nothing is ever clicked. A pin cannot make
+Quickfill write a field that is not on the screen.
+
+It also cannot cross portals. A **named AESDirect step is never treated as an
+unidentified INTTRA screen**, however the toggle is set: INTTRA's ladders match
+by label wording, and an ACE step carries wordings that brush against them
+("Vessel", "Booking Number"), so a toggle left on INTTRA while the operator
+moved to Step 4 would otherwise type INTTRA's values into ACE's boxes. On a
+named step a pinned INTTRA fill refuses and says which step it is; Copy rows
+stays, because it touches nothing but the clipboard.
 
 ## 3. What it drops, and what that costs
 

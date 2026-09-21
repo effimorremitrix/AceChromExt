@@ -79,7 +79,7 @@ describe('the playground pages, filled from disk', () => {
     for (const step of ACE_STEPS) {
       window.history.pushState({}, '', `/playground/${step.file}`);
       document.body.innerHTML = fixture(step.fixture);
-      const response = answer({ type: 'content/where' });
+      const response = answer({ type: 'content/where', mode: 'auto' });
       if (!response.ok || response.type !== 'content/where') throw new Error('unexpected');
       expect(response.payload).toMatchObject({ portal: 'ace', label: step.title, hasLines: step.step === 3 });
     }
@@ -134,7 +134,7 @@ describe('the playground pages, filled from disk', () => {
   it('offers nothing on a local page that is no step', () => {
     window.history.pushState({}, '', '/playground/README.md');
     document.body.innerHTML = '<p>Welcome</p>';
-    const response = answer({ type: 'content/where' });
+    const response = answer({ type: 'content/where', mode: 'auto' });
     if (!response.ok || response.type !== 'content/where') throw new Error('unexpected');
     expect(response.payload.portal).toBe('none');
     expect(response.payload.label).toMatch(/neither an AESDirect step nor an INTTRA screen/);

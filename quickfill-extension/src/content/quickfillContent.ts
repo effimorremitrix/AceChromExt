@@ -22,17 +22,32 @@
  */
 
 import { fillFields } from '../../../src/content/filler.js';
-import { detectPage } from '../../../src/content/pageDetector.js';
+import { detectPage, type PageDetection } from '../../../src/content/pageDetector.js';
 import { DEFAULT_SETTINGS } from '../../../src/core/settings.js';
 import type { FillReport } from '../../../src/models/AceField.js';
 import { detectInttraPage, hasStructuralEvidence } from '../../../inttra-extension/src/content/pageDetector.js';
 import { fillInttraFields } from '../../../inttra-extension/src/content/filler.js';
 import { detectGrid, fillContainerGrid, gridAcceptsTyping, gridPasteBlock } from '../../../inttra-extension/src/content/gridWriter.js';
-import type { InttraFillReport } from '../../../inttra-extension/src/models/InttraField.js';
-import type { FillCount, QuickfillContentRequest, QuickfillContentResponse, Where } from '../core/messages.js';
+import { inttraFieldsForPage } from '../../../inttra-extension/src/mappings/index.js';
+import { inttraPageLabel } from '../../../inttra-extension/src/pages.js';
+import type { InttraFillReport, InttraPageId } from '../../../inttra-extension/src/models/InttraField.js';
+import type { FillCount, FillMode, QuickfillContentRequest, QuickfillContentResponse, Where } from '../core/messages.js';
 
 const CBP = /(^|\.)cbp\.dhs\.gov$/i;
 const INTTRA = /(^|\.)(inttra\.com|e2open\.com)$/i;
+
+/**
+ * The screen a pinned INTTRA fill assumes when the detector named none.
+ *
+ * The live portal has one page the whole shipping instruction is written on,
+ * and `INTTRA_MAPPINGS_BY_PAGE` serves both scopes there: the header fields
+ * and the per-container Particulars blocks. So there is one honest guess to
+ * make and this is it. Nothing is forced by guessing: the fill still writes
+ * only where a selector resolves to exactly one control, an ambiguous match is
+ * still refused, and a container row the screen does not have is still
+ * reported rather than written into another row.
+ */
+const ASSUMED_PAGE: InttraPageId = 'generalDetails';
 
 function onCbpHost(): boolean {
   return CBP.test(location.hostname);
@@ -42,69 +57,128 @@ function onInttraHost(): boolean {
   return INTTRA.test(location.hostname);
 }
 
+function nothing(label: string): Where {
+  return { portal: 'none', label, hasLines: false, canFillForm: false, hasGrid: false, gridWritable: false };
+}
+
 /** An AESDirect step, recognised by its content alone (the step tabs, the headings, the URL), or null. */
-function aceAnswer(): Where | null {
+function acePage(): PageDetection | null {
   const page = detectPage(document);
-  if (page.page === 'unknown' || page.confidence === 'none') return null;
-  return { portal: 'ace', label: page.label, hasLines: page.page === 'commodities', isGrid: false, gridWritable: false };
+  return page.page === 'unknown' || page.confidence === 'none' ? null : page;
+}
+
+function aceWhere(): Where | null {
+  const page = acePage();
+  if (!page) return null;
+  return { portal: 'ace', label: page.label, hasLines: page.page === 'commodities', canFillForm: true, hasGrid: false, gridWritable: false };
 }
 
 /**
- * An INTTRA Shipping Instructions screen, or null.
+ * An INTTRA Shipping Instructions screen, and whatever routes into it exist.
  *
- * The container grid is evidence, and it outranks the step strip.
+ * The two routes are answered SEPARATELY, and this is the lesson of the live
+ * create page. `detectInttraPage` returns one screen, and on the page the
+ * operator actually works from it returns the create page even when the Copy
+ * Container Details modal is drawn over it: `#generalDetails` is a real,
+ * visible marker worth 10, plus its heading and URL, against the grid's 10
+ * (docs/INTTRA-INTEGRATION.md section 5d). A popup that read "is this the grid
+ * screen?" off that one answer offered no grid route at all while the grid
+ * filled the screen. So the grid is asked about directly, with `detectGrid` -
+ * the same reading the grid writer uses - and the form is asked about by
+ * whether the named screen has any fields at all. Both can be true at once,
+ * and on the live create page with the modal open both are.
  *
- * Copy Container Details is a MODAL over whichever step the operator was on
- * (observed on the live portal on 2026-09-17 at
- * ship.inttra.e2open.com/siact/siworkspace#/create/<id>). The step strip
- * behind the overlay still reports that underlying step, so asking the strip
- * "which screen is this?" answers about the page the operator is no longer
- * looking at - on the first live run it said "B/L Documents" while a
- * container grid filled the screen. The shared detector scores a visible
- * container grid above every wording hint combined, so asking it is asking
- * the grid, and the INTTRA Helper's panel and this popup cannot disagree.
+ * Returns null when the page holds neither, so the callers can fall through.
+ * `pinned` is the operator's toggle: it does not conjure a route that is not
+ * there, it only says that an unidentified screen should be treated as the
+ * create page rather than as nothing.
  */
-function inttraAnswer(): Where | null {
+function inttraWhere(pinned: boolean): Where | null {
   const screen = detectInttraPage(document);
-  if (screen.page === 'unknown' || screen.confidence === 'none') return null;
-  const isGrid = screen.page === 'copyContainerDetails';
-  return { portal: 'inttra', label: screen.label, hasLines: false, isGrid, gridWritable: isGrid && gridAcceptsTyping(document) };
+  const named = screen.page !== 'unknown' && screen.confidence !== 'none';
+  const grid = detectGrid(document);
+  const hasGrid = grid.found;
+  const gridWritable = hasGrid && gridAcceptsTyping(document);
+  if (named) {
+    return {
+      portal: 'inttra',
+      label: screen.label,
+      hasLines: false,
+      // Copy Container Details has no fields of its own: its mapping table is
+      // empty because the grid is written from GRID_COLUMNS, not field by
+      // field. Offering "Fill this screen" there would be a button that can
+      // only ever report nothing mapped.
+      canFillForm: inttraFieldsForPage(screen.page).length > 0,
+      hasGrid,
+      gridWritable,
+    };
+  }
+  if (!hasGrid && !pinned) return null;
+  return {
+    portal: 'inttra',
+    label: pinned
+      ? `INTTRA screen not identified. Set to INTTRA, so Fill writes the ${inttraPageLabel(ASSUMED_PAGE)} fields.`
+      : 'INTTRA screen not identified, but a container grid is on the page, so the grid can still be filled and copied.',
+    hasLines: false,
+    canFillForm: pinned,
+    hasGrid,
+    gridWritable,
+    ...(pinned ? { assumingCreatePage: true } : {}),
+  };
+}
+
+/** The INTTRA host with nothing on it the helper can name: Copy rows still needs no screen. */
+function unnamedInttra(): Where {
+  return {
+    portal: 'inttra',
+    label: 'INTTRA screen not identified. Copy rows still copies the container block, in the default column order, for Copy Container Details.',
+    hasLines: false,
+    canFillForm: false,
+    hasGrid: false,
+    gridWritable: false,
+  };
 }
 
 /**
  * Which portal this tab is, and what can be filled on it.
  *
- * The host says which detector speaks first; the page's content gives the
- * answer. On a CBP host only an AESDirect step counts. On an INTTRA host the
- * INTTRA detector goes first, and when it identifies nothing the page is
- * still INTTRA: the operator may well be looking at the grid (the fifth live
- * run: a grid the detector had never been shown the shape of), and Copy rows
- * needs no detection at all - the block is the package's containers in the
- * default column order - so that button stays, alone, and its result line
- * says the order is the default one. The INTTRA Helper's panel behaves the
- * same. Off both portals (the playground build, which runs on pages opened
- * from disk) an AESDirect step is looked for first: the INTTRA signatures are
- * wording guesses that an ACE page can brush against - Step 2's "parties"
- * reads as the B/L Documents screen's Parties heading - and a step named by
- * its own tabs and headings is the better answer.
+ * In 'auto' the host says which detector speaks first and the page's content
+ * gives the answer, which is what the popup did before the toggle existed. On
+ * a CBP host only an AESDirect step counts. On an INTTRA host the INTTRA
+ * detector goes first, and when it identifies nothing the page is still
+ * INTTRA: the operator may well be looking at the grid (the fifth live run: a
+ * grid the detector had never been shown the shape of), and Copy rows needs no
+ * detection at all - the block is the package's containers in the default
+ * column order - so that button stays, alone, and its result line says the
+ * order is the default one. Off both portals (the playground build, which runs
+ * on pages opened from disk) an AESDirect step is looked for first: the INTTRA
+ * signatures are wording guesses that an ACE page can brush against - Step 2's
+ * "parties" reads as the B/L Documents screen's Parties heading - and a step
+ * named by its own tabs and headings is the better answer.
+ *
+ * Pinned, the host is not consulted at all. That is the point of pinning: the
+ * operator is looking at the portal and the detector is not, so their answer
+ * wins. What the pin cannot do is make a fill write something that is not on
+ * the screen, and the label says plainly when the page disagrees.
  */
-function where(): Where {
+function where(mode: FillMode): Where {
+  if (mode === 'ace') {
+    return aceWhere() ?? nothing('Set to ACE, and this page is not one of the four AESDirect filing steps, so there is nothing here to fill. Switch to Auto or INTTRA, or open an AESDirect step.');
+  }
+  if (mode === 'inttra') {
+    // An AESDirect step is not an unidentified INTTRA screen. Assuming the
+    // create page on one would aim INTTRA's label ladders at an ACE form,
+    // where a wording like "Vessel" or "Booking Number" can brush against a
+    // real control, so a mis-set toggle would write INTTRA's values into ACE's
+    // boxes. On a named step the pin falls back to Copy rows, which touches
+    // nothing but the clipboard.
+    return inttraWhere(acePage() === null) ?? unnamedInttra();
+  }
   if (onCbpHost()) {
-    return aceAnswer() ?? { portal: 'none', label: 'This CBP page is not one of the four AESDirect filing steps.', hasLines: false, isGrid: false, gridWritable: false };
+    return aceWhere() ?? nothing('This CBP page is not one of the four AESDirect filing steps.');
   }
-  const answer = onInttraHost() ? (inttraAnswer() ?? aceAnswer()) : (aceAnswer() ?? inttraAnswer());
-  if (answer) return answer;
-  if (!onInttraHost()) {
-    return { portal: 'none', label: 'This page is neither an AESDirect step nor an INTTRA screen.', hasLines: false, isGrid: false, gridWritable: false };
-  }
-  return {
-    portal: 'inttra',
-    label: 'INTTRA screen not identified. Copy rows still copies the container block, in the default column order, for Copy Container Details.',
-    hasLines: false,
-    isGrid: false,
-    gridWritable: false,
-    copyRowsOnly: true,
-  };
+  if (onInttraHost()) return inttraWhere(false) ?? aceWhere() ?? unnamedInttra();
+  return aceWhere() ?? inttraWhere(false) ?? nothing('This page is neither an AESDirect step nor an INTTRA screen.');
 }
 
 /**
@@ -124,7 +198,7 @@ function countOf(report: FillReport | InttraFillReport): FillCount {
 function handleMessage(message: QuickfillContentRequest): QuickfillContentResponse {
   switch (message.type) {
     case 'content/where':
-      return { ok: true, type: 'content/where', payload: where() };
+      return { ok: true, type: 'content/where', payload: where(message.mode) };
 
     case 'content/fillAce': {
       const page = detectPage(document);
@@ -152,8 +226,22 @@ function handleMessage(message: QuickfillContentRequest): QuickfillContentRespon
 
     case 'content/fillInttra': {
       const screen = detectInttraPage(document);
-      if (screen.page === 'unknown' || screen.confidence === 'none') {
-        return { ok: false, error: 'This is not one of the INTTRA Shipping Instructions screens, so nothing was filled.' };
+      const named = screen.page !== 'unknown' && screen.confidence !== 'none';
+      // Pinned to INTTRA, an unidentified screen is filled as the create page
+      // rather than refused. The refusal was right while the toggle did not
+      // exist - a fill has to aim at some mapping table, and guessing one is
+      // not the helper's call to make silently - but an operator who has
+      // pinned the portal has made it, so the assumption is made, named in the
+      // result line, and never made in 'auto'.
+      const step = acePage();
+      const page = named ? screen.page : message.mode === 'inttra' && step === null ? ASSUMED_PAGE : null;
+      if (page === null) {
+        return {
+          ok: false,
+          error: step
+            ? `This tab is ${step.label}, an AESDirect step, not an INTTRA screen, so nothing was filled. Set the toggle to Auto or ACE.`
+            : 'This is not one of the INTTRA Shipping Instructions screens, so nothing was filled. Set the toggle to INTTRA to fill it as the Create Shipping Instruction page anyway.',
+        };
       }
       // A container-scoped fill with no index means every container: the live
       // page repeats the Particulars block per container, numbered from 1
@@ -168,7 +256,7 @@ function handleMessage(message: QuickfillContentRequest): QuickfillContentRespon
           fillInttraFields(
             {
               pkg: message.package,
-              page: screen.page,
+              page,
               scope: message.scope,
               ...(containerIndex === undefined ? {} : { containerIndex }),
               overwrite: true,
@@ -186,10 +274,14 @@ function handleMessage(message: QuickfillContentRequest): QuickfillContentRespon
           filled: counts.reduce((sum, count) => sum + count.filled, 0),
           total: counts.reduce((sum, count) => sum + count.total, 0),
           missed: [...new Set(counts.flatMap((count) => count.missed))],
+          ...(named ? {} : { assumedScreen: inttraPageLabel(page) }),
         },
       };
     }
 
+    // The grid is filled and copied by what is on the page, never by what the
+    // detector called the page. On the live create page with the modal open
+    // the detector names the create page, and the grid is there all the same.
     case 'content/fillGrid': {
       if (!detectGrid(document).found) {
         return { ok: false, error: 'No container grid is on this screen, so nothing was filled. Open Copy Container Details.' };

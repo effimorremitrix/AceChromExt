@@ -313,6 +313,41 @@ describe('the same paste fills INTTRA', () => {
     expect(report.failed).toBe(0);
   });
 
+  /**
+   * The two live page types, from one pasted email.
+   *
+   * This is the claim in the plainest form there is: the operator pastes the
+   * carrier's booking confirmation into the one box, and the same paste fills
+   * the per-container Particulars blocks on the create page AND produces the
+   * block for the Copy Container Details grid - on the SAME document, because
+   * on the live portal the grid is a modal drawn over the create page.
+   */
+  it('fills every container block on the create page, and the grid block, from one email', () => {
+    document.body.innerHTML = html('inttra-create-si').replace('id="si-create"', 'id="generalDetails"') + html('inttra-div-grid');
+    const result = parsed(email('04-booking-confirmation'));
+    expect(result.kind).toBe('email');
+    expect(result.pkg.containers).toHaveLength(3);
+
+    // The detector names the create page here, not the grid: the marker
+    // `#generalDetails` is visible and worth 10, plus its heading and URL,
+    // against the grid's 10. Both routes have to exist on this one answer.
+    expect(detectInttraPage(document).page).toBe('generalDetails');
+    expect(detectGrid(document).found).toBe(true);
+
+    const report = fillInttraFields({ pkg: result.pkg, page: 'generalDetails', scope: 'container', containerIndex: 0, overwrite: true }, document);
+    expect(report.filled).toBeGreaterThan(0);
+    const value = (id: string): string => (document.getElementById(id) as HTMLInputElement).value;
+    expect(value('cont-num-1')).toBe('MSCU1234566');
+    expect(value('carr-seal-1')).toBe('SL-4471209');
+    expect(value('ship-seal-1')).toBe('SH-001');
+
+    // ...and the grid block for the modal over it, cut to the grid's own
+    // columns, three rows for three containers.
+    const tsv = gridRowsAsTsv(result.pkg, detectGrid(document));
+    expect(tsv.split('\r\n')).toHaveLength(3);
+    expect(tsv.split('\r\n')[0]?.split('\t')[0]).toBe('MSCU1234566');
+  });
+
   it('still refuses to press Add Row when the grid is short of rows', () => {
     // The table fixture has two editable rows for three containers. Quickfill
     // fills the two and stops: dropping the checks did not buy it the right to

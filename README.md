@@ -29,10 +29,14 @@ fed by QuickBooks Desktop and by the emails the carrier and the producer send.
   where every value came from, flags every disagreement, and is a plain JSON
   file both extensions read. **[docs/END-TO-END-FLOW.md](docs/END-TO-END-FLOW.md)**
 - **Quickfill Helper** is the same two fills with everything else taken out:
-  one popup, one paste box, two buttons. Paste the carrier email (or a package,
-  or spreadsheet rows), click, the fields fill. No preview, no checks, no
-  review, no approval, no conflict screen, no report - it assumes you read the
-  form. It still never saves, submits or certifies.
+  one popup, one paste box, a portal toggle and a row of buttons. Paste the
+  carrier email (or a package, or spreadsheet rows), click, the fields fill.
+  On an INTTRA screen it offers every route the page has - the header fields,
+  the per-container blocks, the container grid, and the clipboard block for
+  Copy Container Details - because the live create page carries the grid as a
+  modal over it and one of them would otherwise be unreachable. No preview, no
+  checks, no review, no approval, no conflict screen, no report - it assumes
+  you read the form. It still never saves, submits or certifies.
   **[docs/QUICKFILL.md](docs/QUICKFILL.md)**
 - **The operator dashboard** is one web page for the whole preparation:
   import the workbook or a package, run Deckhand, approve, build the package,

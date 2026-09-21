@@ -13,6 +13,31 @@ body.quickfill .brand-mark { color: var(--amber); }
 
 :root { --amber: #92400e; }
 
+/*
+ * The portal toggle: Auto | ACE | INTTRA, a segmented control above the box.
+ *
+ * Three buttons rather than a checkbox or a select, because all three states
+ * have to be readable without opening anything: which portal a fill will go to
+ * is the one thing the operator must not have to guess.
+ */
+.mode-row { display: flex; margin-bottom: 8px; }
+.mode-button {
+  flex: 1 1 0;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-right-width: 0;
+}
+.mode-button:first-child { border-radius: 4px 0 0 4px; }
+.mode-button:last-child { border-right-width: 1px; border-radius: 0 4px 4px 0; }
+.mode-button:hover:not(.mode-button-active) { background: var(--grey-bg); }
+.mode-button-active { background: var(--amber); border-color: var(--amber); color: #fff; }
+.mode-button-active + .mode-button { border-left-color: var(--amber); }
+
 .paste-box {
   width: 100%;
   min-height: 150px;

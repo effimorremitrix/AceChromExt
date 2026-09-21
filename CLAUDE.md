@@ -207,6 +207,8 @@ check; `tests/invariants.test.ts` pins it to that request type, built in
 | either playground (the four mock ACE steps, the example workbook, its README) | `scripts/playground.mjs` wraps `tests/fixtures/ace-*.html` at build time, never a second copy of a screen; the example data is `scripts/templateData.mjs`, shared with `npm run template`. `HELPERS` is the only difference between the ACE build's playground and Quickfill's: the card name, the banner, the README, and whether the generated manifest keeps host permissions (the ACE panel finds its tab by URL, Quickfill asks the content script) |
 | which tabs the ACE panel will address | `tabPatterns()` in `src/ui/tabs.ts`, read from this build's own manifest, so the panel searches exactly what Chrome injected into. `ACE_URL_PATTERNS` stays in the file as the fallback and because `tests/invariants.test.ts` pins it against `host_permissions` |
 | how gated Quickfill is | `quickfill-extension/src/aceShipment.ts`. It is the local, ungated twin of `shared/src/aceView.ts`, and the one file where "fill it anyway" lives. Do not gate it, and do not ungate `aceView.ts` |
+| which routes Quickfill offers on a page | `where()` in `quickfill-extension/src/content/quickfillContent.ts`. It asks TWO questions, never one: does the named screen have fields (`inttraFieldsForPage(page).length`), and is a container grid on the page (`detectGrid`). Both are true on the live create page with the Copy Container Details modal over it, and reading one branch off `detectInttraPage`'s single answer is what hid the grid |
+| Quickfill's portal toggle (Auto / ACE / INTTRA) | `MODES` in `quickfill-extension/src/ui/popup.ts`, `FillMode` in `quickfill-extension/src/core/messages.ts`, the session key in `core/store.ts`. A pin only chooses which buttons are offered and which mapping table an UNNAMED screen is filled from (`ASSUMED_PAGE`, the create page, INTTRA only, named in the result line). It never widens a write: ambiguity is still refused, a missing row is still reported, nothing is still clicked. Auto still refuses an unnamed screen |
 | the dashboard's hosting | `web/wrangler.jsonc` (static assets only), `web/_headers`, `.github/workflows/deploy-web.yml` |
 | the guides in the dashboard's Help tab | `docs/USER-GUIDE.md` and `docs/SETUP-GUIDE.md` themselves; the page bundles them at build time (`?raw` import), never a second copy |
 | a transformation rule | `src/ace/transformers/` + register in `index.ts` |
@@ -434,7 +436,22 @@ stay honestly described:
    containers that carry a seal (a count, not a check), and its Copy rows
    line names the pasted columns and any left blank. On an INTTRA page the
    detector cannot name it offers Copy rows alone, in the default column
-   order, and says so (the fifth live run). A playground build
+   order, and says so (the fifth live run). It offers BOTH INTTRA routes
+   whenever both exist - the form pair and the grid pair - which is the reach
+   the INTTRA Helper has from its two always-available tabs; the old popup
+   picked one branch from `detectInttraPage`'s single answer, and on the live
+   create page with the Copy Container Details modal over it that answer is
+   the create page (`#generalDetails` is visible and worth 10, plus its
+   heading and URL, against the grid's 10), so the grid was on the screen with
+   no route to it. Exactly one button in the row is blue, and it is the one
+   that works. The **portal toggle** (Auto / ACE / INTTRA, held in
+   `chrome.storage.session` under its own key so Clear does not un-pin it) is
+   for the operator who can see the portal when the detector cannot - the
+   third live run blocked Fill on the page being filled. Pinned to INTTRA, an
+   unidentified screen is filled as Create Shipping Instruction and the result
+   line says so; Auto still refuses it, because guessing a mapping table
+   silently is not the helper's call. Neither the two-route popup nor the
+   toggle has been run against the live portal. A playground build
    (`dist-quickfill-playground/`, local files only, never a portal) fills the
    four mock ACE steps from the example workbook; it proves the mechanics on
    the captured labels and ids, not the live portal. What is new about it is
