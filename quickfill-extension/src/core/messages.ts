@@ -1,48 +1,90 @@
 /**
  * What the popup, the worker and the content script say to each other.
  *
- * Deliberately four messages. The ACE Helper and the INTTRA Helper exchange
- * full FillReports so their panels can render a row per field; Quickfill
- * renders a count, so the content script tallies its report and sends back
- * three numbers and a list of labels. Nothing that could grow into a screen.
+ * Deliberately small. The ACE Helper and the INTTRA Helper exchange full
+ * FillReports so their panels can render a row per field; Quickfill renders a
+ * count, so the content script tallies its report and sends back three numbers
+ * and a list of labels. Nothing that could grow into a screen.
  */
 
 import type { CanonicalShipment } from '../../../src/models/CanonicalInvoice.js';
 import type { FilingPackage } from '../../../shared/src/filingPackage.js';
 import type { GridPasteBlock } from '../../../inttra-extension/src/content/gridWriter.js';
 
-/** Which pair of buttons the popup shows, decided by the page in the tab. */
+/** Which portal's buttons the popup shows, decided by the page in the tab. */
 export type Portal = 'ace' | 'inttra' | 'none';
 
+/**
+ * Who decides which portal is being filled.
+ *
+ * 'auto' is the default and is what the popup did before the toggle existed:
+ * the page in the tab answers. 'ace' and 'inttra' pin it, because the operator
+ * knows which portal they are on and the detector has been wrong about it on
+ * the live INTTRA portal - the third live run read "INTTRA screen not
+ * identified" and blocked Fill on the very page the operator was filling
+ * (docs/INTTRA-INTEGRATION.md section 5c). A pin is not a claim about the
+ * page: what a pinned fill can and cannot write is still decided by what
+ * resolves on the screen, and the result line says when the screen was never
+ * identified.
+ */
+export type FillMode = 'auto' | 'ace' | 'inttra';
+
+export const FILL_MODES: readonly FillMode[] = ['auto', 'ace', 'inttra'];
+
+export function isFillMode(value: unknown): value is FillMode {
+  return typeof value === 'string' && (FILL_MODES as readonly string[]).includes(value);
+}
+
+/**
+ * What is on the tab, and which routes into it exist.
+ *
+ * The two INTTRA routes are answered INDEPENDENTLY, which is the whole point
+ * of this shape. `detectInttraPage` returns one screen, and on the live create
+ * page with the Copy Container Details modal open it returns the create page:
+ * the marker `#generalDetails` is real and visible and scores 10, plus its
+ * heading and URL, against the grid's 10. A popup that picked one branch from
+ * that one answer offered no grid route at all while the grid was on the
+ * screen. So the form and the grid are asked about separately, and whichever
+ * exists is offered - the same reach the INTTRA Helper has from its two
+ * always-available tabs.
+ */
 export interface Where {
   portal: Portal;
-  /** "Step 4: Transportation", "General Details", or why neither. */
+  /** "Step 4: Transportation", "Create Shipping Instruction", or why neither. */
   label: string;
   /** True when a commodity line can be filled on this ACE page. */
   hasLines: boolean;
-  /** True when this INTTRA screen is the container grid. */
-  isGrid: boolean;
   /**
-   * True when the grid holds a control that can be typed into. False for a
+   * True when this screen has fields to fill: an AESDirect step, or an INTTRA
+   * screen whose mapping table is not empty. Copy Container Details has no
+   * fields of its own (`INTTRA_MAPPINGS_BY_PAGE.copyContainerDetails` is `[]`),
+   * so it is false there and the grid is the only route.
+   */
+  canFillForm: boolean;
+  /**
+   * True when a container grid is visible on this page, whatever screen the
+   * detector named. Read from `detectGrid`, the same reading the grid writer
+   * uses, so the popup and the writer cannot disagree.
+   */
+  hasGrid: boolean;
+  /**
+   * True when that grid holds a control that can be typed into. False for a
    * click-to-edit grid, where Copy rows is the only route and therefore the
    * button that should come first.
    */
   gridWritable: boolean;
   /**
-   * True on an INTTRA page the detector could not identify. Nothing can be
-   * filled there, but Copy rows still puts the container block on the
-   * clipboard in the default column order, for the operator who is looking
-   * at Copy Container Details when the helper is not (fifth live run,
-   * 2026-09-17: the grid was neither a table nor an ARIA grid, and the popup
-   * offered nothing at all).
+   * True when the screen was not identified and the toggle is pinned to
+   * INTTRA, so a fill will try the Create Shipping Instruction fields. Said
+   * before the click, not after it.
    */
-  copyRowsOnly?: boolean;
+  assumingCreatePage?: boolean;
 }
 
 export type QuickfillContentRequest =
-  | { type: 'content/where' }
+  | { type: 'content/where'; mode: FillMode }
   | { type: 'content/fillAce'; shipment: CanonicalShipment; scope: 'shipment' | 'commodityLine'; line?: number }
-  | { type: 'content/fillInttra'; package: FilingPackage; scope: 'shipment' | 'container'; containerIndex?: number }
+  | { type: 'content/fillInttra'; package: FilingPackage; scope: 'shipment' | 'container'; containerIndex?: number; mode: FillMode }
   | { type: 'content/fillGrid'; package: FilingPackage }
   | { type: 'content/gridRows'; package: FilingPackage };
 
@@ -58,6 +100,12 @@ export interface FillCount {
    * one sentence that tells the operator to paste instead.
    */
   useCopyRows?: boolean;
+  /**
+   * The screen whose fields were tried when the detector could not name one
+   * and the toggle was pinned to INTTRA. Naming it is the price of filling a
+   * screen nobody identified.
+   */
+  assumedScreen?: string;
 }
 
 export type QuickfillContentResponse =
@@ -75,13 +123,21 @@ export interface StoredPaste {
   shipment: CanonicalShipment;
 }
 
+/** Everything the popup reloads itself from: the paste, and where the toggle is set. */
+export interface StoredState {
+  paste: StoredPaste | null;
+  mode: FillMode;
+}
+
 export type QuickfillBackgroundRequest =
   | { type: 'store/get' }
   | { type: 'store/set'; payload: StoredPaste }
-  | { type: 'store/clear' };
+  | { type: 'store/clear' }
+  /** The toggle outlives Clear: clearing the box does not un-pin the portal. */
+  | { type: 'store/mode'; mode: FillMode };
 
 export type QuickfillBackgroundResponse =
-  | { ok: true; type: 'store/data'; payload: StoredPaste | null }
+  | { ok: true; type: 'store/data'; payload: StoredState }
   | { ok: true; type: 'store/cleared' }
   | { ok: false; error: string };
 

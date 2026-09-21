@@ -1,5 +1,5 @@
 /**
- * The whole interface: a box, two buttons, two lines of text.
+ * The whole interface: a toggle, a box, a few buttons, two lines of text.
  *
  * There is no panel, no side panel, no options page, no tab strip and no
  * settings screen. The ACE Helper's panel has eight tabs because it answers
@@ -14,6 +14,7 @@ import { appendAll, buildStamp, clear, el } from '../../../src/ui/dom.js';
 import { isFailure, parsePaste } from '../paste.js';
 import type {
   FillCount,
+  FillMode,
   QuickfillBackgroundRequest,
   QuickfillBackgroundResponse,
   QuickfillContentRequest,
@@ -22,9 +23,11 @@ import type {
   Where,
 } from '../core/messages.js';
 import { CONTENT_NOT_READY } from '../core/messages.js';
+import type { FilingPackage } from '../../../shared/src/filingPackage.js';
 
 let stored: StoredPaste | null = null;
-let place: Where = { portal: 'none', label: 'Looking...', hasLines: false, isGrid: false, gridWritable: false };
+let mode: FillMode = 'auto';
+let place: Where = { portal: 'none', label: 'Looking...', hasLines: false, canFillForm: false, hasGrid: false, gridWritable: false };
 
 const box = el('textarea', {
   className: 'paste-box',
@@ -34,7 +37,29 @@ const readAs = el('p', { className: 'read-as' });
 const whereLine = el('p', { className: 'where' });
 const result = el('p', { className: 'result' });
 const buttons = el('div', { className: 'button-row button-row-actions' });
+const modeRow = el('div', { className: 'mode-row', attrs: { role: 'group', 'aria-label': 'Which portal to fill' } });
 const lineSelect = el('select', { className: 'select' });
+
+/**
+ * The toggle.
+ *
+ * Auto is the default and is what the popup did before this existed. The two
+ * pins are here because the operator knows which portal they are on and the
+ * detector has been wrong about it on the live INTTRA portal - a run that read
+ * "INTTRA screen not identified" and blocked Fill on the page being filled.
+ * A pin changes which buttons are offered, never what a write is allowed to
+ * do: every fill still goes through the same detector-resolved selectors, and
+ * an ambiguous match is still refused.
+ */
+const MODES: Array<{ id: FillMode; label: string; title: string }> = [
+  { id: 'auto', label: 'Auto', title: 'The page decides: an AESDirect step fills ACE, an INTTRA screen fills INTTRA.' },
+  { id: 'ace', label: 'ACE', title: 'Fill ACE. The four AESDirect steps only; this pin does not make another page fillable.' },
+  {
+    id: 'inttra',
+    label: 'INTTRA',
+    title: 'Fill INTTRA. A screen the helper cannot identify is filled as Create Shipping Instruction, and the result line says so.',
+  },
+];
 
 async function toBackground(message: QuickfillBackgroundRequest): Promise<QuickfillBackgroundResponse> {
   return (await chrome.runtime.sendMessage(message)) as QuickfillBackgroundResponse;
@@ -57,11 +82,15 @@ function say(text: string, tone: 'plain' | 'error' = 'plain'): void {
 
 /** The one line of feedback a fill produces. */
 function report(count: FillCount): void {
+  // The screen was never identified and the pin made the fill happen anyway,
+  // so the line says which screen's fields were tried before it says how many
+  // took. An operator reading "Filled 3 of 7" is owed the assumption behind it.
+  const assumed = count.assumedScreen ? `The screen was not identified, so the ${count.assumedScreen} fields were tried. ` : '';
   if (count.total === 0) {
-    say('Nothing on this screen is mapped to a value in the paste.');
+    say(`${assumed}Nothing on this screen is mapped to a value in the paste.`);
     return;
   }
-  const head = `Filled ${count.filled} of ${count.total}.`;
+  const head = `${assumed}Filled ${count.filled} of ${count.total}.`;
   if (count.useCopyRows) {
     // Nothing took because the grid holds no writable control until a cell is
     // clicked. Saying "0 of 9" and stopping would leave the operator stuck in
@@ -93,7 +122,7 @@ function report(count: FillCount): void {
  * needs no selector for the cell editors. The content script produces the rows
  * because only it can see the grid, and therefore its column order.
  */
-async function copyRows(pkg: StoredPaste['package']): Promise<void> {
+async function copyRows(pkg: FilingPackage): Promise<void> {
   const response = await toContent({ type: 'content/gridRows', package: pkg });
   if (!response.ok) {
     say(response.error, 'error');
@@ -150,8 +179,8 @@ function renderLines(): void {
   }
 }
 
-function fillButton(label: string, run: () => Promise<void>, rank: 'primary' | 'secondary' = 'primary'): HTMLButtonElement {
-  const button = el('button', { className: rank === 'primary' ? 'button button-primary' : 'button', text: label });
+function fillButton(label: string, run: () => Promise<void>, rank: 'primary' | 'secondary' = 'primary', title?: string): HTMLButtonElement {
+  const button = el('button', { className: rank === 'primary' ? 'button button-primary' : 'button', text: label, ...(title ? { title } : {}) });
   button.addEventListener('click', () => {
     button.disabled = true;
     void run().finally(() => {
@@ -170,6 +199,134 @@ async function run(message: QuickfillContentRequest): Promise<void> {
   if (response.type === 'content/count') report(response.payload);
 }
 
+/** Ask the tab again. The answer depends on the toggle, so this runs whenever it moves. */
+async function locate(): Promise<void> {
+  const found = await toContent({ type: 'content/where', mode });
+  place =
+    found.ok && found.type === 'content/where'
+      ? found.payload
+      : { portal: 'none', label: CONTENT_NOT_READY, hasLines: false, canFillForm: false, hasGrid: false, gridWritable: false };
+  renderButtons();
+}
+
+function renderModes(): void {
+  clear(modeRow);
+  for (const option of MODES) {
+    const active = option.id === mode;
+    const button = el('button', {
+      className: `mode-button${active ? ' mode-button-active' : ''}`,
+      text: option.label,
+      title: option.title,
+      attrs: { type: 'button', 'aria-pressed': String(active) },
+    });
+    button.addEventListener('click', () => {
+      if (mode === option.id) return;
+      mode = option.id;
+      renderModes();
+      say('');
+      void toBackground({ type: 'store/mode', mode });
+      void locate();
+    });
+    modeRow.append(button);
+  }
+}
+
+/**
+ * The ACE buttons: the step, and a line on the Commodities step.
+ */
+function aceButtons(): void {
+  if (!stored) return;
+  const shipment = stored.shipment;
+  buttons.append(fillButton('Fill this page', () => run({ type: 'content/fillAce', shipment, scope: 'shipment' })));
+  if (place.hasLines && shipment.commodities.length) {
+    buttons.append(
+      fillButton('Fill line', () => run({ type: 'content/fillAce', shipment, scope: 'commodityLine', line: Number(lineSelect.value) || 1 }), 'secondary'),
+      lineSelect,
+    );
+  }
+}
+
+/**
+ * The INTTRA buttons: both routes, whenever both exist.
+ *
+ * The INTTRA Helper reaches the form and the grid from two tabs that are
+ * always there. This is the same reach in one row: the form pair is offered
+ * whenever the named screen has fields, the grid button whenever a grid is on
+ * the page, and Copy rows whenever the paste has containers - it needs no
+ * screen at all, which is why it survived the fifth live run when nothing else
+ * did.
+ *
+ * Which one leads is the one thing the page decides. A grid that cannot be
+ * typed into puts Copy rows first and says why BEFORE the click, because on
+ * the live portal two equal blue buttons read as two equal routes and Fill was
+ * pressed first, wrote nothing, and only then explained itself.
+ */
+function inttraButtons(pkg: FilingPackage): void {
+  // A grid on the page is what the operator is looking at, so the grid pair
+  // leads; a grid that cannot be typed into puts Copy rows at the head of it.
+  const gridLeads = place.hasGrid;
+  const copyLeads = place.hasGrid && !place.gridWritable;
+  const assumed = place.assumingCreatePage
+    ? 'The screen was not identified. The toggle is set to INTTRA, so this writes the Create Shipping Instruction fields.'
+    : undefined;
+
+  const form: HTMLElement[] = [];
+  if (place.canFillForm) {
+    form.push(
+      fillButton('Fill this screen', () => run({ type: 'content/fillInttra', package: pkg, scope: 'shipment', mode }), gridLeads ? 'secondary' : 'primary', assumed),
+    );
+    if (pkg.containers.length) {
+      // One press per screen, not per container: the live page repeats the
+      // Particulars block per container and numbers the rows from 1 upward, so
+      // the helper walks them. No index means every container.
+      form.push(
+        fillButton(
+          pkg.containers.length === 1 ? 'Fill container 1' : `Fill all ${pkg.containers.length} containers`,
+          () => run({ type: 'content/fillInttra', package: pkg, scope: 'container', mode }),
+          'secondary',
+          assumed,
+        ),
+      );
+    }
+  }
+
+  const grid: HTMLElement[] = [];
+  if (pkg.containers.length) {
+    // Copy rows needs no screen at all - the block is the package's containers
+    // in the grid's order, or the default one - which is why it is the button
+    // that survived the run where nothing was identified.
+    // Exactly one button in the row is blue, and it is the one that works: a
+    // grid that cannot be typed into makes it Copy rows, and so does a screen
+    // that offers nothing else at all.
+    const copyIsTheRoute = copyLeads || (!place.hasGrid && !place.canFillForm);
+    const copy = fillButton('Copy rows', () => copyRows(pkg), copyIsTheRoute ? 'primary' : 'secondary');
+    if (place.hasGrid) {
+      const fill = fillButton('Fill container grid', () => run({ type: 'content/fillGrid', package: pkg }), place.gridWritable ? 'primary' : 'secondary');
+      grid.push(...(copyLeads ? [copy, fill] : [fill, copy]));
+    } else {
+      grid.push(copy);
+    }
+  }
+
+  if (!form.length && !grid.length) {
+    buttons.append(el('span', { className: 'where', text: 'The paste has no containers, so there is nothing to copy for the grid.' }));
+    return;
+  }
+
+  for (const button of gridLeads ? [...grid, ...form] : [...form, ...grid]) buttons.append(button);
+
+  // Only with the pair it is about: a paste with no containers has no Copy
+  // rows button for the note to explain.
+  if (copyLeads && grid.length) {
+    buttons.append(
+      el('span', {
+        className: 'where grid-note',
+        text: 'This grid opens an editor when a cell is clicked, so Fill container grid has nothing to type into and will write 0 cells. Copy rows, click the first Container Number cell of the first empty row, and paste.',
+      }),
+    );
+  }
+}
+
 function renderButtons(): void {
   clear(buttons);
   whereLine.textContent = place.label;
@@ -180,69 +337,16 @@ function renderButtons(): void {
   }
 
   if (place.portal === 'ace') {
-    const shipment = stored.shipment;
-    buttons.append(fillButton('Fill this page', () => run({ type: 'content/fillAce', shipment, scope: 'shipment' })));
-    if (place.hasLines && shipment.commodities.length) {
-      buttons.append(
-        fillButton('Fill line', () =>
-          run({ type: 'content/fillAce', shipment, scope: 'commodityLine', line: Number(lineSelect.value) || 1 }),
-        ),
-        lineSelect,
-      );
+    if (!place.canFillForm) {
+      buttons.append(el('span', { className: 'where', text: 'Open one of the four AESDirect filing steps in this tab.' }));
+      return;
     }
+    aceButtons();
     return;
   }
 
   if (place.portal === 'inttra') {
-    const pkg = stored.package;
-    if (place.copyRowsOnly) {
-      // Nothing to fill on a screen the detector cannot name, but the block
-      // to paste needs no screen: it is the containers in the default order.
-      if (pkg.containers.length) buttons.append(fillButton('Copy rows', () => copyRows(pkg)));
-      else buttons.append(el('span', { className: 'where', text: 'The paste has no containers, so there is nothing to copy for the grid.' }));
-      return;
-    }
-    if (place.isGrid) {
-      // On a click-to-edit grid Fill cannot write a single cell, so offering it
-      // first means a dead-end click and a sentence to read before the button
-      // that works. Ask the grid which it is and lead with the route that
-      // exists. The other stays available: a grid that answers wrongly must
-      // not become a grid the operator cannot fill.
-      //
-      // Order alone was not enough on the live portal (2026-09-17): two equal
-      // blue buttons read as two equal routes, so Fill was pressed, wrote
-      // nothing, and only then said why. So the one that cannot work is a
-      // plain button, and the reason is on the screen BEFORE the click.
-      const fill = fillButton(
-        'Fill container grid',
-        () => run({ type: 'content/fillGrid', package: pkg }),
-        place.gridWritable ? 'primary' : 'secondary',
-      );
-      const copy = fillButton('Copy rows', () => copyRows(pkg), place.gridWritable ? 'secondary' : 'primary');
-      if (place.gridWritable) buttons.append(fill, copy);
-      else {
-        buttons.append(copy, fill);
-        buttons.append(
-          el('span', {
-            className: 'where grid-note',
-            text: 'This grid opens an editor when a cell is clicked, so Fill container grid has nothing to type into and will write 0 cells. Copy rows, click the first Container Number cell of the first empty row, and paste.',
-          }),
-        );
-      }
-      return;
-    }
-    buttons.append(fillButton('Fill this screen', () => run({ type: 'content/fillInttra', package: pkg, scope: 'shipment' })));
-    if (pkg.containers.length) {
-      // One press per screen, not per container: the live page repeats the
-      // Particulars block per container and numbers the rows from 1 upward, so
-      // the helper walks them. No index means every container.
-      buttons.append(
-        fillButton(
-          pkg.containers.length === 1 ? 'Fill container 1' : `Fill all ${pkg.containers.length} containers`,
-          () => run({ type: 'content/fillInttra', package: pkg, scope: 'container' }),
-        ),
-      );
-    }
+    inttraButtons(stored.package);
     return;
   }
 
@@ -267,6 +371,7 @@ function layout(): HTMLElement {
   });
 
   const section = el('section', { className: 'panel-section' }, [
+    modeRow,
     box,
     readAs,
     whereLine,
@@ -298,16 +403,17 @@ async function boot(): Promise<void> {
   });
 
   const saved = await toBackground({ type: 'store/get' });
-  if (saved.ok && saved.type === 'store/data' && saved.payload) {
-    stored = saved.payload;
-    box.value = saved.payload.text;
-    readAs.textContent = `Read as: ${saved.payload.summary}`;
-    renderLines();
+  if (saved.ok && saved.type === 'store/data') {
+    mode = saved.payload.mode;
+    if (saved.payload.paste) {
+      stored = saved.payload.paste;
+      box.value = saved.payload.paste.text;
+      readAs.textContent = `Read as: ${saved.payload.paste.summary}`;
+      renderLines();
+    }
   }
-
-  const found = await toContent({ type: 'content/where' });
-  place = found.ok && found.type === 'content/where' ? found.payload : { portal: 'none', label: CONTENT_NOT_READY, hasLines: false, isGrid: false, gridWritable: false };
-  renderButtons();
+  renderModes();
+  await locate();
 }
 
 let debounce = 0;

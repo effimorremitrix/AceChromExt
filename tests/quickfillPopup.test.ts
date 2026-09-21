@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { QuickfillContentRequest, QuickfillContentResponse, StoredPaste, Where } from '../quickfill-extension/src/core/messages.js';
+import type { FillMode, Portal, QuickfillContentRequest, QuickfillContentResponse, StoredPaste, Where } from '../quickfill-extension/src/core/messages.js';
 
 const email = readFileSync(join(__dirname, 'fixtures', 'deckhand', '04-booking-confirmation.txt'), 'utf8');
 
@@ -23,6 +23,31 @@ let place: Where;
 let reply: QuickfillContentResponse;
 let sent: QuickfillContentRequest[];
 let session: StoredPaste | null;
+let sessionMode: FillMode;
+
+/**
+ * What the tab answers. `canFillForm` defaults to true for a named portal,
+ * because that is the common case; the grid screen passes it false, since
+ * Copy Container Details has no fields of its own.
+ */
+function at(portal: Portal, label: string, extra: Partial<Where> = {}): Where {
+  return { portal, label, hasLines: false, canFillForm: portal !== 'none', hasGrid: false, gridWritable: false, ...extra };
+}
+
+/** The labels on the portal toggle, and which one is pressed. */
+function modeLabels(): string[] {
+  return Array.from(document.querySelectorAll('.mode-button')).map((node) => node.textContent ?? '');
+}
+
+function activeMode(): string {
+  return document.querySelector('.mode-button-active')?.textContent ?? '';
+}
+
+function pressMode(label: string): void {
+  const button = Array.from(document.querySelectorAll('.mode-button')).find((node) => node.textContent === label);
+  if (!button) throw new Error(`No mode button labelled ${label}`);
+  (button as HTMLButtonElement).click();
+}
 
 /** Let the popup's boot() promises and the input debounce settle. */
 async function settle(): Promise<void> {
@@ -50,23 +75,28 @@ beforeEach(async () => {
   vi.useFakeTimers();
   vi.resetModules();
   document.body.innerHTML = '<div id="root"></div>';
-  place = { portal: 'ace', label: 'Step 4: Transportation', hasLines: false, isGrid: false, gridWritable: false };
+  place = at('ace', 'Step 4: Transportation');
   reply = { ok: true, type: 'content/count', payload: { filled: 3, total: 4, missed: ['Carrier SCAC/IATA'] } };
   sent = [];
   session = null;
+  sessionMode = 'auto';
 
   vi.stubGlobal('chrome', {
     runtime: {
-      sendMessage: vi.fn(async (message: { type: string; payload?: StoredPaste }) => {
+      sendMessage: vi.fn(async (message: { type: string; payload?: StoredPaste; mode?: FillMode }) => {
         if (message.type === 'store/set') {
           session = message.payload ?? null;
-          return { ok: true, type: 'store/data', payload: session };
+          return { ok: true, type: 'store/data', payload: { paste: session, mode: sessionMode } };
+        }
+        if (message.type === 'store/mode') {
+          sessionMode = message.mode ?? 'auto';
+          return { ok: true, type: 'store/data', payload: { paste: session, mode: sessionMode } };
         }
         if (message.type === 'store/clear') {
           session = null;
           return { ok: true, type: 'store/cleared' };
         }
-        return { ok: true, type: 'store/data', payload: session };
+        return { ok: true, type: 'store/data', payload: { paste: session, mode: sessionMode } };
       }),
     },
     tabs: {
@@ -154,7 +184,7 @@ describe('the popup', () => {
   });
 
   it('offers the line picker only on the Commodities step', async () => {
-    place = { portal: 'ace', label: 'Step 3: Commodities', hasLines: true, isGrid: false, gridWritable: false };
+    place = at('ace', 'Step 3: Commodities', { hasLines: true });
     const box = await mount();
     await paste(box, ['InvoiceNumber\tDescription', 'CN-1042\tAlmond Kernels'].join('\n'));
     expect(buttonLabels()).toEqual(['Fill this page', 'Fill line']);
@@ -162,18 +192,20 @@ describe('the popup', () => {
   });
 
   it('shows the INTTRA buttons on an INTTRA screen', async () => {
-    place = { portal: 'inttra', label: 'General Details', hasLines: false, isGrid: false, gridWritable: false };
+    place = at('inttra', 'General Details');
     const box = await mount();
     await paste(box, email);
     // One press per screen: the number of containers differs per draft, so the
-    // button walks every container block rather than naming one.
-    expect(buttonLabels()).toEqual(['Fill this screen', 'Fill all 3 containers']);
+    // button walks every container block rather than naming one. Copy rows
+    // trails, because it needs no grid to build the block and the operator's
+    // next move on this screen is to open the modal and paste it.
+    expect(buttonLabels()).toEqual(['Fill this screen', 'Fill all 3 containers', 'Copy rows']);
   });
 
   it('leads with Copy rows on a grid that cannot be typed into', async () => {
     // The live portal's grid: clicking Fill first is a dead end, so it is not
     // the first button.
-    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: false };
+    place = at('inttra', 'Copy Container Details', { canFillForm: false, hasGrid: true });
     const box = await mount();
     await paste(box, email);
     expect(buttonLabels()).toEqual(['Copy rows', 'Fill container grid']);
@@ -183,7 +215,7 @@ describe('the popup', () => {
     // The live portal, 2026-09-17: two equal blue buttons read as two equal
     // routes. Fill was pressed, wrote nothing, and only then said why. So the
     // reason is on the screen first, and only Copy rows is blue.
-    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: false };
+    place = at('inttra', 'Copy Container Details', { canFillForm: false, hasGrid: true });
     const box = await mount();
     await paste(box, email);
     expect(text('.grid-note')).toContain('opens an editor when a cell is clicked');
@@ -193,7 +225,7 @@ describe('the popup', () => {
   });
 
   it('leads with Fill on a grid that can be typed into', async () => {
-    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: true };
+    place = at('inttra', 'Copy Container Details', { canFillForm: false, hasGrid: true, gridWritable: true });
     const box = await mount();
     await paste(box, email);
     expect(buttonLabels()).toEqual(['Fill container grid', 'Copy rows']);
@@ -205,7 +237,7 @@ describe('the popup', () => {
   it('names the paste route when the grid holds no writable control', async () => {
     // The live portal, 2026-09-17: Filled 0 of 9, every cell unresolved,
     // because the grid opens an editor only when a cell is clicked.
-    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: false };
+    place = at('inttra', 'Copy Container Details', { canFillForm: false, hasGrid: true });
     reply = { ok: true, type: 'content/count', payload: { filled: 0, total: 9, missed: ['9 grid cells'], useCopyRows: true } };
     const box = await mount();
     await paste(box, email);
@@ -216,7 +248,7 @@ describe('the popup', () => {
   });
 
   it('copies the rows to the clipboard in the grid\u2019s own column order', async () => {
-    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: false };
+    place = at('inttra', 'Copy Container Details', { canFillForm: false, hasGrid: true });
     const written: string[] = [];
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -250,7 +282,7 @@ describe('the popup', () => {
   it('names the columns that stay blank after Copy rows', async () => {
     // The operator can see whether the seal is in the block before pasting,
     // which is the whole of the checking Quickfill does.
-    place = { portal: 'inttra', label: 'Copy Container Details', hasLines: false, isGrid: true, gridWritable: false };
+    place = at('inttra', 'Copy Container Details', { canFillForm: false, hasGrid: true });
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => undefined } });
     reply = {
       ok: true,
@@ -278,7 +310,7 @@ describe('the popup', () => {
   it('offers Copy rows alone on an INTTRA screen the detector could not name', async () => {
     // The fifth live run: the grid was of a shape the detector had never been
     // shown, and the popup offered nothing. The block needs no detection.
-    place = { portal: 'inttra', label: 'INTTRA screen not identified. Copy rows still copies the container block, in the default column order, for Copy Container Details.', hasLines: false, isGrid: false, gridWritable: false, copyRowsOnly: true };
+    place = at('inttra', 'INTTRA screen not identified. Copy rows still copies the container block, in the default column order, for Copy Container Details.', { canFillForm: false });
     const written: string[] = [];
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => void written.push(value) } });
     reply = {
@@ -308,7 +340,7 @@ describe('the popup', () => {
   });
 
   it('offers nothing on a page that is neither portal', async () => {
-    place = { portal: 'none', label: 'This CBP page is not one of the four AESDirect filing steps.', hasLines: false, isGrid: false, gridWritable: false };
+    place = at('none', 'This CBP page is not one of the four AESDirect filing steps.');
     const box = await mount();
     await paste(box, email);
     expect(buttonLabels()).toEqual([]);
@@ -358,5 +390,139 @@ describe('the popup', () => {
     await paste(box, '{ "not": "a package or an extraction" }');
     expect(text('.read-as')).not.toBe('');
     expect(buttonLabels()).toEqual([]);
+  });
+});
+
+/**
+ * Both INTTRA page types, from one paste.
+ *
+ * The INTTRA Helper reaches the form and the grid from two tabs that are
+ * always there. Quickfill has one row of buttons, so it has to offer both
+ * routes whenever both exist - and on the live create page with the Copy
+ * Container Details modal open, both do: `detectInttraPage` names the create
+ * page there (the marker `#generalDetails` is real, visible and worth 10, plus
+ * its heading and URL, against the grid's 10), while the grid is on the screen
+ * all the same. Reading "is this the grid screen?" off that one answer left
+ * the popup with no grid route at all.
+ */
+describe('the two INTTRA page types', () => {
+  it('offers the grid AND the container blocks when the modal is open over the create page', async () => {
+    place = at('inttra', 'Create Shipping Instruction', { canFillForm: true, hasGrid: true, gridWritable: false });
+    const box = await mount();
+    await paste(box, email);
+    // The grid pair leads, because the modal is what the operator is looking
+    // at, and Copy rows leads it because this grid cannot be typed into.
+    expect(buttonLabels()).toEqual(['Copy rows', 'Fill container grid', 'Fill this screen', 'Fill all 3 containers']);
+    const primary = Array.from(document.querySelectorAll('.button-row-actions .button-primary')).map((node) => node.textContent);
+    expect(primary).toEqual(['Copy rows']);
+  });
+
+  it('keeps the form buttons first when no grid is on the page', async () => {
+    place = at('inttra', 'Create Shipping Instruction', { canFillForm: true, hasGrid: false });
+    const box = await mount();
+    await paste(box, email);
+    // Copy rows still trails: the operator opens the modal next, and the block
+    // needs no grid to be built.
+    expect(buttonLabels()).toEqual(['Fill this screen', 'Fill all 3 containers', 'Copy rows']);
+  });
+
+  it('offers the grid on an INTTRA page the detector could not name', async () => {
+    // A tie no signature won, with the grid on the screen: the INTTRA Helper
+    // has a checkbox for exactly this ("look for the grid even when the screen
+    // was not identified"), and here it needs none.
+    place = at('inttra', 'INTTRA screen not identified, but a container grid is on the page, so the grid can still be filled and copied.', {
+      canFillForm: false,
+      hasGrid: true,
+    });
+    const box = await mount();
+    await paste(box, email);
+    expect(buttonLabels()).toEqual(['Copy rows', 'Fill container grid']);
+  });
+
+  it('sends the container fill with no index, so one press walks every block', async () => {
+    place = at('inttra', 'Create Shipping Instruction', { canFillForm: true });
+    const box = await mount();
+    await paste(box, email);
+    press('Fill all 3 containers');
+    await settle();
+    const fill = sent.find((message) => message.type === 'content/fillInttra' && message.scope === 'container');
+    expect(fill).toMatchObject({ type: 'content/fillInttra', scope: 'container', mode: 'auto' });
+    expect(fill && 'containerIndex' in fill ? fill.containerIndex : undefined).toBeUndefined();
+  });
+});
+
+/**
+ * The portal toggle.
+ *
+ * Auto is the default and is what the popup did before the toggle existed.
+ * The pins are for the operator who can see the portal when the detector
+ * cannot - the third live run read "INTTRA screen not identified" and blocked
+ * Fill on the page being filled.
+ */
+describe('the ACE / INTTRA toggle', () => {
+  it('offers three states, and starts on Auto', async () => {
+    await mount();
+    expect(modeLabels()).toEqual(['Auto', 'ACE', 'INTTRA']);
+    expect(activeMode()).toBe('Auto');
+  });
+
+  it('asks the tab again, as the pinned portal, and keeps the pin for the session', async () => {
+    const box = await mount();
+    await paste(box, email);
+    sent = [];
+    place = at('inttra', 'Create Shipping Instruction', { canFillForm: true });
+    pressMode('INTTRA');
+    await settle();
+    expect(activeMode()).toBe('INTTRA');
+    expect(sent.filter((message) => message.type === 'content/where')).toEqual([{ type: 'content/where', mode: 'inttra' }]);
+    expect(sessionMode).toBe('inttra');
+    expect(buttonLabels()).toEqual(['Fill this screen', 'Fill all 3 containers', 'Copy rows']);
+  });
+
+  it('carries the pin into the fill, so an unidentified screen is filled rather than refused', async () => {
+    place = at('inttra', 'INTTRA screen not identified. Set to INTTRA, so Fill writes the Create Shipping Instruction fields.', {
+      canFillForm: true,
+      assumingCreatePage: true,
+    });
+    sessionMode = 'inttra';
+    const box = await mount();
+    await paste(box, email);
+    expect(activeMode()).toBe('INTTRA');
+    press('Fill this screen');
+    await settle();
+    expect(sent.some((message) => message.type === 'content/fillInttra' && message.mode === 'inttra')).toBe(true);
+  });
+
+  it('names the screen it assumed, before it says how many took', async () => {
+    place = at('inttra', 'INTTRA screen not identified.', { canFillForm: true, assumingCreatePage: true });
+    sessionMode = 'inttra';
+    reply = { ok: true, type: 'content/count', payload: { filled: 2, total: 7, missed: [], assumedScreen: 'Create Shipping Instruction' } };
+    const box = await mount();
+    await paste(box, email);
+    press('Fill this screen');
+    await settle();
+    expect(text('.result')).toBe('The screen was not identified, so the Create Shipping Instruction fields were tried. Filled 2 of 7.');
+  });
+
+  it('says plainly when the pinned portal is not what this page is', async () => {
+    place = at('none', 'Set to ACE, and this page is not one of the four AESDirect filing steps, so there is nothing here to fill. Switch to Auto or INTTRA, or open an AESDirect step.');
+    sessionMode = 'ace';
+    const box = await mount();
+    await paste(box, email);
+    expect(activeMode()).toBe('ACE');
+    expect(buttonLabels()).toEqual([]);
+    expect(text('.where')).toContain('Set to ACE');
+  });
+
+  it('survives Clear: emptying the box does not un-pin the portal', async () => {
+    sessionMode = 'inttra';
+    place = at('inttra', 'Create Shipping Instruction', { canFillForm: true });
+    const box = await mount();
+    await paste(box, email);
+    (document.querySelector('.button-row .button-small') as HTMLButtonElement).click();
+    await settle();
+    expect(box.value).toBe('');
+    expect(sessionMode).toBe('inttra');
+    expect(activeMode()).toBe('INTTRA');
   });
 });

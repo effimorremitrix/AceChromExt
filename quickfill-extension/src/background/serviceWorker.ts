@@ -1,23 +1,30 @@
 /**
  * Background service worker.
  *
- * Holds the parsed paste for the browsing session so closing the popup does not
- * lose it. That is all it does: no session log, no diagnostics, no network
- * request of any kind. The ACE Helper's session log is an audit feature, and
- * Quickfill has no audit story to tell - the filing package the operator keeps
- * is the ACE Helper's job.
+ * Holds the parsed paste and the portal toggle for the browsing session, so
+ * closing the popup does not lose either. That is all it does: no session log,
+ * no diagnostics, no network request of any kind. The ACE Helper's session log
+ * is an audit feature, and Quickfill has no audit story to tell - the filing
+ * package the operator keeps is the ACE Helper's job.
  */
 
-import type { QuickfillBackgroundRequest, QuickfillBackgroundResponse } from '../core/messages.js';
-import { clearPaste, getPaste, setPaste } from '../core/store.js';
+import type { QuickfillBackgroundRequest, QuickfillBackgroundResponse, StoredState } from '../core/messages.js';
+import { clearPaste, getMode, getPaste, setMode, setPaste } from '../core/store.js';
+
+async function state(): Promise<StoredState> {
+  return { paste: await getPaste(), mode: await getMode() };
+}
 
 async function handle(message: QuickfillBackgroundRequest): Promise<QuickfillBackgroundResponse> {
   switch (message.type) {
     case 'store/get':
-      return { ok: true, type: 'store/data', payload: await getPaste() };
+      return { ok: true, type: 'store/data', payload: await state() };
     case 'store/set':
       await setPaste(message.payload);
-      return { ok: true, type: 'store/data', payload: await getPaste() };
+      return { ok: true, type: 'store/data', payload: await state() };
+    case 'store/mode':
+      await setMode(message.mode);
+      return { ok: true, type: 'store/data', payload: await state() };
     case 'store/clear':
       await clearPaste();
       return { ok: true, type: 'store/cleared' };
