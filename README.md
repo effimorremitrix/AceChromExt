@@ -330,6 +330,7 @@ More: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**,
 | Command | Does |
 | --- | --- |
 | `npm run verify` | typecheck + tests + template + all three extension builds + their three bundle checks + companion build + dashboard build + its bundle check |
+| `npm run build:all` | build all three extensions at once: `dist/`, `dist-inttra/`, `dist-quickfill/`. No checks, and not the playgrounds, the companion or the dashboard |
 | `npm run build` / `build:watch` | build `dist/` (the ACE Helper) |
 | `npm run build:inttra` / `build:inttra:watch` | build `dist-inttra/` (the INTTRA Helper) |
 | `npm run build:quickfill` / `build:quickfill:watch` | build `dist-quickfill/` (the Quickfill Helper) |
