@@ -63,6 +63,12 @@ describe('the playground pages, filled from disk', () => {
       runtime: { onMessage: { addListener: (listener: Listener) => listeners.push(listener) }, sendMessage: async () => ({ ok: true }) },
     });
     vi.resetModules();
+    // The script registers its listener once per frame and remembers that on
+    // the frame, because the popup can start a second copy of it in a tab.
+    // Chrome gives every page load a fresh isolated world; a module reset in
+    // one jsdom does not, so the flag is cleared here
+    // (tests/quickfillContent.test.ts asserts the once-only behaviour itself).
+    delete (globalThis as unknown as { __quickfillListening?: boolean }).__quickfillListening;
     await import('../quickfill-extension/src/content/quickfillContent.js');
   });
 

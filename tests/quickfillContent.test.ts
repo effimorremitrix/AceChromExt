@@ -50,6 +50,20 @@ function answer(message: QuickfillContentRequest): QuickfillContentResponse {
 // Every describe in this file drives the same freshly imported content
 // script, so the setup is file-scoped: a block that forgot it would otherwise
 // answer through a listener left behind by the previous one.
+/**
+ * A frame the script has never run in.
+ *
+ * The script registers its listener once per frame and remembers that on the
+ * frame, because the popup can start a second copy of it in a tab
+ * (`chrome.scripting.executeScript`) and two listeners would answer the same
+ * message twice. Chrome gives every page load a fresh isolated world; a module
+ * reset in one jsdom does not, so the flag is cleared here. Re-importing
+ * WITHOUT clearing it is the second-injection case, and it is asserted below.
+ */
+function freshFrame(): void {
+  delete (globalThis as unknown as { __quickfillListening?: boolean }).__quickfillListening;
+}
+
 beforeEach(async () => {
   vi.useFakeTimers();
   listeners.length = 0;
@@ -57,12 +71,40 @@ beforeEach(async () => {
     runtime: { onMessage: { addListener: (listener: Listener) => listeners.push(listener) }, sendMessage: async () => ({ ok: true }) },
   });
   vi.resetModules();
+  freshFrame();
   await import('../quickfill-extension/src/content/quickfillContent.js');
 });
 
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+/**
+ * Started twice in the same frame.
+ *
+ * On 2026-09-21 the popup could reach no frame of a live INTTRA tab, because
+ * Chrome injects a content script when a page LOADS and that tab had been open
+ * since before the build was loaded. The popup now starts the script itself,
+ * into every frame; the frames that already had it must not end up answering
+ * everything twice.
+ */
+describe('started a second time in a frame that already has it', () => {
+  it('registers one listener, so no message is answered twice', async () => {
+    expect(listeners).toHaveLength(1);
+    vi.resetModules();
+    // No freshFrame(): this is the same frame, injected into again.
+    await import('../quickfill-extension/src/content/quickfillContent.js');
+    expect(listeners).toHaveLength(1);
+  });
+
+  it('keeps answering after the second injection', async () => {
+    document.body.innerHTML = readFileSync(join(__dirname, 'fixtures', 'inttra-div-grid.html'), 'utf8');
+    vi.resetModules();
+    await import('../quickfill-extension/src/content/quickfillContent.js');
+    const response = answer({ type: 'content/where', mode: 'auto' });
+    expect(response.ok && response.type === 'content/where' && response.payload.hasGrid).toBe(true);
+  });
 });
 
 describe('Quickfill content script on an INTTRA tab', () => {

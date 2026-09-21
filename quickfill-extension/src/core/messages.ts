@@ -141,5 +141,24 @@ export type QuickfillBackgroundResponse =
   | { ok: true; type: 'store/cleared' }
   | { ok: false; error: string };
 
-export const CONTENT_NOT_READY =
-  'Quickfill is not running in this tab. Open an ACE or INTTRA screen and reload the page.';
+/**
+ * The tab has no content script, and starting one in it did not take either.
+ *
+ * Chrome injects a content script when a page LOADS, so a tab that was already
+ * open when the helper was loaded or rebuilt has none - which is the whole of
+ * what went wrong on the live create page on 2026-09-21. The popup now starts
+ * the script itself before it says any of this, so by the time an operator
+ * reads this line the injection was refused as well and reloading the page is
+ * the move that is left.
+ */
+export const CONTENT_NOT_READY = 'Quickfill could not start in this tab. Reload the page, then open Quickfill again.';
+
+/**
+ * The tab is not one of the five portal hosts.
+ *
+ * Told apart from the line above by `tab.url`, which Chrome populates only for
+ * a tab the extension has host permission for: its absence IS the answer, and
+ * it costs no `tabs` permission to read. Reloading such a page would change
+ * nothing, so the popup does not suggest it.
+ */
+export const NOT_A_PORTAL_TAB = 'This tab is not an ACE or INTTRA screen, so Quickfill cannot run in it.';

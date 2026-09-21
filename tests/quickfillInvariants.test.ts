@@ -175,10 +175,62 @@ describe('Quickfill: what it may and may not import', () => {
 describe('Quickfill manifest', () => {
   const manifest = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8')) as Record<string, unknown>;
 
-  it('is Manifest V3, named Quickfill Helper, with only the storage permission', () => {
+  it('is Manifest V3, named Quickfill Helper, asking for storage and scripting and nothing else', () => {
     expect(manifest['manifest_version']).toBe(3);
     expect(manifest['name']).toBe('Quickfill Helper');
-    expect(manifest['permissions']).toEqual(['storage']);
+    // `scripting` was added on 2026-09-21, deliberately, and this is where that
+    // decision is written down. Chrome injects a content script when a page
+    // LOADS, so every portal tab that was already open when the helper was
+    // loaded or rebuilt is orphaned: the manifest still matches it, and it is
+    // running nothing. On the live create page that emptied the popup in front
+    // of the grid the operator was filling. `scripting` lets the popup start
+    // the script in the tab instead of asking for a page reload that closes
+    // the Copy Container Details modal.
+    //
+    // It widens nothing the operator can see: `host_permissions` already grant
+    // the five portal hosts, and Chrome refuses an injection anywhere else. The
+    // test below pins what it may be used for - this extension's own bundled
+    // file, never a function and never the page's own world - which is the part
+    // that would otherwise drift into arbitrary code injection.
+    expect(manifest['permissions']).toEqual(['storage', 'scripting']);
+    expect(manifest['optional_permissions']).toBeUndefined();
+    expect(manifest['optional_host_permissions']).toBeUndefined();
+  });
+
+  it('uses scripting only to start its own content script, never to run code it composed', () => {
+    const users = sources.filter(({ code }) => /chrome\.scripting/.test(code));
+    // One caller, so there is one place to read. A second would be a second
+    // set of rules about what may be injected.
+    expect(users.map(({ path }) => path)).toEqual(['src/ui/popup.ts']);
+    for (const { path, code } of users) {
+      // The bundled content script by name: not a path from a message, not a
+      // file named anywhere else, and nothing the operator pasted.
+      expect(code, path).toMatch(/files:\s*\[\s*'quickfillContent\.js'\s*\]/);
+      // `func` and `args` run a function in the page's process, and MAIN puts
+      // it in the page's own world beside the portal's scripts. Either would
+      // make this extension a code-injection tool on a customs filing portal.
+      expect(code, path).not.toMatch(/\bfunc\s*:/);
+      expect(code, path).not.toMatch(/\bargs\s*:/);
+      expect(code, path).not.toMatch(/world\s*:/);
+      // Nothing persistent and no stylesheet: a registered script would outlive
+      // the popup, and a stylesheet in the page is what the content layer is
+      // forbidden to add (tests/invariants.test.ts).
+      expect(code, path).not.toMatch(/registerContentScripts|updateContentScripts|insertCSS|removeCSS/);
+      // Only ever the tab the popup is open over.
+      expect(code, path).not.toMatch(/allFrames:\s*false/);
+      expect(code, path).toMatch(/target:\s*\{\s*tabId/);
+    }
+  });
+
+  it('registers its content listener once, however many times the script is started', () => {
+    // The popup starts the script in a tab that has none, and a frame that
+    // already had it would otherwise answer every message twice - which Chrome
+    // reports as "Could not send response more than once" and which would make
+    // two frames' answers race.
+    const content = readFileSync(join(SRC, 'content', 'quickfillContent.ts'), 'utf8');
+    expect(content).toMatch(/if\s*\(!\s*frame\.__quickfillListening\s*\)/);
+    expect(content).toMatch(/frame\.__quickfillListening\s*=\s*true/);
+    expect((content.match(/onMessage\.addListener/g) ?? []).length).toBe(1);
   });
 
   it('names exactly the two portals’ hosts and never <all_urls>', () => {
