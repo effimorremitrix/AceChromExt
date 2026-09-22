@@ -260,9 +260,12 @@ describe('manifest', () => {
    * instead of a popup. `default_popup` is gone from the manifest in the same
    * change, so it replaces a surface rather than adding one.
    *
-   * Widen it no further, and do not add it to Quickfill, whose one box is a
-   * pop-out window instead (no permission at all): docs/ARCHITECTURE.md,
-   * "The three UI surfaces".
+   * Widen it no further. Quickfill was given the same permission later the
+   * same day, so all three helpers open a side panel and none declares a
+   * `default_popup`; its pop-out window went with its popup, because three
+   * helpers behaving three ways is one thing more to remember than a
+   * forwarder in a hurry has room for. docs/ARCHITECTURE.md,
+   * "The one UI surface", and docs/QUICKFILL.md section 5c for the reversal.
    */
   it('requests storage and sidePanel, and nothing else', () => {
     expect(manifest['permissions']).toEqual(['storage', 'sidePanel']);
