@@ -249,10 +249,12 @@ layer data-only.
 | `quickfill-extension/src/paste.ts` | the one input: detect the shape, build the package, auto-resolve. Pure |
 | `quickfill-extension/src/aceShipment.ts` | package -> ACE model with no gate; the ungated twin of `shared/src/aceView.ts` |
 | `quickfill-extension/src/content/` | one content script for both portals; tallies a report to a count |
-| `src/ui/app.ts` | the shared UI, rendered in both surfaces |
+| `src/ui/app.ts` | the shared UI, rendered in the side panel and the wide panel |
+| `src/ui/liveTab.ts` | re-probing for a surface that outlives a tab switch, and the portal tab for a detached one |
+| `src/ui/lastTab.ts` | the screen the operator was last on, per surface |
 | `src/ui/importer.ts` | the XLSX parser, injected only into the panel |
 | `src/core/store.ts` | session-memory storage of the imported shipment |
-| `src/background/serviceWorker.ts` | holds the store across popup open/close |
+| `src/background/serviceWorker.ts` | holds the store across a surface closing and reopening; points the toolbar icon at the side panel |
 | `companion/src/qbxml/` | a small XML reader (no DOCTYPE, no entity expansion), qbXML request builders, response parsers |
 | `companion/src/transport/` | `QbxmlTransport`: the COM bridge, or replay of a saved response |
 | `companion/src/adapter/` | `InvoiceSourceAdapter` and its QuickBooks implementation |
@@ -335,15 +337,74 @@ value looks right and files wrong. The helper:
 Every ACE write in the codebase goes through this function. The calculator's
 insertion does too.
 
-## The two UI surfaces
+## The three UI surfaces
 
-| Surface | Contains | Why |
-| --- | --- | --- |
-| `popup.html` | page status, line picker, Fill buttons, last report | one click from the ACE tab |
-| `panel.html` | import, full preview, settings, diagnostics | Chrome closes a popup when a file picker opens, and previews need width |
+| Surface | Who has it | Contains | Why |
+| --- | --- | --- | --- |
+| `sidepanel.html` | ACE Helper, INTTRA Helper | page status, line picker, Fill buttons, last report | docked beside the page and stays open while the operator fills it |
+| `panel.html` | ACE Helper, INTTRA Helper | import, full preview, settings, diagnostics | Chrome closes a popup when a file picker opens, and previews need width |
+| `popup.html` | Quickfill Helper | the one paste box, the toggle, the buttons | one click from the toolbar, and behind **Pop out**, the same page in a window |
 
-Both render `src/ui/app.ts`. The XLSX parser is injected into the panel only,
-so `popup.js` is ~27 kB instead of ~380 kB.
+The first two render `src/ui/app.ts`. The XLSX parser is injected into the wide
+panel only, so `sidePanel.js` is ~128 kB instead of ~380 kB.
+
+### Why none of the three is an action popup any more
+
+Chrome destroys an action popup the moment it loses focus. On a form being
+filled that is the FIRST click into the form, so the helper closed and the
+operator went back to the toolbar for the next field. Nothing inside a popup
+can fix that; the surface has to be one Chrome does not destroy. Reported
+2026-09-22, against all three helpers.
+
+Two answers, because the two shapes of helper want different things:
+
+- **A side panel** for the ACE and INTTRA helpers. It is docked beside the
+  page, survives the click and the tab switch, and closes when the operator
+  closes it. It costs the `sidePanel` permission, which is a surface and only
+  a surface: no host, no network, no tab reading, no injection. `default_popup`
+  is gone from both manifests in the same change, so it REPLACED a surface
+  rather than adding one, and `setPanelBehavior({ openPanelOnActionClick:
+  true })` in each service worker is what makes the toolbar icon open it. The
+  pinned permission sets are in `tests/invariants.test.ts`,
+  `tests/inttraInvariants.test.ts` and `tests/webInvariants.test.ts`.
+- **A pop-out window** for Quickfill, which stays an action popup with a
+  **Pop out** button beside Clear. `chrome.windows.create` on an extension page
+  of our own needs no permission at all, the window is the same
+  `popup.html` carrying `?window=1`, and it can sit on a second screen, which
+  a side panel cannot. It also costs the portal no width, and one paste box
+  does not need a docked strip. Quickfill therefore does NOT get `sidePanel`;
+  `docs/QUICKFILL.md` section 5c.
+
+### What a surface that stays open owes the operator
+
+A popup could not be wrong about the page: it was gone before the page could
+change. A side panel and a pop-out window are still on the screen when the
+operator switches tab, opens a second draft or reloads the portal, and a stale
+"Create Shipping Instruction, 7 containers" reads as current. So both re-probe,
+through `watchBrowser` in `src/ui/liveTab.ts`: `tabs.onActivated`,
+`tabs.onUpdated` and `windows.onFocusChanged`, coalesced so that loading a page
+is one probe and two probes never overlap. None of those events needs a
+permission this build does not already have, and no URL is read there: which
+tabs may be addressed is still Chrome's answer to a pattern query.
+
+One thing a browser-driven repaint may not do is take the operator's caret.
+`tabs.onUpdated` fires for EVERY tab, so a background tab finishing its load
+would otherwise rebuild the DOM under someone halfway through the Deckhand
+paste box. `isEditing` in the same file holds the paint back while a box has
+focus; the state behind it was refreshed either way, and the next click or the
+next browser event paints it.
+
+The pop-out window has one more problem of its own. It is a window, so
+`currentWindow` means the pop-out, whose only tab is the helper. Asking it
+would report "no portal tab" with the portal open right beside it, so
+`activeBrowserTab` in the same file queries `windowType: 'normal'` instead and
+takes the most recently used answer.
+
+Reopening is remembered too (`src/ui/lastTab.ts`): the screen the operator
+chose, per surface, in `chrome.storage.session`. Only screens the operator
+navigated to are written; the boot defaults and the fallback for a screen this
+state has no tab for are not, because remembering those would overwrite where
+the operator was with where the code had to put them.
 
 ## Storage
 

@@ -66,3 +66,23 @@ chrome.runtime.onStartup.addListener(() => {
   void clearImport();
   void clearLog();
 });
+
+/**
+ * The toolbar icon opens the side panel.
+ *
+ * There is no `default_popup` in the manifest any more. Chrome destroys an
+ * action popup the moment it loses focus, so the helper closed on the first
+ * click into the ACE form and the operator had to go back to the toolbar for
+ * every field. A side panel is docked beside the page, survives that click,
+ * survives a tab switch, and closes when the operator closes it.
+ *
+ * Chrome persists the behaviour, so one call would do; it is made on every
+ * worker start because a service worker is not persistent and this costs
+ * nothing. A build running on a Chrome without the API is left as it is rather
+ * than being broken by the attempt.
+ */
+if (chrome.sidePanel) {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {
+    // Nothing to recover: the icon simply does not open the panel on this Chrome.
+  });
+}

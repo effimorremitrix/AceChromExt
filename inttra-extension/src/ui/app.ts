@@ -30,10 +30,12 @@ import type { GridFillReport } from '../content/gridWriter.js';
 import type { InttraFillReport } from '../models/InttraField.js';
 import { ALL_INTTRA_MAPPINGS, GRID_COLUMNS, GRID_DEVTOOLS_CHECKLIST, NOTIFICATION_EMAILS_NOTE, unverifiedInttraFieldKeys } from '../mappings/index.js';
 import { INTTRA_PAGE_SIGNATURES } from '../pages.js';
+import { isEditing, watchBrowser } from '../../../src/ui/liveTab.js';
+import { tabMemory } from '../../../src/ui/lastTab.js';
 import { gridPasteBlock, type GridPasteBlock } from '../content/gridWriter.js';
 import { resolveInttraTab, sendToBackground, sendToTab, type InttraTab } from './tabs.js';
 
-export type Surface = 'popup' | 'panel';
+export type Surface = 'side' | 'panel';
 type StatusTone = 'info' | 'ok' | 'warn' | 'error';
 
 interface AppState {
@@ -58,7 +60,7 @@ interface AppState {
 }
 
 const state: AppState = {
-  surface: 'popup',
+  surface: 'side',
   settings: { ...DEFAULT_INTTRA_SETTINGS },
   stored: emptyStoredPackage(),
   tab: null,
@@ -75,6 +77,9 @@ const state: AppState = {
   overridesDraft: null,
   deckhandDraft: '',
 };
+
+/** The screen the operator was last on, per surface. See src/ui/lastTab.ts. */
+const lastTab = tabMemory('inttraHelper.activeTab');
 
 // ---------------------------------------------------------------- utilities
 
@@ -460,21 +465,29 @@ function renderTabs(): HTMLElement {
   const nav = el('nav', { className: 'tabs', attrs: { role: 'tablist' } });
   for (const tab of tabs) {
     const button = el('button', { className: `tab${state.activeTab === tab.id ? ' tab-active' : ''}`, text: tab.label, attrs: { type: 'button', role: 'tab', 'aria-selected': String(state.activeTab === tab.id) } });
-    button.addEventListener('click', () => {
-      state.activeTab = tab.id;
-      render();
-    });
+    button.addEventListener('click', () => goTo(tab.id));
     nav.append(button);
   }
   return nav;
 }
 
+/**
+ * Every screen the OPERATOR chooses goes through here, so it is remembered.
+ *
+ * The automatic moves deliberately do not: the boot default, and the fallback
+ * in the tab strip for a screen this state has no tab for. Remembering those
+ * would overwrite where the operator actually was with where the code had to
+ * put them.
+ */
+function goTo(tab: string): void {
+  state.activeTab = tab;
+  lastTab.write(state.surface, tab);
+  render();
+}
+
 function actionButton(label: string, tab: string, primary = false): HTMLElement {
   const button = el('button', { className: `button${primary ? ' button-primary' : ''}`, text: label, attrs: { type: 'button' } });
-  button.addEventListener('click', () => {
-    state.activeTab = tab;
-    render();
-  });
+  button.addEventListener('click', () => goTo(tab));
   return button;
 }
 
@@ -672,7 +685,7 @@ function renderFill(): HTMLElement {
   const current = pkg();
   if (!current) {
     section.append(el('p', { className: 'muted', text: 'Load or build a filing package first.' }));
-    if (state.surface === 'popup') section.append(openPanelButton('Open the panel'));
+    if (state.surface === 'side') section.append(openPanelButton('Open the panel'));
     return section;
   }
   const ready = readyToFill();
@@ -1121,7 +1134,7 @@ function render(): void {
       root.append(renderFill());
       break;
   }
-  if (state.surface === 'popup') {
+  if (state.surface === 'side') {
     const open = openPanelButton('Open full panel (import, Deckhand, package, diagnostics)');
     open.classList.add('button-small');
     root.append(el('footer', { className: 'app-footer' }, [open]));
@@ -1139,5 +1152,24 @@ export async function startApp(surface: Surface): Promise<void> {
   await refreshLog();
   await refreshTab();
   if (state.stored.package) state.activeTab = 'overview';
+
+  // Where the operator actually was wins over the default above. A screen this
+  // state has no tab for is dropped by the tab strip, so a remembered
+  // 'package' cannot strand the side panel on a screen it does not show.
+  const remembered = await lastTab.read(surface);
+  if (remembered) state.activeTab = remembered;
+
   render();
+
+  // Both surfaces now outlive the tab they are describing: the side panel is
+  // beside the page while the operator switches tabs, and the panel is a tab
+  // of its own. Neither may go on describing the screen it was opened on -
+  // and on this portal that matters twice over, because the header names the
+  // tab it addresses.
+  watchBrowser(async () => {
+    await refreshTab();
+    // Refreshed either way; the paint waits while the operator is in a box, so
+    // a background tab finishing its load cannot take their caret.
+    if (!isEditing()) render();
+  });
 }

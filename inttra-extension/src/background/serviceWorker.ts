@@ -43,3 +43,15 @@ chrome.runtime.onStartup.addListener(() => {
   void clearStoredPackage();
   void clearLog();
 });
+
+/**
+ * The toolbar icon opens the side panel. See src/background/serviceWorker.ts
+ * for why there is no `default_popup`: an action popup is destroyed on its
+ * first loss of focus, which on Create Shipping Instruction is the first click
+ * into the form.
+ */
+if (chrome.sidePanel) {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {
+    // Nothing to recover: the icon simply does not open the panel on this Chrome.
+  });
+}

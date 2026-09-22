@@ -120,10 +120,13 @@ describe('the dashboard reuses the domain code and nothing runtime-specific', ()
     // One expected set per manifest, so a permission can only ever be added by
     // editing this line. Quickfill's `scripting` is the popup starting its own
     // content script in a tab that has none, and nothing else: what it may
-    // inject is pinned in tests/quickfillInvariants.test.ts.
+    // inject is pinned in tests/quickfillInvariants.test.ts. `sidePanel` is a
+    // surface and only a surface, and it REPLACED the action popup rather than
+    // adding to it: tests/invariants.test.ts says why, and says why Quickfill
+    // does not have it.
     const expected: Array<[string, string[]]> = [
-      [join(ROOT, 'extension', 'manifest.json'), ['storage']],
-      [join(ROOT, 'inttra-extension', 'manifest.json'), ['storage']],
+      [join(ROOT, 'extension', 'manifest.json'), ['storage', 'sidePanel']],
+      [join(ROOT, 'inttra-extension', 'manifest.json'), ['storage', 'sidePanel']],
       [join(ROOT, 'quickfill-extension', 'manifest.json'), ['storage', 'scripting']],
     ];
     for (const [manifestPath, permissions] of expected) {

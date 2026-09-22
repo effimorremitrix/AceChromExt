@@ -31,6 +31,10 @@ let injectionWorks: boolean;
 /** What `chrome.tabs.query` reports; undefined is a tab this extension has no host permission for. */
 let tabUrl: string | undefined;
 let injected: string[][];
+/** Every `chrome.tabs.query` the surface made, so a detached one can be shown to skip its own window. */
+let queries: Record<string, unknown>[];
+/** Every window the surface asked Chrome to open. */
+let opened: Record<string, unknown>[];
 
 /**
  * What the tab answers. `canFillForm` defaults to true for a named portal,
@@ -91,9 +95,14 @@ beforeEach(async () => {
   injectionWorks = true;
   tabUrl = 'https://aesdirect.cbp.dhs.gov/filing';
   injected = [];
+  queries = [];
+  opened = [];
+  // Every test but the pop-out one runs as the action popup.
+  window.history.replaceState({}, '', '/popup.html');
 
   vi.stubGlobal('chrome', {
     runtime: {
+      getURL: (path: string) => `chrome-extension://test/${path}`,
       sendMessage: vi.fn(async (message: { type: string; payload?: StoredPaste; mode?: FillMode }) => {
         if (message.type === 'store/set') {
           session = message.payload ?? null;
@@ -114,13 +123,22 @@ beforeEach(async () => {
       // Chrome populates `url` only for a tab the extension has host
       // permission for, which is how the popup tells a portal tab it cannot
       // talk to from a tab it may not touch at all.
-      query: vi.fn(async () => [tabUrl === undefined ? { id: 7 } : { id: 7, url: tabUrl }]),
+      query: vi.fn(async (query: Record<string, unknown>) => {
+        queries.push(query);
+        return [tabUrl === undefined ? { id: 7 } : { id: 7, url: tabUrl }];
+      }),
       sendMessage: vi.fn(async (_id: number, message: QuickfillContentRequest) => {
         // What Chrome throws when no frame in the tab is listening.
         if (!running) throw new Error('Could not establish connection. Receiving end does not exist.');
         sent.push(message);
         if (message.type === 'content/where') return { ok: true, type: 'content/where', payload: place };
         return reply;
+      }),
+    },
+    windows: {
+      create: vi.fn(async (options: Record<string, unknown>) => {
+        opened.push(options);
+        return { id: 99 };
       }),
     },
     scripting: {
@@ -643,5 +661,106 @@ describe('the ACE / INTTRA toggle', () => {
     expect(box.value).toBe('');
     expect(sessionMode).toBe('inttra');
     expect(activeMode()).toBe('INTTRA');
+  });
+});
+
+/**
+ * "Pop out": the same interface in a window that does not close.
+ *
+ * The complaint this answers, 2026-09-22: leaving an ACE or INTTRA screen with
+ * the popup open and coming back means clicking the toolbar icon again. Chrome
+ * destroys an action popup the moment it loses focus, and on a container grid
+ * that is every click into the grid, so there is nothing to fix inside the
+ * popup - the surface has to be one Chrome does not destroy.
+ *
+ * The ACE and INTTRA helpers answer with a side panel and the `sidePanel`
+ * permission. Quickfill answers with a window, which needs no permission at
+ * all: `chrome.windows.create` on an extension page of our own asks for
+ * nothing, not `tabs` and not `windows`.
+ *
+ * Two things are the whole feature, and both are pinned here: the window
+ * carries `?window=1`, and a surface carrying it resolves the portal tab from
+ * a NORMAL browser window instead of its own.
+ */
+describe('the pop-out window', () => {
+  /** Any button on the screen, not only the fill row. */
+  function anyButton(label: string): HTMLButtonElement | null {
+    const match = Array.from(document.querySelectorAll('button')).find((node) => node.textContent === label);
+    return (match ?? null) as HTMLButtonElement | null;
+  }
+
+  async function mountDetached(): Promise<void> {
+    window.history.replaceState({}, '', '/popup.html?window=1');
+    document.body.className = 'surface-popup quickfill';
+    await mount();
+  }
+
+  it('is offered from the action popup', async () => {
+    await mount();
+    expect(anyButton('Pop out')).not.toBeNull();
+  });
+
+  it('opens this same page in a window, and closes the popup behind it', async () => {
+    const close = vi.spyOn(window, 'close').mockImplementation(() => undefined);
+    await mount();
+
+    anyButton('Pop out')?.click();
+    await settle();
+
+    expect(opened).toHaveLength(1);
+    expect(opened[0]?.['url']).toBe('chrome-extension://test/popup.html?window=1');
+    expect(opened[0]?.['type']).toBe('popup');
+    // Two live copies of one box, each holding a paste the other does not know
+    // about, is worse than no window at all.
+    expect(close).toHaveBeenCalled();
+    close.mockRestore();
+  });
+
+  it('does not offer itself again once it IS the window', async () => {
+    await mountDetached();
+    expect(anyButton('Pop out')).toBeNull();
+  });
+
+  it('drops the popup sizing, which Chrome imposed and a window does not', async () => {
+    await mountDetached();
+    expect(document.body.classList.contains('surface-detached')).toBe(true);
+    expect(document.body.classList.contains('surface-popup')).toBe(false);
+  });
+
+  it('reads the portal from a normal browser window, never from its own', async () => {
+    await mountDetached();
+
+    // `currentWindow` inside a pop-out window is the pop-out, whose only tab is
+    // this helper: asking it would answer "no portal tab" with the portal open
+    // right beside it. `windowType: 'normal'` leaves our own window out.
+    expect(queries.length).toBeGreaterThan(0);
+    for (const query of queries) {
+      expect(query['windowType']).toBe('normal');
+      expect(query['currentWindow']).toBeUndefined();
+    }
+  });
+
+  it('still asks the active tab directly when it is the action popup', async () => {
+    await mount();
+    expect(queries.length).toBeGreaterThan(0);
+    for (const query of queries) {
+      expect(query['currentWindow']).toBe(true);
+      expect(query['windowType']).toBeUndefined();
+    }
+  });
+
+  it('opens on the paste the popup was holding, carried in session storage and not in the URL', async () => {
+    const { isFailure, parsePaste } = await import('../quickfill-extension/src/paste.js');
+    const parsed = parsePaste(email);
+    if (isFailure(parsed)) throw new Error(parsed.error);
+    session = { text: email, summary: parsed.summary, package: parsed.pkg, shipment: parsed.ace };
+
+    await mountDetached();
+
+    // Nothing is handed over in the URL. Both surfaces read the same
+    // chrome.storage.session on boot, so the window opens on exactly what the
+    // popup was showing.
+    expect((document.querySelector('.paste-box') as HTMLTextAreaElement).value).toBe(email);
+    expect(text('.read-as')).toContain(parsed.summary);
   });
 });

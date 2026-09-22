@@ -26,8 +26,20 @@ body {
   background: var(--surface-alt);
 }
 
+/* Three surfaces, three sizings.
+
+   `surface-popup` is a real action popup and is still what the Quickfill
+   Helper opens: Chrome gives it no scrollbar of its own, so it is pinned to a
+   width and its content is clamped and scrolled here.
+
+   `surface-side` (the ACE and INTTRA side panels) and `surface-detached` (the
+   Quickfill pop-out window) are sized by the operator and scroll natively, so
+   neither is pinned or clamped. 300px is the narrowest Chrome will make a side
+   panel; everything wider is the operator's choice. */
 body.surface-popup { width: 420px; }
 body.surface-popup #root { max-height: 580px; overflow-y: auto; }
+body.surface-side, body.surface-detached { min-width: 300px; }
+body.surface-side #root, body.surface-detached #root { padding-bottom: 12px; }
 body.surface-panel #root { max-width: 960px; margin: 0 auto; padding-bottom: 40px; }
 
 #root { display: flex; flex-direction: column; }

@@ -34,6 +34,7 @@ tab and no per-field report. Paste, click, look at the form, submit.
 5. [Build, check, install](#5-build-check-install)
 5a. [Practising without the portal: the playground](#5a-practising-without-the-portal-the-playground)
 5b. [The tab that was already open](#5b-the-tab-that-was-already-open)
+5c. [Pop out: the popup that stays open](#5c-pop-out-the-popup-that-stays-open)
 6. [What is not verified](#6-what-is-not-verified)
 7. [The dashboard, and why nothing was added to it](#7-the-dashboard-and-why-nothing-was-added-to-it)
 
@@ -242,7 +243,9 @@ New code, all under `quickfill-extension/`:
 src/paste.ts                     the one input, pure; format detection + auto-resolve
 src/aceShipment.ts               package -> CanonicalShipment, ungated
 src/content/quickfillContent.ts  one content script, both portals
-src/ui/popup.ts                  the whole interface
+src/ui/popup.ts                  the whole interface, in both frames: the
+                                 action popup, and behind Pop out the same
+                                 page in a window (section 5c)
 src/background/serviceWorker.ts  holds the parsed paste for the session
 src/core/{messages,store}.ts     four messages and a session key
 ```
@@ -392,6 +395,55 @@ own listener throws before it answers. The listener now treats a failed read of
 the page as "not this frame" rather than as silence, so one slow frame cannot
 make the whole tab look dead.
 
+## 5c. Pop out: the popup that stays open
+
+Reported 2026-09-22, against all three helpers: leave an ACE or INTTRA screen
+with the helper open, come back, and the helper is gone; the toolbar icon has
+to be clicked again.
+
+**That is Chrome, not a bug here.** An action popup is destroyed the moment it
+loses focus, and on a form being filled that is the first click into the form.
+There is no flag, no permission and no API that keeps one open. The only fix is
+a surface Chrome does not destroy.
+
+The ACE and INTTRA helpers answer with a side panel and the `sidePanel`
+permission (`docs/ARCHITECTURE.md`, "The three UI surfaces"). **Quickfill does
+not, and this is the decision, not an oversight:**
+
+| | Side panel | Pop-out window (chosen) |
+| --- | --- | --- |
+| Permission | `sidePanel` | none; `chrome.windows.create` on our own extension page asks for nothing |
+| Where it sits | docked, taking width from the portal | anywhere, including a second screen |
+| Suits | a panel you read while filling: status, line picker, report | one paste box, which needs no docked strip |
+| Cost | the portal is narrower, and INTTRA's create page is already wide | the window can fall behind the browser on a single screen |
+
+So the popup keeps a **Pop out** button beside Clear. It opens this same
+`popup.html` with `?window=1` in a `type: 'popup'` window and closes the popup
+behind it, because two live copies of one box, each holding a paste the other
+does not know about, is worse than no window at all. Nothing is handed over in
+the URL: both read the same `chrome.storage.session` on boot, so the window
+opens on exactly what the popup was showing, toggle included.
+
+Two things the window has to do that a popup never did, both in
+`src/ui/liveTab.ts` and shared with the two side panels:
+
+- **It has to keep looking.** A popup was gone before the page could change. A
+  window is still on the screen when the operator switches to the ACE tab,
+  opens a second draft or reloads the portal, and a stale "Copy Container
+  Details, 7 containers" reads as current. So it re-probes on
+  `tabs.onActivated`, `tabs.onUpdated` and `windows.onFocusChanged`, coalesced
+  so that loading a page is one probe and two probes never overlap.
+- **It has to ask about somebody else's window.** `currentWindow` inside a
+  pop-out window is the pop-out, whose only tab is Quickfill itself; asking it
+  would report "not a portal tab" with the portal open right beside it. So a
+  detached surface queries `windowType: 'normal'` and takes the most recently
+  used answer.
+
+What the window does NOT change: not one of the removals in section 3 comes
+back, nothing is clicked, and a fill still goes through the same
+detector-resolved selectors. It is the same interface, in a frame Chrome does
+not close. Neither it nor the two side panels has been used on a real shipment.
+
 ## 6. What is not verified
 
 Quickfill inherits `README.md`'s caveats whole and resolves none of them.
@@ -449,6 +501,12 @@ Quickfill inherits `README.md`'s caveats whole and resolves none of them.
    section 3 have still never been tested against an operator in a hurry,
    which is exactly the condition under which dropping the checks matters
    most.
+5. **The pop-out window has never been opened on a live portal** (section 5c),
+   and neither has the side panel the other two helpers moved to. Both are
+   answers to a complaint made about the live portal on 2026-09-22, but the
+   surface is all that changed: the same detector, the same selectors, the
+   same refusals. A window that stays open in front of an unfilled field is
+   still an unfilled field.
 
 ## 7. The dashboard, and why nothing was added to it
 
