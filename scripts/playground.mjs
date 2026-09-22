@@ -223,14 +223,15 @@ Build: ${stamp}
 
 1. Open \`${WORKBOOK_FILE}\`, select the header row and the two rows below it,
    copy.
-2. Open \`${ACE_STEPS[0].file}\` (double-click it). Click the Q and paste into
-   the box. The line under the box reads \`Read as: spreadsheet rows · BKG-5541220 ·
+2. Open \`${ACE_STEPS[0].file}\` (double-click it). Click the Q: the side panel
+   opens beside the page and stays there while you work. Paste into the box.
+   The line under the box reads \`Read as: spreadsheet rows · BKG-5541220 ·
    1 container · 1 with a seal · 2 lines\`.
 3. Press **Fill this page** and read what landed: the reference number, the
    departure date as MM/DD/YYYY, the origin state, the destination.
 4. Use the step tabs to open steps 2, 3 and 4 and press **Fill this page** on
    each. On Step 3 press **Fill line** for line 1; then **Add New Line** on the
-   page, pick Line 2 in the popup, and **Fill line** again.
+   page, pick Line 2 in the side panel, and **Fill line** again.
 5. The Save buttons only show a note. Reload a page to start it over.
 
 ## What this proves, and what it does not

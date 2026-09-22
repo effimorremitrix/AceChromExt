@@ -118,16 +118,16 @@ describe('the dashboard reuses the domain code and nothing runtime-specific', ()
 
   it('leaves every extension manifest on its own permissions, portal hosts only, no dashboard host', () => {
     // One expected set per manifest, so a permission can only ever be added by
-    // editing this line. Quickfill's `scripting` is the popup starting its own
+    // editing this line. Quickfill's `scripting` is the panel starting its own
     // content script in a tab that has none, and nothing else: what it may
     // inject is pinned in tests/quickfillInvariants.test.ts. `sidePanel` is a
-    // surface and only a surface, and it REPLACED the action popup rather than
-    // adding to it: tests/invariants.test.ts says why, and says why Quickfill
-    // does not have it.
+    // surface and only a surface, and on all three it REPLACED the action
+    // popup rather than adding to it: tests/invariants.test.ts says why.
+    // No manifest here declares a `default_popup` any more.
     const expected: Array<[string, string[]]> = [
       [join(ROOT, 'extension', 'manifest.json'), ['storage', 'sidePanel']],
       [join(ROOT, 'inttra-extension', 'manifest.json'), ['storage', 'sidePanel']],
-      [join(ROOT, 'quickfill-extension', 'manifest.json'), ['storage', 'scripting']],
+      [join(ROOT, 'quickfill-extension', 'manifest.json'), ['storage', 'scripting', 'sidePanel']],
     ];
     for (const [manifestPath, permissions] of expected) {
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
@@ -137,6 +137,7 @@ describe('the dashboard reuses the domain code and nothing runtime-specific', ()
       for (const never of ['cookies', 'webRequest', 'webRequestBlocking', 'declarativeNetRequest', 'downloads', 'history', 'management', 'nativeMessaging', 'proxy', 'tabs', 'debugger']) {
         expect(manifest['permissions'], `${manifestPath} asks for ${never}`).not.toContain(never);
       }
+      expect(manifest['action'], manifestPath).not.toHaveProperty('default_popup');
       const csp = (manifest['content_security_policy'] as { extension_pages: string }).extension_pages;
       expect(csp).toContain("connect-src 'none'");
       expect(JSON.stringify(manifest)).not.toMatch(/workers\.dev|pages\.dev|dashboard|externally_connectable|<all_urls>/);

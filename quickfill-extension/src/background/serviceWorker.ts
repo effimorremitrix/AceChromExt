@@ -40,3 +40,18 @@ chrome.runtime.onMessage.addListener((message: QuickfillBackgroundRequest, _send
   // Keep the message channel open for the async handler.
   return true;
 });
+
+/**
+ * The toolbar icon opens the side panel, as it does for the other two helpers.
+ *
+ * Quickfill held out on an action popup longer than they did, and answered the
+ * popup's one fatal property - Chrome destroys it on its first loss of focus -
+ * with a "Pop out" window instead. Both are gone: three helpers behaving three
+ * ways is one thing more to remember than a forwarder in a hurry has room for.
+ * See src/background/serviceWorker.ts.
+ */
+if (chrome.sidePanel) {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {
+    // Nothing to recover: the icon simply does not open the panel on this Chrome.
+  });
+}

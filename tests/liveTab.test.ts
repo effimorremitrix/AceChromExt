@@ -13,15 +13,19 @@
  *     portal page fires onUpdated several times with onActivated alongside it;
  *     one probe per event is four round trips to a content script that is
  *     still parsing;
- *   - a DETACHED surface resolves the portal tab from a normal browser window,
- *     never from its own. `currentWindow` inside a pop-out window is the
- *     pop-out, whose only tab is the helper, which would answer "no portal
- *     tab" with the portal open right beside it.
+ *   - a repaint driven by the BROWSER never takes the caret out of a box the
+ *     operator is typing in.
+ *
+ * It used to pin a third: that a DETACHED surface resolved the portal tab from
+ * a normal browser window rather than its own. That went with the Quickfill
+ * pop-out window on 2026-09-22; all three helpers are side panels now, docked
+ * inside the window whose page they fill, so the ordinary active-tab query is
+ * right for every one of them.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { activeBrowserTab, isEditing, watchBrowser } from '../src/ui/liveTab.js';
+import { isEditing, watchBrowser } from '../src/ui/liveTab.js';
 
 type Listener = (...args: unknown[]) => void;
 
@@ -129,37 +133,6 @@ describe('watchBrowser', () => {
     // portal gives it. A probe not scheduled costs a refresh, not the panel.
     vi.stubGlobal('chrome', { tabs: { query: vi.fn(async () => []) } });
     expect(() => watchBrowser(async () => undefined)).not.toThrow();
-  });
-});
-
-describe('activeBrowserTab', () => {
-  it('asks for the current window when the surface is docked in one', async () => {
-    const query = vi.fn(async () => [{ id: 4, url: 'https://ace.cbp.dhs.gov/step1' }]);
-    stubChrome(query);
-
-    const tab = await activeBrowserTab(false);
-
-    expect(query).toHaveBeenCalledWith({ active: true, currentWindow: true });
-    expect(tab?.id).toBe(4);
-  });
-
-  it('skips its own window when detached, and takes the most recently used portal tab', async () => {
-    const query = vi.fn(async () => [
-      { id: 11, url: 'https://ace.cbp.dhs.gov/step1', lastAccessed: 100 },
-      { id: 12, url: 'https://ship.inttra.e2open.com/siworkspace', lastAccessed: 900 },
-    ]);
-    stubChrome(query);
-
-    const tab = await activeBrowserTab(true);
-
-    // windowType: 'normal' is what leaves out our own pop-out window.
-    expect(query).toHaveBeenCalledWith({ active: true, windowType: 'normal' });
-    expect(tab?.id).toBe(12);
-  });
-
-  it('answers undefined when no browser window has a tab, rather than guessing', async () => {
-    stubChrome(async () => []);
-    expect(await activeBrowserTab(true)).toBeUndefined();
   });
 });
 

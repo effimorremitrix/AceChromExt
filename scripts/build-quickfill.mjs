@@ -38,7 +38,7 @@ const dist = join(root, playground ? 'dist-quickfill-playground' : 'dist-quickfi
 
 const CLASSIC_ENTRIES = {
   quickfillContent: 'quickfill-extension/src/content/quickfillContent.ts',
-  popup: 'quickfill-extension/src/ui/popup.ts',
+  sidePanel: 'quickfill-extension/src/ui/sidePanel.ts',
 };
 
 const MODULE_ENTRIES = {
@@ -47,7 +47,7 @@ const MODULE_ENTRIES = {
 
 function copyStatic() {
   mkdirSync(dist, { recursive: true });
-  for (const name of ['manifest.json', 'popup.html']) cpSync(join(source, name), join(dist, name));
+  for (const name of ['manifest.json', 'sidepanel.html']) cpSync(join(source, name), join(dist, name));
   cpSync(join(source, 'icons'), join(dist, 'icons'), { recursive: true });
   mkdirSync(join(dist, 'styles'), { recursive: true });
   cpSync(join(root, 'extension', 'styles', 'ui.css'), join(dist, 'styles', 'ui.css'));
