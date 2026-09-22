@@ -9,7 +9,7 @@
  */
 
 import type { BackgroundRequest, BackgroundResponse } from '../core/messages.js';
-import { clearImport, getImport, selectLine, setImport } from '../core/store.js';
+import { clearActiveTab, clearImport, getImport, selectLine, setImport } from '../core/store.js';
 import { clearLog, logEvent, readLog } from '../core/sessionLog.js';
 
 
@@ -25,13 +25,17 @@ async function handle(message: BackgroundRequest): Promise<BackgroundResponse> {
     case 'store/selectLine':
       return { ok: true, type: 'store/data', payload: await selectLine(message.line) };
 
-    // Clearing the import clears the log with it. The log holds invoice
-    // numbers, weights and values derived from the shipment, so leaving it
-    // behind would make "Clear Imported Data" a promise the extension does not
-    // keep. Export diagnostics first if the trail is wanted.
+    // Clearing the import clears the log and the remembered screen with it.
+    // The log holds invoice numbers, weights and values derived from the
+    // shipment, so leaving it behind would make "Clear Imported Data" a
+    // promise the extension does not keep; the remembered screen is not
+    // shipment data, but leaving it would make that promise unauditable,
+    // because it stops meaning "the session area is empty". Export
+    // diagnostics first if the trail is wanted.
     case 'store/clear':
       await clearImport();
       await clearLog();
+      await clearActiveTab();
       return { ok: true, type: 'store/cleared' };
 
     // The log is owned here so the panel, the popup and the content script all

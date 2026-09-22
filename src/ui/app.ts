@@ -61,6 +61,7 @@ import { buildFilingPackage, aceShipmentFromPackage, type CommercialSource, type
 import { validateShipment } from '../excel/validator.js';
 import { isEditing, watchBrowser } from './liveTab.js';
 import { tabMemory } from './lastTab.js';
+import { ACTIVE_TAB_KEY } from '../core/store.js';
 
 export type Surface = 'side' | 'panel';
 
@@ -99,7 +100,7 @@ interface AppState {
 let importer: ExcelImporter | null = null;
 
 /** The screen the operator was last on, per surface. See src/ui/lastTab.ts. */
-const lastTab = tabMemory('aceHelper.activeTab');
+const lastTab = tabMemory(ACTIVE_TAB_KEY);
 
 const state: AppState = {
   surface: 'side',

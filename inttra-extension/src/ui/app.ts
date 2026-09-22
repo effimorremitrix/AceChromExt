@@ -23,7 +23,7 @@ import { emptyOverrides, hasCapturedSelector, serializeOverrides, starterOverrid
 import { buildFilingPackage, fillGate, filingPackageFileName, parseFilingPackageJson, serializeFilingPackage, type FilingPackage } from '../../../shared/src/index.js';
 import { DEFAULT_INTTRA_SETTINGS, loadInttraSettings, saveInttraSettings, type InttraHelperSettings } from '../core/settings.js';
 import type { InttraDiagnosticsSnapshot, InttraGridStatus } from '../core/messages.js';
-import { emptyStoredPackage, type StoredPackage } from '../core/store.js';
+import { ACTIVE_TAB_KEY, emptyStoredPackage, type StoredPackage } from '../core/store.js';
 import { clearInttraOverrides, loadInttraOverrides, saveInttraOverrides } from '../core/overridesStore.js';
 import type { InttraPageDetection } from '../content/pageDetector.js';
 import type { GridFillReport } from '../content/gridWriter.js';
@@ -79,7 +79,7 @@ const state: AppState = {
 };
 
 /** The screen the operator was last on, per surface. See src/ui/lastTab.ts. */
-const lastTab = tabMemory('inttraHelper.activeTab');
+const lastTab = tabMemory(ACTIVE_TAB_KEY);
 
 // ---------------------------------------------------------------- utilities
 

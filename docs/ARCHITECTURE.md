@@ -401,7 +401,12 @@ would report "no portal tab" with the portal open right beside it, so
 takes the most recently used answer.
 
 Reopening is remembered too (`src/ui/lastTab.ts`): the screen the operator
-chose, per surface, in `chrome.storage.session`. Only screens the operator
+chose, per surface, in `chrome.storage.session`. **Clear Imported Data drops it
+with the shipment and the log**, because that promise is only auditable while
+it means the session area is EMPTY, not "empty except for the things we judged
+harmless"; `npm run smoke` asserts exactly that, and caught this key the first
+time it was added. It earns the clear on its own merits too: after Clear the
+remembered screen points at a shipment the session no longer has. Only screens the operator
 navigated to are written; the boot defaults and the fallback for a screen this
 state has no tab for are not, because remembering those would overwrite where
 the operator was with where the code had to put them.
