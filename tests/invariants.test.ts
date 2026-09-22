@@ -247,8 +247,27 @@ describe('manifest', () => {
     expect(manifest['name']).toBe('ACE Helper');
   });
 
-  it('requests only the storage permission', () => {
-    expect(manifest['permissions']).toEqual(['storage']);
+  /**
+   * `sidePanel` is the second permission either of these two ever asked for,
+   * and it was added on 2026-09-22 for one reason: Chrome destroys an action
+   * popup the moment it loses focus, so the helper closed on the operator's
+   * first click into the form being filled and had to be reopened from the
+   * toolbar for the next field.
+   *
+   * What it buys is a surface, and only a surface. It grants no host, no
+   * network, no tab reading and no injection: it lets this extension show its
+   * OWN page docked beside the tab, and lets the toolbar icon open that page
+   * instead of a popup. `default_popup` is gone from the manifest in the same
+   * change, so it replaces a surface rather than adding one.
+   *
+   * Widen it no further, and do not add it to Quickfill, whose one box is a
+   * pop-out window instead (no permission at all): docs/ARCHITECTURE.md,
+   * "The three UI surfaces".
+   */
+  it('requests storage and sidePanel, and nothing else', () => {
+    expect(manifest['permissions']).toEqual(['storage', 'sidePanel']);
+    expect(manifest['action']).not.toHaveProperty('default_popup');
+    expect(manifest['side_panel']).toEqual({ default_path: 'sidepanel.html' });
   });
 
   it('is restricted to CBP hosts, in both host_permissions and content_scripts', () => {

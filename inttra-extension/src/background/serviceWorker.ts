@@ -6,7 +6,7 @@
 
 import { clearLog, logEvent, readLog } from '../../../src/core/sessionLog.js';
 import type { InttraBackgroundRequest, InttraBackgroundResponse } from '../core/messages.js';
-import { clearStoredPackage, getStoredPackage, setStoredPackage } from '../core/store.js';
+import { clearActiveTab, clearStoredPackage, getStoredPackage, setStoredPackage } from '../core/store.js';
 
 async function handle(message: InttraBackgroundRequest): Promise<InttraBackgroundResponse> {
   switch (message.type) {
@@ -15,9 +15,13 @@ async function handle(message: InttraBackgroundRequest): Promise<InttraBackgroun
     case 'store/set':
       await setStoredPackage(message.payload);
       return { ok: true, type: 'store/data', payload: await getStoredPackage() };
+    // The package, the log and the remembered screen go together: "Clear"
+    // promises the session area is EMPTY, and a promise that means "empty
+    // except for what we judged harmless" cannot be audited.
     case 'store/clear':
       await clearStoredPackage();
       await clearLog();
+      await clearActiveTab();
       return { ok: true, type: 'store/cleared' };
     case 'log/append':
       await logEvent(message.kind, message.message, message.detail);
@@ -43,3 +47,15 @@ chrome.runtime.onStartup.addListener(() => {
   void clearStoredPackage();
   void clearLog();
 });
+
+/**
+ * The toolbar icon opens the side panel. See src/background/serviceWorker.ts
+ * for why there is no `default_popup`: an action popup is destroyed on its
+ * first loss of focus, which on Create Shipping Instruction is the first click
+ * into the form.
+ */
+if (chrome.sidePanel) {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {
+    // Nothing to recover: the icon simply does not open the panel on this Chrome.
+  });
+}

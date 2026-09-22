@@ -27,17 +27,17 @@ npm run verify      # typecheck + tests + template + all builds + all bundle che
 ```
 
 `npm run verify` writes the ACE Helper to `dist/`, the INTTRA Helper to
-`dist-inttra/` (same layout: `manifest.json`, `popup.html`, `panel.html`,
-`styles/`, `inttraContent.js`, `popup.js`, `panel.js`, `serviceWorker.js`,
-`icons/`), and the Quickfill Helper to `dist-quickfill/` (no panel; just
-`manifest.json`, `popup.html`, `styles/`, `quickfillContent.js`, `popup.js`,
-`serviceWorker.js`, `icons/`):
+`dist-inttra/` (same layout: `manifest.json`, `sidepanel.html`, `panel.html`,
+`styles/`, `inttraContent.js`, `sidePanel.js`, `panel.js`, `serviceWorker.js`,
+`icons/`), and the Quickfill Helper to `dist-quickfill/` (no panel and no side
+panel; just `manifest.json`, `popup.html`, `styles/`, `quickfillContent.js`,
+`popup.js`, `serviceWorker.js`, `icons/`):
 
 ```
 dist/
   manifest.json
-  popup.html      panel.html      styles/ui.css
-  popup.js        panel.js
+  sidepanel.html  panel.html      styles/ui.css
+  sidePanel.js    panel.js
   aceContent.js   serviceWorker.js
   icons/          templates/ACE_Import_Template.xlsx
 ```
@@ -77,11 +77,18 @@ Individual steps, if you prefer:
 2. Turn on **Developer mode** (top right).
 3. Click **Load unpacked**.
 4. Select the `dist/` folder (not the repository root).
-5. Pin "ACE Helper" to the toolbar so the popup is one click away.
-6. For the INTTRA Helper, repeat with the `dist-inttra/` folder.
+5. Pin "ACE Helper" to the toolbar. Its icon opens a **side panel**, docked to
+   the right of the page: it stays open while you click into the ACE form, and
+   across a tab switch, until you close it. It is not a popup, and there is
+   nothing to reopen after every field.
+6. For the INTTRA Helper, repeat with the `dist-inttra/` folder. Same side
+   panel, same behaviour.
 7. For the Quickfill Helper, repeat with the `dist-quickfill/` folder. Its icon
    is the amber "Q", so the three are told apart in the toolbar. It has no
-   panel: the popup is the whole interface.
+   panel and no side panel: the popup is the whole interface. Chrome closes a
+   popup on the first click into the page, so if you want it to stay, press
+   **Pop out** and it reopens as a window you can park beside the browser or on
+   a second screen.
 8. Each helper's header shows `build <version>+<commit>.<time>`, the stamp of
    the folder Chrome loaded (also shown as the version in `chrome://extensions`).
    If it is not the build you just ran, Chrome is still running an older
@@ -149,7 +156,7 @@ each header changes with every build; if it did not, the reload did not take.
 
 Reloading the card is what orphans an open tab: Chrome injects a content script
 when a page **loads**, so a portal tab that was open across the reload keeps
-running nothing, and the helper's panel or popup cannot reach it. It looks like
+running nothing, and the helper's side panel or wide panel cannot reach it. It looks like
 an ordinary page, which is why this is worth knowing. **The Quickfill card is
 the exception**: its popup starts its own content script in a tab that is not
 running one, so a rebuild costs no page reload and no open modal

@@ -31,6 +31,7 @@ import { COLUMNS, EXAMPLE_ROWS } from '../scripts/templateData.mjs';
 const COUNTER_KEY = 'aceHelper.referenceCounter';
 
 let local: Record<string, unknown>;
+let session: Record<string, unknown>;
 let imported: StoredImport | null;
 
 /** Let startApp's loads and the click handlers' promises settle. */
@@ -62,7 +63,7 @@ function numberBox(): HTMLInputElement {
   return input as HTMLInputElement;
 }
 
-async function open(surface: 'panel' | 'popup'): Promise<void> {
+async function open(surface: 'panel' | 'side'): Promise<void> {
   const { startApp } = await import('../src/ui/app.js');
   await startApp(surface);
   await settle();
@@ -85,6 +86,7 @@ beforeEach(() => {
   vi.resetModules();
   document.body.innerHTML = '<div id="root"></div>';
   local = {};
+  session = {};
   imported = null;
 
   vi.stubGlobal('chrome', {
@@ -109,9 +111,24 @@ beforeEach(() => {
           delete local[key];
         }),
       },
-      session: { get: vi.fn(async () => ({})), set: vi.fn(async () => undefined), remove: vi.fn(async () => undefined) },
+      session: {
+        get: vi.fn(async (key: string) => (key in session ? { [key]: session[key] } : {})),
+        set: vi.fn(async (bag: Record<string, unknown>) => {
+          Object.assign(session, bag);
+        }),
+        remove: vi.fn(async (key: string) => {
+          delete session[key];
+        }),
+      },
     },
-    tabs: { query: vi.fn(async () => []), sendMessage: vi.fn(async () => ({ ok: false, error: 'no tab' })) },
+    tabs: {
+      query: vi.fn(async () => []),
+      sendMessage: vi.fn(async () => ({ ok: false, error: 'no tab' })),
+      // The side panel outlives a tab switch, so it subscribes to these.
+      onActivated: { addListener: vi.fn() },
+      onUpdated: { addListener: vi.fn() },
+    },
+    windows: { onFocusChanged: { addListener: vi.fn() } },
   });
 });
 
@@ -129,8 +146,8 @@ describe('the overview with nothing imported', () => {
     expect(numberBox().placeholder).toBe('4088');
   });
 
-  it('offers it in the popup too, which is where a filer looks first', async () => {
-    await open('popup');
+  it('offers it in the side panel too, which is where a filer looks first', async () => {
+    await open('side');
 
     expect(screen()).toContain('Nothing loaded');
     expect(count('Set starting number')).toBe(1);
@@ -184,5 +201,105 @@ describe('the overview with a workbook loaded', () => {
     expect(screen()).toContain('Status');
     expect(headings().filter((heading) => heading === 'Shipment Reference Number')).toHaveLength(1);
     expect(count('Set starting number')).toBe(1);
+  });
+});
+
+/**
+ * Reopening where the operator left off.
+ *
+ * The complaint, 2026-09-22: leaving the portal with the helper open and
+ * coming back means opening it again. The surface answer is the side panel,
+ * which Chrome does not destroy on a click into the form. This is the rest of
+ * it: when the panel IS closed and reopened, it should not land on Overview
+ * having forgotten the screen that was in front of the operator.
+ *
+ * The memory is per surface on purpose. The wide panel has tabs the side panel
+ * does not, so one shared memory would keep sending the side panel to a screen
+ * it cannot show. Storage mechanics are pinned in tests/lastTab.test.ts; the
+ * subject here is what the operator sees on the second open.
+ */
+describe('reopening the helper', () => {
+  function tabStrip(): string[] {
+    return Array.from(document.querySelectorAll('.tabs .tab')).map((node) => node.textContent ?? '');
+  }
+
+  function openTab(): string {
+    return document.querySelector('.tabs .tab-active')?.textContent ?? '';
+  }
+
+  function pressTab(label: string): void {
+    const tab = Array.from(document.querySelectorAll('.tabs .tab')).find((node) => node.textContent === label);
+    if (!tab) throw new Error(`No tab labelled ${label}. Tabs: ${tabStrip().join(', ')}`);
+    (tab as HTMLButtonElement).click();
+  }
+
+  it('opens the side panel on Overview the first time', async () => {
+    imported = exampleImport();
+    await open('side');
+
+    expect(openTab()).toBe('Overview');
+  });
+
+  it('opens it again on the screen the operator chose', async () => {
+    imported = exampleImport();
+    await open('side');
+    pressTab('Fill ACE');
+    await settle();
+    expect(openTab()).toBe('Fill ACE');
+
+    // Close and reopen: a fresh app over the same browsing session.
+    document.body.innerHTML = '<div id="root"></div>';
+    vi.resetModules();
+    await open('side');
+
+    expect(openTab()).toBe('Fill ACE');
+  });
+
+  it('does not send the side panel to a screen only the wide panel has', async () => {
+    imported = exampleImport();
+    await open('panel');
+    pressTab('Mapping');
+    await settle();
+    expect(openTab()).toBe('Mapping');
+
+    document.body.innerHTML = '<div id="root"></div>';
+    vi.resetModules();
+    await open('side');
+
+    // The side panel has no Mapping tab, and it never had one: the memory is
+    // the wide panel's, not this surface's.
+    expect(tabStrip()).not.toContain('Mapping');
+    expect(openTab()).toBe('Overview');
+  });
+
+  it('remembers each surface separately, so neither drags the other about', async () => {
+    imported = exampleImport();
+    await open('side');
+    pressTab('Fill ACE');
+    await settle();
+
+    document.body.innerHTML = '<div id="root"></div>';
+    vi.resetModules();
+    await open('panel');
+    pressTab('Preview');
+    await settle();
+
+    document.body.innerHTML = '<div id="root"></div>';
+    vi.resetModules();
+    await open('side');
+
+    expect(openTab()).toBe('Fill ACE');
+  });
+
+  it('keeps the remembered screen in the session area, never beside the settings', async () => {
+    imported = exampleImport();
+    await open('side');
+    pressTab('Fill ACE');
+    await settle();
+
+    // A screen remembered past a browser restart opens onto a shipment this
+    // session no longer has, and it is not a setting the operator chose.
+    expect(Object.keys(session)).toContain('aceHelper.activeTab');
+    expect(Object.keys(local)).not.toContain('aceHelper.activeTab');
   });
 });

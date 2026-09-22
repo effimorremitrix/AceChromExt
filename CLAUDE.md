@@ -139,8 +139,18 @@ of these, so do not work around them - fix the cause:
   serves from its own host, against `inttraContent.js` on the extension's
   Errors panel. The calculator is the one thing with CSS of its own, and it
   keeps it in a SHADOW ROOT, which is the pattern to copy;
-- the manifest keeps `permissions: ["storage"]`, CBP-only hosts, and a CSP with
-  `script-src 'self'` + `connect-src 'none'`.
+- the manifest keeps `permissions: ["storage", "sidePanel"]`, CBP-only hosts,
+  and a CSP with `script-src 'self'` + `connect-src 'none'`. `sidePanel` was
+  added on 2026-09-22 and is the ACE and INTTRA helpers' only permission beyond
+  storage: it buys a SURFACE and nothing else (no host, no network, no tab
+  reading, no injection), and it REPLACED the action popup rather than adding
+  to it - `default_popup` is gone from both manifests and the toolbar icon
+  opens the side panel. Chrome destroys an action popup the moment it loses
+  focus, so the helper closed on the operator's first click into the form and
+  had to be reopened from the toolbar for the next field; nothing inside a
+  popup can fix that. Do not widen it, do not add it to Quickfill (whose
+  answer is a pop-out window, costing no permission at all), and do not restore
+  `default_popup`. `docs/ARCHITECTURE.md`, "The three UI surfaces".
 
 `tests/quickfillInvariants.test.ts` holds the Quickfill Helper's, and is the
 only place the *deliberate* removals are written down: it asserts no eval, no
@@ -148,8 +158,10 @@ network, no credential, no browser storage outside `chrome.storage.session`, no
 `.click()`/`.submit()` in its content layer, exactly the five portal hosts and
 `permissions: ["storage", "scripting"]` - and it deliberately does NOT assert a
 preview, a check or a gate, because Quickfill has none by design. `scripting`
-was added on 2026-09-21 and is the one permission beyond storage any of the
-three asks for: Chrome injects a content script when a page LOADS, so a portal
+was added on 2026-09-21 and is Quickfill's only permission beyond storage; it
+is also the only one of the three that has it, and the only one that does NOT
+have `sidePanel` (a pop-out window is its answer to a popup that closes, and
+that costs no permission): Chrome injects a content script when a page LOADS, so a portal
 tab that was open before the helper was loaded or rebuilt runs nothing, and on
 the live create page that emptied the popup in front of the grid the operator
 was filling. The popup starts the script itself rather than asking for a page
@@ -219,6 +231,9 @@ check; `tests/invariants.test.ts` pins it to that request type, built in
 | a dashboard screen | a renderer in `web/src/views/` over `ShipmentRecord`; the rules stay in `src/`, `shared/`, `deckhand/`. A workflow step is a pure function in `web/src/workflow.ts` |
 | what Quickfill accepts in its one paste box | the detection ladder in `quickfill-extension/src/paste.ts`. Never add a format picker: one box is the product |
 | either playground (the four mock ACE steps, the example workbook, its README) | `scripts/playground.mjs` wraps `tests/fixtures/ace-*.html` at build time, never a second copy of a screen; the example data is `scripts/templateData.mjs`, shared with `npm run template`. `HELPERS` is the only difference between the ACE build's playground and Quickfill's: the card name, the banner, the README, and whether the generated manifest keeps host permissions (the ACE panel finds its tab by URL, Quickfill asks the content script) |
+| which SURFACE a helper opens on | the manifests. ACE and INTTRA carry `side_panel.default_path` and no `default_popup`, plus `setPanelBehavior({ openPanelOnActionClick: true })` in each service worker; Quickfill stays an action popup with a **Pop out** button (`popOutButton` in `quickfill-extension/src/ui/popup.ts`). Chrome destroys an action popup on its first loss of focus, which on a form being filled is the first click into the form, so none of the three relies on one staying open. Do not give Quickfill `sidePanel`: `docs/QUICKFILL.md` section 5c is the decision and its cost |
+| what a surface that STAYS OPEN must re-ask | `watchBrowser` in `src/ui/liveTab.ts`, shared by all three. A popup could not be wrong about the page; a side panel and a pop-out window are still on screen after a tab switch, and a stale "7 containers" reads as current. Three events, no new permission, coalesced so a page load is one probe and two probes never overlap. `activeBrowserTab(detached)` is the other half: inside a pop-out window `currentWindow` is the pop-out, whose only tab is the helper, so a detached surface asks `windowType: 'normal'` instead |
+| which screen a helper reopens on | `tabMemory` in `src/ui/lastTab.ts`, under `ACTIVE_TAB_KEY` from each extension's `core/store.ts`, per surface, in `chrome.storage.session`. Only a screen the OPERATOR navigated to is written (`goTo` in each `app.ts`); the boot defaults and the tab-strip fallback are not, because remembering those overwrites where the operator was with where the code had to put them. **Anything new in `chrome.storage.session` must also be dropped by `store/clear`**: "Clear Imported Data" promises the area is EMPTY, and `npm run smoke` asserts it - this key broke that check the first time it was added, with the unit suite green |
 | which tabs the ACE panel will address | `tabPatterns()` in `src/ui/tabs.ts`, read from this build's own manifest, so the panel searches exactly what Chrome injected into. `ACE_URL_PATTERNS` stays in the file as the fallback and because `tests/invariants.test.ts` pins it against `host_permissions` |
 | how gated Quickfill is | `quickfill-extension/src/aceShipment.ts`. It is the local, ungated twin of `shared/src/aceView.ts`, and the one file where "fill it anyway" lives. Do not gate it, and do not ungate `aceView.ts` |
 | which routes Quickfill offers on a page | `where()` in `quickfill-extension/src/content/quickfillContent.ts`. It asks TWO questions, never one: does the named screen have fields (`inttraFieldsForPage(page).length`), and is a container grid on the page (`detectGrid`). Both are true on the live create page with the Copy Container Details modal over it, and reading one branch off `detectInttraPage`'s single answer is what hid the grid |
@@ -251,7 +266,7 @@ transformation engine.
 
 ## Current state
 
-Six things are built but not verified against the real system, and all must
+Seven things are built but not verified against the real system, and all must
 stay honestly described:
 
 1. The ACE selectors are **mostly verified by label wording, with six real
@@ -498,3 +513,25 @@ stay honestly described:
    reads the form. Two things it still refuses: it never presses a portal
    control, and it never guesses which of several containers goes in ACE's
    single container field.
+
+7. The **surfaces changed on 2026-09-22 and not one of them has been opened on
+   a live portal**. The operator reported that leaving an ACE or INTTRA screen
+   with a helper's popup open and coming back means clicking the toolbar icon
+   again. That is Chrome, not a bug in this code: an action popup is destroyed
+   the moment it loses focus, and on a form being filled that is the first
+   click into the form. So the ACE and INTTRA helpers now open a **side panel**
+   (`sidepanel.html`, the `sidePanel` permission, no `default_popup`) and
+   Quickfill keeps its popup with a **Pop out** button that reopens the same
+   page as a window (no permission at all). Both new surfaces stay open, which
+   is a thing no surface here had to do before, so both re-probe the browser
+   (`src/ui/liveTab.ts`) and both remember the screen the operator was on
+   (`src/ui/lastTab.ts`).
+
+   What this does NOT change: not one selector, not one mapping, not one
+   refusal, and nothing in items 1 to 6. It changes where the buttons live and
+   how long they stay, and that is all. A panel that stays open in front of a
+   field the helper still cannot resolve is still a field the helper cannot
+   resolve. Both surfaces are tested in jsdom (`tests/liveTab.test.ts`,
+   `tests/lastTab.test.ts`, the reopen block in `tests/panelOverview.test.ts`,
+   the pop-out block in `tests/quickfillPopup.test.ts`) and against no live
+   portal whatever.

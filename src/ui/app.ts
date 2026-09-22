@@ -59,8 +59,11 @@ import { renderDeckhandTab, type DeckhandState } from './deckhandTab.js';
 import { renderPackageTab } from './packageTab.js';
 import { buildFilingPackage, aceShipmentFromPackage, type CommercialSource, type FilingPackage } from '../../shared/src/index.js';
 import { validateShipment } from '../excel/validator.js';
+import { isEditing, watchBrowser } from './liveTab.js';
+import { tabMemory } from './lastTab.js';
+import { ACTIVE_TAB_KEY } from '../core/store.js';
 
-export type Surface = 'popup' | 'panel';
+export type Surface = 'side' | 'panel';
 
 type StatusTone = 'info' | 'ok' | 'warn' | 'error';
 
@@ -93,11 +96,14 @@ interface AppState {
   deckhandDraft: string;
 }
 
-/** Injected by the panel surface only; the popup has no Import tab. */
+/** Injected by the panel surface only; the side panel has no Import tab. */
 let importer: ExcelImporter | null = null;
 
+/** The screen the operator was last on, per surface. See src/ui/lastTab.ts. */
+const lastTab = tabMemory(ACTIVE_TAB_KEY);
+
 const state: AppState = {
-  surface: 'popup',
+  surface: 'side',
   settings: { ...DEFAULT_SETTINGS },
   counter: { ...DEFAULT_COUNTER },
   data: null,
@@ -513,17 +519,23 @@ function renderTabs(): HTMLElement {
       text: tab.label,
       attrs: { type: 'button', role: 'tab', 'aria-selected': String(state.activeTab === tab.id) },
     });
-    button.addEventListener('click', () => {
-      state.activeTab = tab.id;
-      render();
-    });
+    button.addEventListener('click', () => goTo(tab.id));
     nav.append(button);
   }
   return nav;
 }
 
+/**
+ * Every screen the OPERATOR chooses goes through here, so it is remembered.
+ *
+ * The automatic moves deliberately do not: the boot defaults, and the fallback
+ * in `renderTabs` for a screen this state has no tab for. Remembering those
+ * would overwrite where the operator actually was with where the code had to
+ * put them.
+ */
 function goTo(tab: string): void {
   state.activeTab = tab;
+  lastTab.write(state.surface, tab);
   render();
 }
 
@@ -808,7 +820,7 @@ function renderPreview(): HTMLElement {
       section,
       el('h2', { text: 'Preview' }),
       el('p', { className: 'muted', text: 'Nothing imported yet.' }),
-      state.surface === 'popup' ? buildOpenPanelButton('Open the panel to import a workbook') : null,
+      state.surface === 'side' ? buildOpenPanelButton('Open the panel to import a workbook') : null,
     );
     return section;
   }
@@ -925,7 +937,7 @@ function renderFill(): HTMLElement {
 
   if (!state.data) {
     section.append(el('p', { className: 'muted', text: 'Import a spreadsheet first.' }));
-    if (state.surface === 'popup') section.append(buildOpenPanelButton('Open the panel to import'));
+    if (state.surface === 'side') section.append(buildOpenPanelButton('Open the panel to import'));
     return section;
   }
 
@@ -1624,7 +1636,7 @@ function render(): void {
       break;
   }
 
-  if (state.surface === 'popup') {
+  if (state.surface === 'side') {
     const open = buildOpenPanelButton('Open full panel (import, preview, mapping, diagnostics)');
     open.classList.add('button-small');
     root.append(el('footer', { className: 'app-footer' }, [open]));
@@ -1652,7 +1664,23 @@ export async function startApp(surface: Surface, excelImporter: ExcelImporter | 
   // Something is already imported, so the hub is more use than the file picker.
   if (state.data) state.activeTab = 'overview';
 
+  // Where the operator actually was wins over both defaults above. A screen
+  // this state has no tab for is dropped by renderTabs, so a remembered
+  // 'mapping' cannot strand the side panel on a screen it does not show.
+  const remembered = await lastTab.read(surface);
+  if (remembered) state.activeTab = remembered;
+
   render();
+
+  // Both surfaces now outlive the tab they are describing: the side panel is
+  // beside the page while the operator switches tabs, and the panel is a tab
+  // of its own. Neither may go on describing the ACE step it was opened on.
+  watchBrowser(async () => {
+    await refreshAceTab();
+    // Refreshed either way; the paint waits while the operator is in a box, so
+    // a background tab finishing its load cannot take their caret.
+    if (!isEditing()) render();
+  });
 }
 
 /**

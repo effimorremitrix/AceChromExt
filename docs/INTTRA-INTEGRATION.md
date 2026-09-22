@@ -39,9 +39,15 @@ asserts that and that no content-script file calls `.click()` at all.
 ## 2. Permissions
 
 ```json
-"permissions": ["storage"],
+"permissions": ["storage", "sidePanel"],
 "host_permissions": ["https://*.inttra.com/*", "https://*.e2open.com/*"]
 ```
+
+`sidePanel` buys a surface and nothing else, and it replaced the action popup
+rather than adding to it: the manifest has no `default_popup`, and the toolbar
+icon opens `sidepanel.html` docked beside the portal. Chrome destroys a popup
+on its first loss of focus, which on Create Shipping Instruction is the first
+click into the form. `docs/ARCHITECTURE.md`, "The three UI surfaces".
 
 No `<all_urls>`, no `tabs`, no `scripting`, no network permission; the
 extension-page CSP pins `connect-src` to `'none'`. **Confirm the hostname of
@@ -75,7 +81,7 @@ inttra-extension/src/
     filler.ts                  Fill Current Page for the form screens
     automationPolicy.ts        what is never pressed
   core/                        settings, session store, messages, overrides store
-  ui/                          the popup and the panel
+  ui/                          the side panel and the wide panel
 ```
 
 Shared with the ACE Helper, by import rather than by copy: the selector
@@ -170,8 +176,8 @@ clipboard, in both helpers, and on the live portal it is the route:
 
 It also says what it did: the headings pasted in order, which of them are
 blank because no package column feeds them, and whether the order is the
-grid's or the default. The panel and the popup show that beside the paste
-instruction. For the manifest of 2026-09-17 against the live header row the
+grid's or the default. The wide panel and the side panel show that beside the
+paste instruction. For the manifest of 2026-09-17 against the live header row the
 first two rows are:
 
 ```

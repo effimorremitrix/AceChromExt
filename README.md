@@ -29,7 +29,10 @@ fed by QuickBooks Desktop and by the emails the carrier and the producer send.
   where every value came from, flags every disagreement, and is a plain JSON
   file both extensions read. **[docs/END-TO-END-FLOW.md](docs/END-TO-END-FLOW.md)**
 - **Quickfill Helper** is the same two fills with everything else taken out:
-  one popup, one paste box, a portal toggle and a row of buttons. Paste the
+  one popup, one paste box, a portal toggle and a row of buttons. Press **Pop
+  out** and the same page reopens as a window that does not close when you
+  click into the form; the other two helpers open as a docked side panel for
+  the same reason. Paste the
   carrier email (or a package, or spreadsheet rows), click, the fields fill.
   On an INTTRA screen it offers every route the page has - the header fields,
   the per-container blocks, the container grid, and the clipboard block for
@@ -282,8 +285,10 @@ src/
     transformers/ numbers | weight | dates | text | codes + registry
   content/        pageDetector, fieldDetector, fieldWriter, filler, highlight,
                   automationPolicy (what is never clicked)
-  ui/             app, popup, panel, preview, mappingStatus, preflight,
+  ui/             app, sidePanel, panel, preview, mappingStatus, preflight,
                   calculatorPanel, diagnostics, importer,
+                  liveTab + lastTab (a surface that stays open: re-probing, and
+                  the screen the operator was last on),
                   deckhandTab + packageTab (shared with the INTTRA Helper)
   core/           settings, messages, store, sessionLog, logger
   background/     service worker

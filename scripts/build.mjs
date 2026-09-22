@@ -18,7 +18,7 @@
  * the card, and not one CBP host in its manifest.
  *
  * Output formats matter here:
- *   - the content script and the popup/panel scripts are IIFEs, because MV3
+ *   - the content script and the side-panel/panel scripts are IIFEs, because MV3
  *     content scripts and plain <script src> tags are not ES modules;
  *   - the service worker is ESM, which is what manifest.json declares.
  */
@@ -38,7 +38,7 @@ const dist = join(root, playground ? 'dist-ace-playground' : 'dist');
 
 const CLASSIC_ENTRIES = {
   aceContent: 'src/content/aceContent.ts',
-  popup: 'src/ui/popup.ts',
+  sidePanel: 'src/ui/sidePanel.ts',
   panel: 'src/ui/panel.ts',
 };
 

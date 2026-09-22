@@ -70,8 +70,11 @@ describe('the playground manifest', () => {
     expect(manifest['description']).toContain('never on ACE');
   });
 
-  it('widens nothing else: the permission, the CSP and the shipping manifest are untouched', () => {
-    expect(manifest['permissions']).toEqual(['storage']);
+  it('widens nothing else: the permissions, the CSP and the shipping manifest are untouched', () => {
+    // The playground rewrites the hosts and nothing else, so it carries the
+    // shipping manifest's permissions unchanged - `sidePanel` included, which
+    // is how the playground opens the same side panel the real build does.
+    expect(manifest['permissions']).toEqual(['storage', 'sidePanel']);
     expect(manifest['content_security_policy']).toEqual(SHIPPING_MANIFEST['content_security_policy']);
     expect(manifest['web_accessible_resources']).toBeUndefined();
     // The generator copies; it must not have edited the manifest it was given.

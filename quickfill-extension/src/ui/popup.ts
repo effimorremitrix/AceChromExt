@@ -6,11 +6,25 @@
  * "where did this value come from?"; Quickfill answers "is it in the field?",
  * and the operator answers that by looking at the form.
  *
+ * It renders in two places, and they are the SAME interface, not two surfaces:
+ * the action popup the toolbar icon opens, and, behind "Pop out", a detached
+ * window holding this very file. Chrome destroys an action popup the moment it
+ * loses focus, so the popup closed on the first click into the grid being
+ * filled and the operator went back to the toolbar for each container. The
+ * window does not close. The ACE and INTTRA helpers answer the same complaint
+ * with a side panel; Quickfill takes the window instead, because a side panel
+ * costs the portal the width this one box does not need, and because a window
+ * can sit on the second screen next to the form.
+ *
+ * What the window changes about the code is one thing, and it is not cosmetic:
+ * a surface that stays open has to keep LOOKING. See `detached` below.
+ *
  * Built with createElement and textContent only, so nothing pasted can ever be
  * interpreted as markup.
  */
 
 import { appendAll, buildStamp, clear, el } from '../../../src/ui/dom.js';
+import { activeBrowserTab, watchBrowser } from '../../../src/ui/liveTab.js';
 import { isFailure, parsePaste } from '../paste.js';
 import type {
   FillCount,
@@ -32,6 +46,17 @@ import type { FilingPackage } from '../../../shared/src/filingPackage.js';
 
 /** Whether the tab can be talked to at all, which is a different question from what is on it. */
 type Reach = 'ok' | 'notRunning' | 'offPortal';
+
+/**
+ * True in the pop-out window, false in the action popup.
+ *
+ * Read from our own URL rather than probed, because the two differ in one way
+ * no runtime test sees cleanly: the popup is INSIDE the browser window whose
+ * page it is filling, and the window is a window of its own. `currentWindow`
+ * therefore means the portal in one and means us in the other, which is why
+ * `activeBrowserTab` takes this flag; see src/ui/liveTab.ts.
+ */
+const detached = new URLSearchParams(location.search).get('window') === '1';
 
 let stored: StoredPaste | null = null;
 let mode: FillMode = 'auto';
@@ -117,7 +142,7 @@ function setReach(next: Reach): void {
 }
 
 async function toContent(message: QuickfillContentRequest): Promise<QuickfillContentResponse> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = await activeBrowserTab(detached);
   if (!tab?.id) return { ok: false, error: 'No active tab.' };
 
   const answer = await ask(tab.id, message);
@@ -468,13 +493,45 @@ function renderButtons(): void {
   buttons.append(el('span', { className: 'where', text: 'Open an ACE or INTTRA screen in this tab.' }));
 }
 
+/**
+ * "Pop out": the same interface in a window that does not close.
+ *
+ * `chrome.windows.create` on an extension page of our own needs no permission
+ * at all - not `tabs`, not `windows` - which is why this is the answer here
+ * rather than a side panel. The window carries `?window=1`, and that is the
+ * whole difference between the two: see `detached`.
+ *
+ * The popup closes itself afterwards. Leaving it up would put two live copies
+ * of the same box on the screen, each holding a paste the other does not know
+ * about, and Chrome would close it on the next click anyway.
+ *
+ * Nothing carries over in the URL. The paste and the toggle are already in
+ * chrome.storage.session, read on boot, so the window opens on exactly what
+ * the popup was showing.
+ */
+function popOutButton(): HTMLElement {
+  const button = el('button', {
+    className: 'button button-small',
+    text: 'Pop out',
+    title: 'Open Quickfill in a window that stays open while you click into the form.',
+    attrs: { type: 'button' },
+  });
+  button.addEventListener('click', () => {
+    void chrome.windows
+      .create({ url: chrome.runtime.getURL('popup.html?window=1'), type: 'popup', width: 460, height: 720 })
+      .then(() => window.close())
+      .catch(() => say('Chrome would not open the window.'));
+  });
+  return button;
+}
+
 function layout(): HTMLElement {
   const stamp = buildStamp();
   const header = el('header', { className: 'app-header' }, [
     el('div', { className: 'brand' }, [
       el('span', { className: 'brand-mark', text: 'Q' }),
       el('span', { className: 'brand-name', text: 'Quickfill' }),
-      stamp ? el('span', { className: 'build-stamp', text: stamp, title: 'The build this popup is running: version, git commit, build time (UTC)' }) : null,
+      stamp ? el('span', { className: 'build-stamp', text: stamp, title: 'The build this helper is running: version, git commit, build time (UTC)' }) : null,
     ]),
   ]);
 
@@ -485,6 +542,9 @@ function layout(): HTMLElement {
     void readBox();
   });
 
+  const footer = el('div', { className: 'button-row' }, [clearButton]);
+  if (!detached) footer.append(popOutButton());
+
   const section = el('section', { className: 'panel-section' }, [
     modeRow,
     box,
@@ -492,7 +552,7 @@ function layout(): HTMLElement {
     whereLine,
     buttons,
     result,
-    el('div', { className: 'button-row' }, [clearButton]),
+    footer,
     el('p', {
       className: 'where',
       text: 'Quickfill types values into the screen you are looking at. It never saves, submits or certifies, and it checks nothing: read the form before you submit.',
@@ -507,6 +567,9 @@ function layout(): HTMLElement {
 async function boot(): Promise<void> {
   const root = document.getElementById('root');
   if (!root) return;
+  // The popup is pinned to a width and clamped in height because Chrome gives
+  // it no scrollbar; the window is sized by the operator and scrolls itself.
+  if (detached) document.body.classList.replace('surface-popup', 'surface-detached');
   root.append(layout());
 
   box.addEventListener('input', () => {
@@ -529,6 +592,11 @@ async function boot(): Promise<void> {
   }
   renderModes();
   await locate();
+
+  // A popup is destroyed before any of this can change. The window is not: the
+  // operator switches to the ACE tab, opens a second draft, reloads the portal,
+  // and the window is still on the screen saying what WAS there. Re-ask.
+  if (detached) watchBrowser(() => locate());
 }
 
 let debounce = 0;

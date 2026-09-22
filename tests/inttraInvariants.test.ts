@@ -107,10 +107,14 @@ describe('INTTRA Helper: attended, never submits, never logs in', () => {
 describe('INTTRA Helper manifest', () => {
   const manifest = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8')) as Record<string, unknown>;
 
-  it('is Manifest V3, named INTTRA Helper, with only the storage permission', () => {
+  it('is Manifest V3, named INTTRA Helper, with storage and sidePanel only', () => {
     expect(manifest['manifest_version']).toBe(3);
     expect(manifest['name']).toBe('INTTRA Helper');
-    expect(manifest['permissions']).toEqual(['storage']);
+    // Why sidePanel, and why only these two: tests/invariants.test.ts, above
+    // the ACE Helper's copy of this assertion.
+    expect(manifest['permissions']).toEqual(['storage', 'sidePanel']);
+    expect(manifest['action']).not.toHaveProperty('default_popup');
+    expect(manifest['side_panel']).toEqual({ default_path: 'sidepanel.html' });
   });
 
   it('is restricted to INTTRA and e2open hosts, never <all_urls>, never a CBP host', () => {
@@ -140,6 +144,6 @@ describe('INTTRA Helper manifest', () => {
   it('does not touch the ACE Helper manifest', () => {
     const ace = JSON.parse(readFileSync(join(__dirname, '..', 'extension', 'manifest.json'), 'utf8')) as Record<string, unknown>;
     expect(JSON.stringify(ace)).not.toMatch(/inttra|e2open/i);
-    expect(ace['permissions']).toEqual(['storage']);
+    expect(ace['permissions']).toEqual(['storage', 'sidePanel']);
   });
 });

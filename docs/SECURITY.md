@@ -39,7 +39,7 @@ The companion's own guarantees are in [Companion](#the-quickbooks-companion).
 ## Permissions
 
 ```json
-"permissions": ["storage"],
+"permissions": ["storage", "sidePanel"],
 "host_permissions": [
   "https://ace.cbp.dhs.gov/*",
   "https://aesdirect.cbp.dhs.gov/*",
@@ -48,6 +48,14 @@ The companion's own guarantees are in [Companion](#the-quickbooks-companion).
 ```
 
 No `tabs`, no `<all_urls>`, no `scripting`, no `downloads`, no `webRequest`.
+
+`sidePanel` (added 2026-09-22) buys a **surface and nothing else**: it lets the
+extension show its own page docked beside the tab, and lets the toolbar icon
+open that page. It grants no host, no network, no tab reading and no injection,
+and it reads nothing about the page beside it. It replaced the action popup
+rather than adding to it - `default_popup` is gone from the manifest in the
+same change - because Chrome destroys a popup the moment it loses focus, which
+on a form being filled is the operator's first click into the form.
 (Those are the ACE Helper's. The INTTRA Helper's are the same list against its
 own hosts; the Quickfill Helper adds `scripting`, and only that, for one
 purpose described in its own section below.)
@@ -117,7 +125,8 @@ future change breaks a test rather than a promise:
 - no `document.cookie`, password handling, `localStorage`, or `sessionStorage`;
 - `store.ts` uses `chrome.storage.session` and never `local` or `sync`;
 - `innerHTML` is only ever assigned a string literal;
-- the manifest stays MV3, `permissions` stays exactly `["storage"]`, hosts stay
+- the manifest stays MV3, `permissions` stays exactly `["storage", "sidePanel"]`
+  with no `default_popup`, hosts stay
   CBP-only in both `host_permissions` and `content_scripts`, the CSP keeps
   `script-src 'self'` + `connect-src 'none'` with no `unsafe-eval`, and there
   are no `web_accessible_resources`.
@@ -241,7 +250,7 @@ each bundle is checked against its own host allowlist
 | --- | --- |
 | Login, MFA, or any credential handling | never sees one; `tests/inttraInvariants.test.ts` forbids the words `password` and `credential` in its source |
 | Pressing Save, Continue, Next, Add Row, Submit, or accepting a declaration | `automationPolicy.ts` names each switch and freezes it off; no `.click()`, `.submit()`, `MouseEvent` or `PointerEvent` anywhere in its content layer |
-| Headless or unattended operation | it is a content script that answers a popup; there is nothing to run it |
+| Headless or unattended operation | it is a content script that answers a panel a person opened; there is nothing to run it |
 | Network access | no `fetch`, no network permission, `connect-src 'none'` |
 | Reaching outside INTTRA | `host_permissions` and `content_scripts.matches` are `https://*.inttra.com/*` and `https://*.e2open.com/*`; no `<all_urls>`; the tab helper re-checks the host |
 | Writing outside `setInttraFieldValue` | no `.value =` or `.textContent =` in the content layer outside `fieldWriter.ts` |
@@ -327,7 +336,7 @@ browser. The hosting serves files; it never receives a shipment.
 | Filling a portal | no import of any content script, field writer, filler or grid writer; no `chrome.*`; the hand-off to the extensions is a downloaded file |
 | Loading anything remote | `index.html` loads one local script and two local stylesheets; the CSP is `default-src 'none'` with `script-src 'self'`, `style-src 'self'`, `form-action 'none'`, `base-uri 'none'`, `frame-ancestors 'none'` |
 | Credential handling | there is no login; the page holds nothing until a file is chosen. Who may open the URL is a hosting decision (Cloudflare Access, an internal name), outside the page |
-| Changing the extensions | both manifests are asserted unchanged (storage only, portal hosts only, no dashboard host), and nothing under `src/`, `inttra-extension/`, `companion/`, `deckhand/` or `shared/` may import from `web/` |
+| Changing the extensions | all three manifests are asserted unchanged (their own pinned permission sets, portal hosts only, no dashboard host), and nothing under `src/`, `inttra-extension/`, `companion/`, `deckhand/` or `shared/` may import from `web/` |
 | Depending on the host | `wrangler` is not a dependency; the repository's dependency list stays `xlsx`. The local programs may not name a hosting provider (`tests/independence.test.ts`) |
 
 | Data | Where | Lifetime |
