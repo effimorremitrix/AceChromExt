@@ -47,7 +47,7 @@ asserts that and that no content-script file calls `.click()` at all.
 rather than adding to it: the manifest has no `default_popup`, and the toolbar
 icon opens `sidepanel.html` docked beside the portal. Chrome destroys a popup
 on its first loss of focus, which on Create Shipping Instruction is the first
-click into the form. `docs/ARCHITECTURE.md`, "The two UI surfaces".
+click into the form. `docs/ARCHITECTURE.md`, "The one UI surface".
 
 No `<all_urls>`, no `tabs`, no `scripting`, no network permission; the
 extension-page CSP pins `connect-src` to `'none'`. **Confirm the hostname of
