@@ -14,7 +14,7 @@
 Everything is a local file or a browser tab on the operator's machine. No
 server, no network permission, no credential anywhere in the chain.
 
-## The three workflows that must keep working on their own
+## The four workflows that must keep working on their own
 
 These existed before the package and do not depend on it. Tests assert each.
 
@@ -24,6 +24,71 @@ These existed before the package and do not depend on it. Tests assert each.
 | **ACE calculator** | F2 beside a numeric ACE field -> expression -> Enter -> only the result is inserted |
 | **ACE from QuickBooks** | `ace-export export CN-1042` -> `ACE_Invoice_CN-1042.xlsx` -> ACE Helper Import -> Fill |
 | **Vendor bill from QuickBooks** | `ace-export bill CN-1042` -> preview + checks -> `--write` adds the supplier's Bill (goods, terms, negative commission line) to QuickBooks; `--excel` writes `Bill_CN-1042.xlsx` with the arithmetic. The companion's one write; unverified live ([QUICKBOOKS-INTEGRATION.md](QUICKBOOKS-INTEGRATION.md) section 6b) |
+
+## ACE from QuickBooks, stage by stage
+
+Nothing is scraped, and the ACE Helper never reads QuickBooks. Two programs
+are joined by a file: `ace-export` runs on the Windows PC beside QuickBooks
+Desktop and writes a workbook; the extension reads that workbook in the
+browser. They never talk to each other.
+
+```
+QuickBooks Desktop ──▶ ace-export ──▶ ACE_Invoice_CN-1042.xlsx ──▶ ACE Helper ──▶ ACE
+                       local COM      the handoff file             in the browser
+```
+
+`docs/ARCHITECTURE.md` records why the seam is a file: a workbook is
+inspectable, editable, e-mailable and archivable, while a private channel
+would have meant a second import path to maintain, a second thing to
+validate, and a Chrome extension that had to talk to a local process.
+
+**1. Reading out.** One `InvoiceQueryRq` through `QBXMLRP2`, driven from
+32-bit PowerShell because the request processor is a 32-bit in-process COM
+server that a 64-bit Node process cannot create. `<OwnerID>0</OwnerID>` is
+what makes custom fields come back at all; without it the vessel, booking,
+container and seal are simply absent.
+[QUICKBOOKS-INTEGRATION.md](QUICKBOOKS-INTEGRATION.md) section 6.
+
+**2. Four origins.** `qbToCanonical.ts` takes the first candidate that is not
+blank and records which one won.
+
+| Origin | Fields | Where it comes from |
+| --- | --- | --- |
+| Direct qbXML | invoice number, date, customer, bill-to, PO, FOB terms, payment terms, carrier, destination; per line the description and the amount | the element itself |
+| Custom field | vessel, booking, container, seal | `DataExt`, named in `ace-export.config.json`. QuickBooks has **no** element for these, so there is nothing to fall back to |
+| Derived | weight lb -> kg, value from quantity x rate, quantity 1 from the weight | computed, and marked `derived` rather than `quickbooks` |
+| Manual | Schedule B, origin, licence code, ECCN, export information code | configured per item, or typed for the export. **No accounting system holds these, and nothing here invents them**; what is missing is flagged |
+
+Precedence, highest first: `--set` or the export window, then `manual`, a
+custom field, `Other`/`Other1`/`Other2`, the built-in element, and
+`invoiceDefaults` last. The preview names the winner for every field.
+
+One transformation engine, not two: `qbToCanonical` calls Phase 1's own
+`mapCell`, so `lb x 0.45359237` is written once and both paths round the same
+way.
+
+**3. The handoff.** `ace-export export CN-1042` writes three sheets:
+**Shipment** (the only one the extension reads), **Audit** (every field, its
+origin, the QuickBooks element, the original value and the transformation) and
+**Checks**. The columns are `TEMPLATE_COLUMNS`, the same list the blank
+template is generated from, pinned together by a test so the two cannot drift.
+
+**4. Reading back.** The panel recognises the Audit sheet and says which kind
+of file it opened. `mapCell` then runs a second time over the same column
+specs, so the round trip is symmetric by construction. The result lives in
+`chrome.storage.session`, never on disk.
+
+**5. Filling.** The step has to be identified or Fill is refused, and a tie
+between two page signatures counts as unidentified. Candidates are tried in
+trust order (id, attribute, label, nearby, placeholder), several matches are
+reported AMBIGUOUS and never written, and `setAceFieldValue` verifies every
+write by reading the value back.
+
+**What this does not prove.** The COM hop itself has never run against a real
+QuickBooks ([QUICKBOOKS-INTEGRATION.md](QUICKBOOKS-INTEGRATION.md) section 11
+is the procedure), and twenty of the twenty-six ACE fields still match by
+label wording only. A clean run of this chain is the mechanics working, not
+the portal.
 
 ## The workflows the package adds
 
@@ -56,7 +121,7 @@ container field. Use it when the shipment is simple and you are checking the
 form anyway; use the path below when it is not.
 **[QUICKFILL.md](QUICKFILL.md)** lists every removal with its cost.
 
-## Three ways to make the package
+## Four ways to make the package
 
 **A. On the QuickBooks PC, from the command line.**
 

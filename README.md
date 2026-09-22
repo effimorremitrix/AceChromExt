@@ -80,7 +80,7 @@ typed either: **[docs/QUICKBOOKS-INTEGRATION.md](docs/QUICKBOOKS-INTEGRATION.md)
 
 ## Status
 
-**Phases 1 to 5 are built. Three caveats you must read.**
+**Phases 1 to 5 are built. Four caveats you must read.**
 
 The two extensions, the companion and the dashboard build, install, and are
 covered by the unit suite - including an automated end-to-end fixture that
@@ -90,13 +90,18 @@ runs the same fixture through the dashboard into a package file and back -
 plus a smoke test that drives a real Chromium with a mocked ACE host.
 
 1. **The ACE selectors match by label, not yet by id.** The label wording of
-   every field on Steps 1-3 (Shipment, Parties, Commodities) was captured
-   from the live AESDirect screens on 2026-09-14 and the extension resolves
-   fields by it; the element ids, the dropdown option values and the
-   Transportation step (5 fields) are still uncaptured, so 22 of the 27 fields
-   are verified by label and 5 are placeholders. Filling never writes to a
-   field it did not confidently find. A DevTools capture lifts a field from
-   medium to high confidence in about a minute:
+   every field on all four steps was read off the live AESDirect screens
+   (Steps 1-3 on 2026-09-14; Step 4, which has three fields, on 2026-09-16)
+   and the extension resolves fields by it, so no field is a pure guess any
+   more. Six ids were copied from the live DOM on 2026-09-16 (Departure Date,
+   1st Quantity, Value of Goods, Shipping Weight, Conveyance Name and
+   Transportation Reference Number), so **twenty of the twenty-six fields
+   still match by label wording only**; `fieldsWithoutCapturedSelector()` is
+   the list and `tests/aceMapping.test.ts` pins it, so it can only shrink.
+   Every dropdown is a Select2 combobox over a hidden `<select>`, and no
+   dropdown write has ever run against the live portal. Filling never writes
+   to a field it did not confidently find. A DevTools capture lifts a field
+   from medium to high confidence in about a minute:
    **[docs/ACE-MAPPING.md](docs/ACE-MAPPING.md)** lists exactly what to capture.
    Since Phase 3 a captured selector is **pasted into the panel** and is in
    force on the next fill, with no rebuild and no developer.
