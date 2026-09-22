@@ -1,5 +1,5 @@
 /**
- * The popup, in jsdom.
+ * The Quickfill side panel, in jsdom.
  *
  * Quickfill's whole interface is one box, two buttons and two lines of text, so
  * "the interface works" is a small enough claim to assert directly: the box
@@ -33,8 +33,10 @@ let tabUrl: string | undefined;
 let injected: string[][];
 /** Every `chrome.tabs.query` the surface made, so a detached one can be shown to skip its own window. */
 let queries: Record<string, unknown>[];
-/** Every window the surface asked Chrome to open. */
+/** Every window the surface asked Chrome to open. Should stay empty: there is no Pop out. */
 let opened: Record<string, unknown>[];
+/** The browser-event listeners `watchBrowser` subscribed, so a test can fire one. */
+let hooks: { activated: Array<(...args: unknown[]) => void>; updated: Array<(...args: unknown[]) => void>; focus: Array<(...args: unknown[]) => void> };
 
 /**
  * What the tab answers. `canFillForm` defaults to true for a named portal,
@@ -97,8 +99,7 @@ beforeEach(async () => {
   injected = [];
   queries = [];
   opened = [];
-  // Every test but the pop-out one runs as the action popup.
-  window.history.replaceState({}, '', '/popup.html');
+  hooks = { activated: [], updated: [], focus: [] };
 
   vi.stubGlobal('chrome', {
     runtime: {
@@ -127,6 +128,10 @@ beforeEach(async () => {
         queries.push(query);
         return [tabUrl === undefined ? { id: 7 } : { id: 7, url: tabUrl }];
       }),
+      // A side panel stays open while the operator moves around the browser, so
+      // it subscribes to these and re-asks the page. See src/ui/liveTab.ts.
+      onActivated: { addListener: (fn: (...args: unknown[]) => void) => hooks.activated.push(fn) },
+      onUpdated: { addListener: (fn: (...args: unknown[]) => void) => hooks.updated.push(fn) },
       sendMessage: vi.fn(async (_id: number, message: QuickfillContentRequest) => {
         // What Chrome throws when no frame in the tab is listening.
         if (!running) throw new Error('Could not establish connection. Receiving end does not exist.');
@@ -136,6 +141,8 @@ beforeEach(async () => {
       }),
     },
     windows: {
+      onFocusChanged: { addListener: (fn: (...args: unknown[]) => void) => hooks.focus.push(fn) },
+      // Still stubbed so a re-introduced Pop out would be caught rather than throw.
       create: vi.fn(async (options: Record<string, unknown>) => {
         opened.push(options);
         return { id: 99 };
@@ -158,7 +165,7 @@ afterEach(() => {
 });
 
 async function mount(): Promise<HTMLTextAreaElement> {
-  await import('../quickfill-extension/src/ui/popup.js');
+  await import('../quickfill-extension/src/ui/sidePanel.js');
   await settle();
   return document.querySelector('.paste-box') as HTMLTextAreaElement;
 }
@@ -665,83 +672,46 @@ describe('the ACE / INTTRA toggle', () => {
 });
 
 /**
- * "Pop out": the same interface in a window that does not close.
+ * The surface itself.
  *
- * The complaint this answers, 2026-09-22: leaving an ACE or INTTRA screen with
- * the popup open and coming back means clicking the toolbar icon again. Chrome
- * destroys an action popup the moment it loses focus, and on a container grid
- * that is every click into the grid, so there is nothing to fix inside the
- * popup - the surface has to be one Chrome does not destroy.
+ * This file has tracked one complaint through three answers. The original:
+ * leave an ACE or INTTRA screen with the helper open, come back, and it is
+ * gone; the toolbar icon has to be clicked again. That is Chrome, not a bug
+ * here - an action popup is destroyed the moment it loses focus, and on a
+ * container grid that is every click into the grid.
  *
- * The ACE and INTTRA helpers answer with a side panel and the `sidePanel`
- * permission. Quickfill answers with a window, which needs no permission at
- * all: `chrome.windows.create` on an extension page of our own asks for
- * nothing, not `tabs` and not `windows`.
+ * First answer, 2026-09-22 morning: a "Pop out" button reopening this page as
+ * a floating window. Second, the same afternoon: drop the popup and the window
+ * both, and open the side panel the other two helpers open. One box needs no
+ * docked strip, which is why Quickfill held out; what decided it is that three
+ * helpers behaving three ways is one thing more to remember than a forwarder
+ * in a hurry has room for.
  *
- * Two things are the whole feature, and both are pinned here: the window
- * carries `?window=1`, and a surface carrying it resolves the portal tab from
- * a NORMAL browser window instead of its own.
+ * What is pinned here is what an operator would notice if either half of that
+ * were undone: no Pop out button, and the tab read the way a docked surface
+ * reads it.
  */
-describe('the pop-out window', () => {
+describe('the side panel', () => {
   /** Any button on the screen, not only the fill row. */
   function anyButton(label: string): HTMLButtonElement | null {
     const match = Array.from(document.querySelectorAll('button')).find((node) => node.textContent === label);
     return (match ?? null) as HTMLButtonElement | null;
   }
 
-  async function mountDetached(): Promise<void> {
-    window.history.replaceState({}, '', '/popup.html?window=1');
-    document.body.className = 'surface-popup quickfill';
-    await mount();
-  }
-
-  it('is offered from the action popup', async () => {
-    await mount();
-    expect(anyButton('Pop out')).not.toBeNull();
-  });
-
-  it('opens this same page in a window, and closes the popup behind it', async () => {
-    const close = vi.spyOn(window, 'close').mockImplementation(() => undefined);
+  it('offers no Pop out button, because there is no popup left to escape', async () => {
     await mount();
 
-    anyButton('Pop out')?.click();
-    await settle();
-
-    expect(opened).toHaveLength(1);
-    expect(opened[0]?.['url']).toBe('chrome-extension://test/popup.html?window=1');
-    expect(opened[0]?.['type']).toBe('popup');
-    // Two live copies of one box, each holding a paste the other does not know
-    // about, is worse than no window at all.
-    expect(close).toHaveBeenCalled();
-    close.mockRestore();
-  });
-
-  it('does not offer itself again once it IS the window', async () => {
-    await mountDetached();
     expect(anyButton('Pop out')).toBeNull();
+    // The window it opened is gone with it: nothing here creates one.
+    expect(opened).toEqual([]);
   });
 
-  it('drops the popup sizing, which Chrome imposed and a window does not', async () => {
-    await mountDetached();
-    expect(document.body.classList.contains('surface-detached')).toBe(true);
-    expect(document.body.classList.contains('surface-popup')).toBe(false);
-  });
-
-  it('reads the portal from a normal browser window, never from its own', async () => {
-    await mountDetached();
-
-    // `currentWindow` inside a pop-out window is the pop-out, whose only tab is
-    // this helper: asking it would answer "no portal tab" with the portal open
-    // right beside it. `windowType: 'normal'` leaves our own window out.
-    expect(queries.length).toBeGreaterThan(0);
-    for (const query of queries) {
-      expect(query['windowType']).toBe('normal');
-      expect(query['currentWindow']).toBeUndefined();
-    }
-  });
-
-  it('still asks the active tab directly when it is the action popup', async () => {
+  it('reads the active tab of its own window, the way a docked surface should', async () => {
     await mount();
+
+    // A side panel is docked INSIDE the browser window whose page it fills, so
+    // `currentWindow` means the portal. The pop-out window had to ask for
+    // `windowType: 'normal'` instead, because `currentWindow` meant itself.
     expect(queries.length).toBeGreaterThan(0);
     for (const query of queries) {
       expect(query['currentWindow']).toBe(true);
@@ -749,17 +719,31 @@ describe('the pop-out window', () => {
     }
   });
 
-  it('opens on the paste the popup was holding, carried in session storage and not in the URL', async () => {
+  it('re-asks the page when the operator moves around the browser', async () => {
+    // A popup was destroyed before the page could change under it. A panel is
+    // still on screen when the operator switches to the ACE tab or reloads the
+    // portal, and a stale "Copy Container Details, 7 containers" reads as
+    // current.
+    await mount();
+    const before = sent.filter((message) => message.type === 'content/where').length;
+    expect(before).toBeGreaterThan(0);
+
+    place = at('inttra', 'Create Shipping Instruction');
+    hooks.activated[0]?.({ tabId: 7 });
+    await settle();
+    await settle();
+
+    expect(sent.filter((message) => message.type === 'content/where').length).toBeGreaterThan(before);
+  });
+
+  it('opens on the paste it was holding, carried in session storage', async () => {
     const { isFailure, parsePaste } = await import('../quickfill-extension/src/paste.js');
     const parsed = parsePaste(email);
     if (isFailure(parsed)) throw new Error(parsed.error);
     session = { text: email, summary: parsed.summary, package: parsed.pkg, shipment: parsed.ace };
 
-    await mountDetached();
+    await mount();
 
-    // Nothing is handed over in the URL. Both surfaces read the same
-    // chrome.storage.session on boot, so the window opens on exactly what the
-    // popup was showing.
     expect((document.querySelector('.paste-box') as HTMLTextAreaElement).value).toBe(email);
     expect(text('.read-as')).toContain(parsed.summary);
   });

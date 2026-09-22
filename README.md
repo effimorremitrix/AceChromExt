@@ -29,10 +29,9 @@ fed by QuickBooks Desktop and by the emails the carrier and the producer send.
   where every value came from, flags every disagreement, and is a plain JSON
   file both extensions read. **[docs/END-TO-END-FLOW.md](docs/END-TO-END-FLOW.md)**
 - **Quickfill Helper** is the same two fills with everything else taken out:
-  one popup, one paste box, a portal toggle and a row of buttons. Press **Pop
-  out** and the same page reopens as a window that does not close when you
-  click into the form; the other two helpers open as a docked side panel for
-  the same reason. Paste the
+  one side panel, one paste box, a portal toggle and a row of buttons. All
+  three helpers open the same way: a panel docked beside the page that stays
+  there while you click into the form. Paste the
   carrier email (or a package, or spreadsheet rows), click, the fields fill.
   On an INTTRA screen it offers every route the page has - the header fields,
   the per-container blocks, the container grid, and the clipboard block for
@@ -268,7 +267,7 @@ comes from `node ace-export.mjs package CN-1042 --deckhand booking.eml`.
 extension/        ACE Helper manifest, HTML shells, CSS, icons   (static, copied to dist/)
 inttra-extension/ INTTRA Helper: manifest, HTML, icons, and src/ (pages, mappings, content, ui)
 quickfill-extension/
-                  Quickfill Helper: manifest, popup, icons, and src/ - paste.ts (the one
+                  Quickfill Helper: manifest, side panel, icons, and src/ - paste.ts (the one
                   input), aceShipment.ts (ungated package -> ACE model), one content script
                   for both portals. No mappings of its own: it uses the two above
 deckhand/         email/document extraction: model, ISO 6346, rules extractor, readers, review

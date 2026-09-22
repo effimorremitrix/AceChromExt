@@ -337,15 +337,23 @@ value looks right and files wrong. The helper:
 Every ACE write in the codebase goes through this function. The calculator's
 insertion does too.
 
-## The two UI surfaces
+## The one UI surface
 
-| Surface | Who has it | Contains | Why |
-| --- | --- | --- | --- |
-| `sidepanel.html` | ACE Helper, INTTRA Helper | **everything**: overview, import, Deckhand, package, preview, mapping, fill, calculator, settings, diagnostics | docked beside the page, stays open while the operator fills it, and sized by them |
-| `popup.html` | Quickfill Helper | the one paste box, the toggle, the buttons | one click from the toolbar, and behind **Pop out**, the same page in a window |
+| Surface | Who has it | Contains |
+| --- | --- | --- |
+| `sidepanel.html` | ACE Helper, INTTRA Helper | **everything**: overview, import, Deckhand, package, preview, mapping, fill, calculator, settings, diagnostics |
+| `sidepanel.html` | Quickfill Helper | the one paste box, the toggle, the buttons |
 
-The first renders `src/ui/app.ts` and is the only surface either of those two
-helpers has.
+All three helpers open a side panel, docked beside the page, staying open while
+the operator fills it, sized by them. None declares a `default_popup`; each
+service worker calls `setPanelBehavior({ openPanelOnActionClick: true })`, so
+the toolbar icon opens the panel. The first two render `src/ui/app.ts`;
+Quickfill renders its own `quickfill-extension/src/ui/sidePanel.ts`, because
+its whole product claim is that it shares the mapping tables and nothing else.
+
+The consistency is the point. An operator does not think "which helper is this"
+before clicking a toolbar icon, and three helpers behaving three ways is one
+thing more to remember than a forwarder in a hurry has room for.
 
 ### Why the wide panel went
 
@@ -400,13 +408,15 @@ Two answers, because the two shapes of helper want different things:
   true })` in each service worker is what makes the toolbar icon open it. The
   pinned permission sets are in `tests/invariants.test.ts`,
   `tests/inttraInvariants.test.ts` and `tests/webInvariants.test.ts`.
-- **A pop-out window** for Quickfill, which stays an action popup with a
-  **Pop out** button beside Clear. `chrome.windows.create` on an extension page
-  of our own needs no permission at all, the window is the same
-  `popup.html` carrying `?window=1`, and it can sit on a second screen, which
-  a side panel cannot. It also costs the portal no width, and one paste box
-  does not need a docked strip. Quickfill therefore does NOT get `sidePanel`;
-  `docs/QUICKFILL.md` section 5c.
+- **A pop-out window** for Quickfill, at first: it stayed an action popup with
+  a **Pop out** button that reopened the same page as a floating window, which
+  needed no permission at all and could sit on a second screen. That lasted a
+  few hours. The operator asked for the three to behave alike, and the argument
+  that decided it was never about width: a fast path with its own window
+  management is not a fast path. Quickfill now opens the same side panel, its
+  permissions are `["storage", "scripting", "sidePanel"]`, and the pop-out is
+  gone. `docs/QUICKFILL.md` section 5c keeps both answers and the table that
+  was true but beside the point.
 
 ### What a surface that stays open owes the operator
 
@@ -427,11 +437,10 @@ paste box. `isEditing` in the same file holds the paint back while a box has
 focus; the state behind it was refreshed either way, and the next click or the
 next browser event paints it.
 
-The pop-out window has one more problem of its own. It is a window, so
-`currentWindow` means the pop-out, whose only tab is the helper. Asking it
-would report "no portal tab" with the portal open right beside it, so
-`activeBrowserTab` in the same file queries `windowType: 'normal'` instead and
-takes the most recently used answer.
+A side panel is docked inside the browser window whose page it fills, so the
+ordinary `{ active: true, currentWindow: true }` query is right for all three.
+`activeBrowserTab`, which existed only because `currentWindow` inside a pop-out
+window meant the pop-out, went with the pop-out.
 
 Reopening is remembered too (`src/ui/lastTab.ts`): the screen the operator
 chose, per surface, in `chrome.storage.session`. **Clear Imported Data drops it

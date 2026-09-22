@@ -18,8 +18,8 @@
  *
  *   - `tabs.onActivated`      the operator switched tab;
  *   - `tabs.onUpdated`        that tab navigated or finished loading;
- *   - `windows.onFocusChanged` they switched browser window, which is how the
- *                             portal tab changes under a pop-out window.
+ *   - `windows.onFocusChanged` they switched browser window, which changes
+ *                             which portal tab is in front.
  *
  * `tabs.onUpdated` carries a `url` only for a tab this build has host
  * permission for, and nothing here reads one: which tabs may be addressed is
@@ -104,27 +104,4 @@ export function isEditing(): boolean {
   if (!active) return false;
   const tag = active.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (active as HTMLElement).isContentEditable === true;
-}
-
-/**
- * The browser tab a DETACHED surface is looking at.
- *
- * A side panel lives inside the browser window, so `currentWindow` is the
- * window whose page it is docked beside and the ordinary query is right. A
- * pop-out window is a window of its own: `currentWindow` is the pop-out, whose
- * only tab is the helper itself, so the ordinary query answers "no portal tab"
- * on a screen with the portal open right next to it.
- *
- * `windowType: 'normal'` is what tells them apart. It leaves out our own
- * window and every other popup window, and returns the active tab of each real
- * browser window; most recently used first is the one the operator was just
- * typing into.
- */
-export async function activeBrowserTab(detached: boolean): Promise<chrome.tabs.Tab | undefined> {
-  if (!detached) {
-    const [here] = await chrome.tabs.query({ active: true, currentWindow: true });
-    return here;
-  }
-  const active = await chrome.tabs.query({ active: true, windowType: 'normal' });
-  return [...active].sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
 }

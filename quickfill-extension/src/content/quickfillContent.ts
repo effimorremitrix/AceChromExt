@@ -11,7 +11,7 @@
  * What it does NOT reuse is the reporting: `fillFields` and `fillInttraFields`
  * return an outcome per field, and this script tallies them to three numbers
  * and throws the rest away, because Quickfill's entire result surface is one
- * line in a popup.
+ * line in a side panel.
  *
  * It never clicks. No Save, no Save Line, no Add Line, no Add Row, no Continue,
  * no Submit, no Certify. The automation policies in

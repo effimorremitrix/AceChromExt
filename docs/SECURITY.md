@@ -55,7 +55,10 @@ open that page. It grants no host, no network, no tab reading and no injection,
 and it reads nothing about the page beside it. It replaced the action popup
 rather than adding to it - `default_popup` is gone from the manifest in the
 same change - because Chrome destroys a popup the moment it loses focus, which
-on a form being filled is the operator's first click into the form.
+on a form being filled is the operator's first click into the form. All three
+helpers carry it; the Quickfill Helper's set is
+`["storage", "scripting", "sidePanel"]` and `docs/QUICKFILL.md` section 5b
+covers its `scripting`.
 (Those are the ACE Helper's. The INTTRA Helper's are the same list against its
 own hosts; the Quickfill Helper adds `scripting`, and only that, for one
 purpose described in its own section below.)
@@ -286,7 +289,7 @@ section 3. None of them is a security control, and none of the rows below moves.
 | Credential handling | never sees one; `tests/quickfillInvariants.test.ts` forbids the words `password` and `credential` and any `document.cookie` |
 | Persistence | no `localStorage`, `sessionStorage`, IndexedDB or `caches`; the pasted shipment lives in `chrome.storage.session` only; nothing injected outlives the tab |
 | Reaching outside the two portals | `host_permissions` and `content_scripts.matches` are exactly the three CBP patterns plus `https://*.inttra.com/*` and `https://*.e2open.com/*`; no `<all_urls>`; the manifest is pinned field by field |
-| Injecting anything but its own content script | `scripting` is used in one place, `src/ui/popup.ts`, to start `quickfillContent.js` in a tab that is not running it (`docs/QUICKFILL.md` section 5b). `tests/quickfillInvariants.test.ts` asserts the one caller, the file by name, and no `func`, no `args`, no `world` (so never the page's own world), no `registerContentScripts` and no `insertCSS`. Chrome refuses the call outside `host_permissions`, and the popup does not make it where the tab reports no URL |
+| Injecting anything but its own content script | `scripting` is used in one place, `src/ui/sidePanel.ts`, to start `quickfillContent.js` in a tab that is not running it (`docs/QUICKFILL.md` section 5b). `tests/quickfillInvariants.test.ts` asserts the one caller, the file by name, and no `func`, no `args`, no `world` (so never the page's own world), no `registerContentScripts` and no `insertCSS`. Chrome refuses the call outside `host_permissions`, and the panel does not make it where the tab reports no URL |
 | A second selector table or a second write path | it declares no `mappings/` or `selectors/` folder and imports neither field writer directly, so every write still goes through `setAceFieldValue` / `setInttraFieldValue` with its read-back |
 | Guessing | several containers and one ACE container field leaves the field empty; a grid shorter than the container list is filled as far as it goes |
 

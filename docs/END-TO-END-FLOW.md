@@ -34,7 +34,7 @@ These existed before the package and do not depend on it. Tests assert each.
 | **INTTRA** | `filing-package.json` -> INTTRA Helper Import -> Package (resolve conflicts) -> Fill Current Page |
 | **Containers** | the same package -> Copy Container Details -> Copy rows and paste (Fill Container Grid when the cells can be typed into) |
 | **ACE from the package** | `filing-package.json` -> ACE Helper Import -> the same preview, checks and fill, with booking, vessel, container and seal from the approved extraction |
-| **Quickfill** | paste anything of the four shapes into the Quickfill popup -> Fill this page / Fill this screen. No review, no approval, no gate |
+| **Quickfill** | paste anything of the four shapes into the Quickfill side panel -> Fill this page / Fill this screen. No review, no approval, no gate |
 
 ## The fast path, which skips all of it
 

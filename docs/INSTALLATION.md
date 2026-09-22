@@ -29,8 +29,8 @@ npm run verify      # typecheck + tests + template + all builds + all bundle che
 `npm run verify` writes the ACE Helper to `dist/`, the INTTRA Helper to
 `dist-inttra/` (same layout: `manifest.json`, `sidepanel.html`, `styles/`,
 `inttraContent.js`, `sidePanel.js`, `serviceWorker.js`, `icons/`), and the Quickfill Helper to `dist-quickfill/` (no panel and no side
-panel; just `manifest.json`, `popup.html`, `styles/`, `quickfillContent.js`,
-`popup.js`, `serviceWorker.js`, `icons/`):
+panel; just `manifest.json`, `sidepanel.html`, `styles/`, `quickfillContent.js`,
+`sidePanel.js`, `serviceWorker.js`, `icons/`):
 
 ```
 dist/
@@ -84,11 +84,9 @@ Individual steps, if you prefer:
 6. For the INTTRA Helper, repeat with the `dist-inttra/` folder. Same side
    panel, same behaviour.
 7. For the Quickfill Helper, repeat with the `dist-quickfill/` folder. Its icon
-   is the amber "Q", so the three are told apart in the toolbar. It has no
-   panel and no side panel: the popup is the whole interface. Chrome closes a
-   popup on the first click into the page, so if you want it to stay, press
-   **Pop out** and it reopens as a window you can park beside the browser or on
-   a second screen.
+   is the amber "Q", so the three are told apart in the toolbar. Same side
+   panel, same behaviour as the other two; what differs is what is in it, which
+   is one paste box, a portal toggle and a row of buttons.
 8. Each helper's header shows `build <version>+<commit>.<time>`, the stamp of
    the folder Chrome loaded (also shown as the version in `chrome://extensions`).
    If it is not the build you just ran, Chrome is still running an older
@@ -101,7 +99,7 @@ Individual steps, if you prefer:
    | Build | Folder, or CI artifact | What it drives |
    | --- | --- | --- |
    | `npm run build:playground` | `dist-ace-playground/`, `ace-playground-unpacked` | the ACE Helper panel: import, preview, checks, the reference counter, fill (`docs/USER-GUIDE.md` section 4) |
-   | `npm run build:quickfill:playground` | `dist-quickfill-playground/`, `quickfill-playground-unpacked` | the Quickfill popup: one paste box (`docs/QUICKFILL.md` section 5a) |
+   | `npm run build:quickfill:playground` | `dist-quickfill-playground/`, `quickfill-playground-unpacked` | the Quickfill side panel: one paste box (`docs/QUICKFILL.md` section 5a) |
 
    Load whichever you are practising; loading both at once means two helpers
    answering on the same page.
@@ -158,7 +156,7 @@ Reloading the card is what orphans an open tab: Chrome injects a content script
 when a page **loads**, so a portal tab that was open across the reload keeps
 running nothing, and the helper's side panel cannot reach it. It looks like
 an ordinary page, which is why this is worth knowing. **The Quickfill card is
-the exception**: its popup starts its own content script in a tab that is not
+the exception**: its panel starts its own content script in a tab that is not
 running one, so a rebuild costs no page reload and no open modal
 (`docs/QUICKFILL.md` section 5b). The other two still need the tab reloaded.
 

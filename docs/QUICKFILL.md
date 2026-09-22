@@ -6,7 +6,7 @@
 > selector is still a placeholder, and no dropdown write has ever run against
 > a live portal. A simpler interface verifies nothing. See section 6.
 
-A third Chrome extension. One popup, one paste box, two buttons.
+A third Chrome extension. One side panel, one paste box, two buttons.
 
 ```
   carrier email            ┐
@@ -34,7 +34,7 @@ tab and no per-field report. Paste, click, look at the form, submit.
 5. [Build, check, install](#5-build-check-install)
 5a. [Practising without the portal: the playground](#5a-practising-without-the-portal-the-playground)
 5b. [The tab that was already open](#5b-the-tab-that-was-already-open)
-5c. [Pop out: the popup that stays open](#5c-pop-out-the-popup-that-stays-open)
+5c. [The side panel, and the two answers before it](#5c-the-side-panel-and-the-two-answers-before-it)
 6. [What is not verified](#6-what-is-not-verified)
 7. [The dashboard, and why nothing was added to it](#7-the-dashboard-and-why-nothing-was-added-to-it)
 
@@ -64,7 +64,7 @@ layer too, and that the extension declares no third policy file of its own.
 
 Permissions: `["storage", "scripting"]`, and nothing else. CSP:
 `connect-src 'none'`. No network API of any kind, asserted against the source
-and again against the built bundle. `scripting` is the popup starting this
+and again against the built bundle. `scripting` is the side panel starting this
 extension's own content script in a tab that has none, on the five hosts the
 manifest already asks for; what it may inject is pinned field by field in
 `tests/quickfillInvariants.test.ts` and explained in section 5b.
@@ -243,9 +243,8 @@ New code, all under `quickfill-extension/`:
 src/paste.ts                     the one input, pure; format detection + auto-resolve
 src/aceShipment.ts               package -> CanonicalShipment, ungated
 src/content/quickfillContent.ts  one content script, both portals
-src/ui/popup.ts                  the whole interface, in both frames: the
-                                 action popup, and behind Pop out the same
-                                 page in a window (section 5c)
+src/ui/sidePanel.ts              the whole interface, in the side panel
+                                 the toolbar icon opens (section 5c)
 src/background/serviceWorker.ts  holds the parsed paste for the session
 src/core/{messages,store}.ts     four messages and a session key
 ```
@@ -273,7 +272,7 @@ versa.
 | `npm run build:quickfill:playground` | build `dist-quickfill-playground/`, the practice build (section 5a) |
 | `npm run check:bundle:quickfill` | supply-chain check on the built bundle, allowing only `cbp.dhs.gov`, `inttra.com`, `e2open.com` |
 | `npm run icons:quickfill` | regenerate the committed icons (amber, "Q") |
-| `npm test -- tests/quickfill.test.ts tests/quickfillPopup.test.ts tests/quickfillInvariants.test.ts` | its own tests: the four paste shapes and both fills against real fixtures, the popup in jsdom, the invariants |
+| `npm test -- tests/quickfill.test.ts tests/quickfillSidePanel.test.ts tests/quickfillInvariants.test.ts` | its own tests: the four paste shapes and both fills against real fixtures, the side panel in jsdom, the invariants |
 | `npm run verify` | everything, including the two lines above |
 
 Install: `chrome://extensions` → Developer mode → **Load unpacked** →
@@ -311,7 +310,7 @@ on its card (without it the helper cannot see a page opened from disk), open
 `playground/step1-shipment.html`, paste the workbook rows into the box (`Read
 as: spreadsheet rows · 2 lines`), and press **Fill this page**; then the other
 three steps through the tabs, and on Step 3 **Fill line**, **Add New Line**,
-**Fill line** again for line 2. The popup recognises a step by its content
+**Fill line** again for line 2. The side panel recognises a step by its content
 (the step tabs, the headings), which is what lets it work on a file: on the
 live portals nothing changes, because no INTTRA screen carries ACE's "Step N:"
 tabs.
@@ -347,9 +346,9 @@ Open an ACE or INTTRA screen in this tab.
 Two things were wrong with that, and both are fixed.
 
 **The advice was to do what the operator had already done.** The second line is
-what the popup says when it has no portal to offer, and it printed under a line
+what the helper says when it has no portal to offer, and it printed under a line
 that had already said the real reason. A tab that cannot be reached is not a
-tab that is on the wrong page, and the popup now tells them apart: `tab.url` is
+tab that is on the wrong page, and the helper now tells them apart: `tab.url` is
 populated by Chrome only for a tab the extension has host permission for, so
 its absence *is* the answer that this is not a portal tab, and it costs no
 `tabs` permission to read.
@@ -357,14 +356,14 @@ its absence *is* the answer that this is not a portal tab, and it costs no
 **Every route was withdrawn, including the one that needs no page.** Copy rows
 builds its block out of the package's own containers; it asks the tab only for
 the grid's column order, and `gridPasteBlock` has always had a fallback for a
-page with no grid on it. So the block is now built in the popup when the tab
+page with no grid on it. So the block is now built in the panel when the tab
 cannot be asked, in `GRID_COLUMNS` order, which is the order the live grid was
 read in on 2026-09-20 (Container Number, Carrier Seal #, Shipper Seal #, Cargo
 Description, Marks & Numbers, HS Code). The result line says which order it
 used. On that run the operator would have had their seven rows on the
 clipboard, with the grid to paste them into already on the screen.
 
-**And the popup now starts the script itself.** On a failed ping it calls
+**And the panel now starts the script itself.** On a failed ping it calls
 `chrome.scripting.executeScript` for this extension's own
 `quickfillContent.js`, into every frame of the active tab, and asks again.
 The modal stays open; nothing is reloaded.
@@ -375,9 +374,9 @@ extension deliberately did without until then:
 | | |
 | --- | --- |
 | What it can inject | `quickfillContent.js`, the file in this bundle. Never a function, never a string, never a file named by a message |
-| Where | The five hosts in `host_permissions`. Chrome refuses anywhere else, and the popup does not ask where it has no `tab.url` |
+| Where | The five hosts in `host_permissions`. Chrome refuses anywhere else, and the panel does not ask where it has no `tab.url` |
 | Which world | The extension's isolated world, the default. Never `MAIN`, which would put our code in the page's own world beside the portal's |
-| How long | The tab's lifetime. Never `registerContentScripts`, which would outlive the popup |
+| How long | The tab's lifetime. Never `registerContentScripts`, which would outlive the panel |
 | What the operator sees | Nothing new. `host_permissions` already grant the five portal hosts, and `scripting` adds no install warning of its own |
 
 `tests/quickfillInvariants.test.ts` asserts every row of that table against the
@@ -395,54 +394,74 @@ own listener throws before it answers. The listener now treats a failed read of
 the page as "not this frame" rather than as silence, so one slow frame cannot
 make the whole tab look dead.
 
-## 5c. Pop out: the popup that stays open
+## 5c. The side panel, and the two answers before it
 
 Reported 2026-09-22, against all three helpers: leave an ACE or INTTRA screen
 with the helper open, come back, and the helper is gone; the toolbar icon has
 to be clicked again.
 
-**That is Chrome, not a bug here.** An action popup is destroyed the moment it
+**That was Chrome, not a bug here.** An action popup is destroyed the moment it
 loses focus, and on a form being filled that is the first click into the form.
 There is no flag, no permission and no API that keeps one open. The only fix is
 a surface Chrome does not destroy.
 
-The ACE and INTTRA helpers answer with a side panel and the `sidePanel`
-permission (`docs/ARCHITECTURE.md`, "The two UI surfaces"). **Quickfill does
-not, and this is the decision, not an oversight:**
+This section is kept as a record of getting there in two steps, because the
+reasoning that was wrong the first time is the reasoning most likely to be
+re-invented.
 
-| | Side panel | Pop-out window (chosen) |
+### First answer: a pop-out window (superseded)
+
+The ACE and INTTRA helpers took a side panel. Quickfill did not, and the
+argument was about shape:
+
+| | Side panel | Pop-out window (chosen first) |
 | --- | --- | --- |
 | Permission | `sidePanel` | none; `chrome.windows.create` on our own extension page asks for nothing |
 | Where it sits | docked, taking width from the portal | anywhere, including a second screen |
 | Suits | a panel you read while filling: status, line picker, report | one paste box, which needs no docked strip |
 | Cost | the portal is narrower, and INTTRA's create page is already wide | the window can fall behind the browser on a single screen |
 
-So the popup keeps a **Pop out** button beside Clear. It opens this same
-`popup.html` with `?window=1` in a `type: 'popup'` window and closes the popup
-behind it, because two live copies of one box, each holding a paste the other
-does not know about, is worse than no window at all. Nothing is handed over in
-the URL: both read the same `chrome.storage.session` on boot, so the window
-opens on exactly what the popup was showing, toggle included.
+Every row of that table is still true. It was the wrong table.
 
-Two things the window has to do that a popup never did, both in
-`src/ui/liveTab.ts` and shared with the two side panels:
+### Second answer: the same side panel as the other two
 
-- **It has to keep looking.** A popup was gone before the page could change. A
-  window is still on the screen when the operator switches to the ACE tab,
-  opens a second draft or reloads the portal, and a stale "Copy Container
-  Details, 7 containers" reads as current. So it re-probes on
-  `tabs.onActivated`, `tabs.onUpdated` and `windows.onFocusChanged`, coalesced
-  so that loading a page is one probe and two probes never overlap.
-- **It has to ask about somebody else's window.** `currentWindow` inside a
-  pop-out window is the pop-out, whose only tab is Quickfill itself; asking it
-  would report "not a portal tab" with the portal open right beside it. So a
-  detached surface queries `windowType: 'normal'` and takes the most recently
-  used answer.
+The operator asked for it, having used both, and the argument that decides it
+is not on that table at all: **three helpers behaving three ways is one thing
+more to remember than a forwarder in a hurry has room for.** Quickfill exists
+to be the fast path; a fast path with its own window management is not one.
+The Pop out button was also only ever a workaround for a popup Quickfill no
+longer has, so keeping it would have left a button whose purpose no operator
+could infer.
 
-What the window does NOT change: not one of the removals in section 3 comes
+So `default_popup` is gone, `side_panel.default_path` is `sidepanel.html`, the
+service worker calls `setPanelBehavior({ openPanelOnActionClick: true })`, and
+`permissions` is `["storage", "scripting", "sidePanel"]`. Like the other two,
+`sidePanel` buys a SURFACE and nothing else - no host, no network, no tab
+reading, no injection - and it REPLACED the popup rather than adding to it.
+`tests/quickfillInvariants.test.ts` pins that set and says why, including that
+it reverses what the same file said that morning.
+
+What went with the window: `?window=1`, the detached flag, and
+`activeBrowserTab` in `src/ui/liveTab.ts`, which existed solely because
+`currentWindow` inside a pop-out window meant the pop-out rather than the
+portal. A side panel is docked inside the window whose page it fills, so the
+ordinary active-tab query is right again for all three helpers.
+
+### What survived both answers
+
+**A surface that stays open has to keep looking.** A popup was gone before the
+page could change under it. A panel is still on the screen when the operator
+switches to the ACE tab, opens a second draft or reloads the portal, and a
+stale "Copy Container Details, 7 containers" reads as current. So it re-probes
+on `tabs.onActivated`, `tabs.onUpdated` and `windows.onFocusChanged`
+(`watchBrowser`, `src/ui/liveTab.ts`), coalesced so that loading a page is one
+probe and two probes never overlap. `tests/quickfillSidePanel.test.ts` fires a
+tab switch and asserts the page is asked again.
+
+What the surface does NOT change: not one of the removals in section 3 comes
 back, nothing is clicked, and a fill still goes through the same
 detector-resolved selectors. It is the same interface, in a frame Chrome does
-not close. Neither it nor the two side panels has been used on a real shipment.
+not close. It has not been used on a real shipment.
 
 ## 6. What is not verified
 
@@ -481,7 +500,7 @@ Quickfill inherits `README.md`'s caveats whole and resolves none of them.
    was never identified, and a column that was not identified was left out of
    the pasted row instead of pasted blank, so the seals were pasted nowhere.
    See `docs/INTTRA-INTEGRATION.md` section 5a. Every build now carries a
-   stamp (`build <version>+<commit>.<time>` in the popup header), because that
+   stamp (`build <version>+<commit>.<time>` in the header), because that
    run could not at first tell which build was loaded. A fifth run, with those
    fixes loaded, found that neither helper found the grid at all: it is
    neither a table nor an ARIA grid, and Quickfill offered nothing while the
@@ -501,12 +520,12 @@ Quickfill inherits `README.md`'s caveats whole and resolves none of them.
    section 3 have still never been tested against an operator in a hurry,
    which is exactly the condition under which dropping the checks matters
    most.
-5. **The pop-out window has never been opened on a live portal** (section 5c),
-   and neither has the side panel the other two helpers moved to. Both are
-   answers to a complaint made about the live portal on 2026-09-22, but the
-   surface is all that changed: the same detector, the same selectors, the
-   same refusals. A window that stays open in front of an unfilled field is
-   still an unfilled field.
+5. **The side panel has never been opened on a live portal** (section 5c), and
+   neither have the other two helpers' panels. All three are answers to a
+   complaint made about the live portal on 2026-09-22, but the surface is all
+   that changed: the same detector, the same selectors, the same refusals. A
+   panel that stays open in front of an unfilled field is still an unfilled
+   field.
 
 ## 7. The dashboard, and why nothing was added to it
 

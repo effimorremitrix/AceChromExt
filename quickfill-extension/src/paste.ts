@@ -8,7 +8,7 @@
  * INTTRA side and a CanonicalShipment for the ACE side - so the two fillers
  * never need to know which branch produced them.
  *
- * Pure: no DOM, no chrome.*, no file reading. The popup hands it a string.
+ * Pure: no DOM, no chrome.*, no file reading. The side panel hands it a string.
  *
  * What this deliberately does NOT do, and what the other two extensions do:
  * no preview, no data quality checks, no Deckhand review, no Approve click, no
