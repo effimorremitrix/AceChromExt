@@ -98,7 +98,7 @@ describe('the playground folder', () => {
     for (const step of ACE_STEPS) {
       const page = wrapAceScreen(fixture(step.fixture), step, HELPERS.ace);
       expect(page).toContain('<strong>ACE Helper playground.</strong>');
-      expect(page).toContain('Import the example workbook in the panel');
+      expect(page).toContain('Import the example workbook in the side panel');
       expect(page).not.toContain('Paste the example rows into Quickfill');
       for (const other of ACE_STEPS) expect(page).toContain(`href="${other.file}"`);
       expect(page).not.toMatch(/eval\(|new Function/);
@@ -230,11 +230,11 @@ describe('the panel finding its tab', () => {
     expect(await resolveAceTab()).toMatchObject({ id: 2 });
   });
 
-  it('falls back to the most recently used one when the panel is in front', async () => {
+  it('falls back to the most recently used one when an extension page is in front', async () => {
     tabs = [
       tab(1, 'https://ace.cbp.dhs.gov/ace/filing/shipment', { lastAccessed: 10 }),
       tab(2, 'https://aesdirect.cbp.dhs.gov/ace/filing/commodities', { lastAccessed: 99 }),
-      tab(3, 'chrome-extension://abc/panel.html', { active: true }),
+      tab(3, 'chrome-extension://abc/sidepanel.html', { active: true }),
     ];
     expect(await resolveAceTab()).toMatchObject({ id: 2 });
   });

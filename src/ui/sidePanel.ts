@@ -1,13 +1,18 @@
 /**
- * Side panel entry point: page status, the line picker, Fill, the last report.
+ * The ONE entry point: every screen, in the side panel.
  *
- * This was `popup.ts` until the toolbar icon stopped opening a popup. Chrome
- * destroys an action popup the moment it loses focus, and on a form being
- * filled that is every click into the form, so the operator had to reopen the
- * helper after each one. The side panel is docked beside the page and stays
- * where it is put. Same code, same bundle, a surface that survives a click.
+ * Two surfaces used to share `app.ts`: this one, compact, and a wide
+ * `panel.html` opened as a browser tab that carried Import, Preview, Mapping,
+ * the Calculator, Settings and Diagnostics. Both reasons for the split were
+ * about the surface this one used to be - an action popup, which Chrome closed
+ * when a file picker opened and would not let the operator resize. A side
+ * panel is neither. So the wide panel is gone and the Excel importer is
+ * injected here, which is what made this bundle grow from ~155 kB to ~505 kB:
+ * SheetJS now rides along. It is bundled, local, and read once when the panel
+ * opens; nothing is fetched.
  */
 
 import { startApp } from './app.js';
+import { createExcelImporter } from './importer.js';
 
-void startApp('side');
+void startApp(createExcelImporter());

@@ -63,9 +63,14 @@ function numberBox(): HTMLInputElement {
   return input as HTMLInputElement;
 }
 
-async function open(surface: 'panel' | 'side'): Promise<void> {
+/**
+ * Boot the helper the way `src/ui/sidePanel.ts` does: one surface, with the
+ * workbook reader injected. There is no second surface to pass any more.
+ */
+async function open(): Promise<void> {
   const { startApp } = await import('../src/ui/app.js');
-  await startApp(surface);
+  const { createExcelImporter } = await import('../src/ui/importer.js');
+  await startApp(createExcelImporter());
   await settle();
 }
 
@@ -138,7 +143,7 @@ afterEach(() => {
 
 describe('the overview with nothing imported', () => {
   it('offers the starting number on the panel', async () => {
-    await open('panel');
+    await open();
 
     expect(screen()).toContain('Nothing loaded');
     expect(headings()).toContain('Shipment Reference Number');
@@ -147,14 +152,14 @@ describe('the overview with nothing imported', () => {
   });
 
   it('offers it in the side panel too, which is where a filer looks first', async () => {
-    await open('side');
+    await open();
 
     expect(screen()).toContain('Nothing loaded');
     expect(count('Set starting number')).toBe(1);
   });
 
   it('seeds the sequence and keeps it in chrome.storage.local', async () => {
-    await open('panel');
+    await open();
 
     numberBox().value = '4088';
     button('Set starting number')?.click();
@@ -169,7 +174,7 @@ describe('the overview with nothing imported', () => {
 
   it('shows a number already in flight, and the button that retires it', async () => {
     local[COUNTER_KEY] = { lastFiled: 4087, reserved: 4088, configured: true };
-    await open('panel');
+    await open();
 
     expect(screen()).toContain('4088 is in use');
     expect(button('Mark 4088 as filed')).not.toBeNull();
@@ -182,7 +187,7 @@ describe('the overview with nothing imported', () => {
   });
 
   it('refuses a number that is not one', async () => {
-    await open('panel');
+    await open();
 
     numberBox().value = '0';
     button('Set starting number')?.click();
@@ -196,7 +201,7 @@ describe('the overview with nothing imported', () => {
 describe('the overview with a workbook loaded', () => {
   it('carries the same block, once, beside the fill buttons', async () => {
     imported = exampleImport();
-    await open('panel');
+    await open();
 
     expect(screen()).toContain('Status');
     expect(headings().filter((heading) => heading === 'Shipment Reference Number')).toHaveLength(1);
@@ -213,10 +218,8 @@ describe('the overview with a workbook loaded', () => {
  * it: when the panel IS closed and reopened, it should not land on Overview
  * having forgotten the screen that was in front of the operator.
  *
- * The memory is per surface on purpose. The wide panel has tabs the side panel
- * does not, so one shared memory would keep sending the side panel to a screen
- * it cannot show. Storage mechanics are pinned in tests/lastTab.test.ts; the
- * subject here is what the operator sees on the second open.
+ * Storage mechanics are pinned in tests/lastTab.test.ts; the subject here is
+ * what the operator sees on the second open.
  */
 describe('reopening the helper', () => {
   function tabStrip(): string[] {
@@ -233,16 +236,58 @@ describe('reopening the helper', () => {
     (tab as HTMLButtonElement).click();
   }
 
-  it('opens the side panel on Overview the first time', async () => {
+  it('opens on Overview the first time, with a shipment already loaded', async () => {
     imported = exampleImport();
-    await open('side');
+    await open();
 
     expect(openTab()).toBe('Overview');
   });
 
+  /**
+   * The point of merging the wide panel in, 2026-09-22.
+   *
+   * Import, Mapping, Calculator, Settings and Diagnostics used to be on a
+   * SECOND surface: a `panel.html` opened as a browser tab, one
+   * `chrome.tabs.create` away, which then sat behind the portal. Whichever
+   * surface the operator had open, the screen they wanted was usually on the
+   * other one. This asserts the whole strip is here, because "no separation"
+   * is the promise and a quietly dropped screen is how it would break.
+   */
+  it('carries every screen on the one surface', async () => {
+    imported = exampleImport();
+    await open();
+
+    expect(tabStrip()).toEqual([
+      'Overview',
+      'Import',
+      'Deckhand',
+      'Package',
+      'Preview',
+      'Mapping',
+      'Fill ACE',
+      'Calculator',
+      'Settings',
+      'Diagnostics',
+    ]);
+  });
+
+  it('opens the file picker screen itself, rather than sending the operator to a tab', async () => {
+    // Chrome closes an ACTION POPUP when a file picker opens. It does not close
+    // a side panel, which is what made the second surface unnecessary. So the
+    // drop zone is here, and there is no "Open the panel" button left anywhere.
+    await open();
+    pressTab('Import');
+    await settle();
+
+    expect(document.querySelectorAll('#file-input')).toHaveLength(1);
+    expect(document.querySelectorAll('#dropzone')).toHaveLength(1);
+    expect(screen()).not.toContain('Open the panel');
+    expect(screen()).not.toContain('Open full panel');
+  });
+
   it('opens it again on the screen the operator chose', async () => {
     imported = exampleImport();
-    await open('side');
+    await open();
     pressTab('Fill ACE');
     await settle();
     expect(openTab()).toBe('Fill ACE');
@@ -250,50 +295,30 @@ describe('reopening the helper', () => {
     // Close and reopen: a fresh app over the same browsing session.
     document.body.innerHTML = '<div id="root"></div>';
     vi.resetModules();
-    await open('side');
+    await open();
 
     expect(openTab()).toBe('Fill ACE');
   });
 
-  it('does not send the side panel to a screen only the wide panel has', async () => {
+  it('reopens on a screen that used to be the wide panel\'s, because it is this surface\'s now', async () => {
     imported = exampleImport();
-    await open('panel');
+    await open();
     pressTab('Mapping');
     await settle();
     expect(openTab()).toBe('Mapping');
 
     document.body.innerHTML = '<div id="root"></div>';
     vi.resetModules();
-    await open('side');
+    await open();
 
-    // The side panel has no Mapping tab, and it never had one: the memory is
-    // the wide panel's, not this surface's.
-    expect(tabStrip()).not.toContain('Mapping');
-    expect(openTab()).toBe('Overview');
-  });
-
-  it('remembers each surface separately, so neither drags the other about', async () => {
-    imported = exampleImport();
-    await open('side');
-    pressTab('Fill ACE');
-    await settle();
-
-    document.body.innerHTML = '<div id="root"></div>';
-    vi.resetModules();
-    await open('panel');
-    pressTab('Preview');
-    await settle();
-
-    document.body.innerHTML = '<div id="root"></div>';
-    vi.resetModules();
-    await open('side');
-
-    expect(openTab()).toBe('Fill ACE');
+    // Before the merge this landed on Overview, because the side panel had no
+    // Mapping tab to land on.
+    expect(openTab()).toBe('Mapping');
   });
 
   it('keeps the remembered screen in the session area, never beside the settings', async () => {
     imported = exampleImport();
-    await open('side');
+    await open();
     pressTab('Fill ACE');
     await settle();
 

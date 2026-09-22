@@ -163,7 +163,7 @@ Full steps: **[docs/INSTALLATION.md](docs/INSTALLATION.md)**
 
 ## Using it
 
-1. Open the panel (toolbar icon -> **Open full panel**) and download
+1. Open the side panel (toolbar icon) and download
    `templates/ACE_Import_Template.xlsx`.
 2. Fill it in: **one row per ACE commodity line**; shipment-level columns only
    on the first row.
@@ -285,7 +285,7 @@ src/
     transformers/ numbers | weight | dates | text | codes + registry
   content/        pageDetector, fieldDetector, fieldWriter, filler, highlight,
                   automationPolicy (what is never clicked)
-  ui/             app, sidePanel, panel, preview, mappingStatus, preflight,
+  ui/             app, sidePanel (the one surface), preview, mappingStatus, preflight,
                   calculatorPanel, diagnostics, importer,
                   liveTab + lastTab (a surface that stays open: re-probing, and
                   the screen the operator was last on),

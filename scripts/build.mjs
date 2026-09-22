@@ -39,7 +39,6 @@ const dist = join(root, playground ? 'dist-ace-playground' : 'dist');
 const CLASSIC_ENTRIES = {
   aceContent: 'src/content/aceContent.ts',
   sidePanel: 'src/ui/sidePanel.ts',
-  panel: 'src/ui/panel.ts',
 };
 
 const MODULE_ENTRIES = {

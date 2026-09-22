@@ -121,7 +121,7 @@ sheets for you (SETUP-GUIDE, section 3).
 
 ### 1b. By hand
 
-Open the ACE Helper panel (toolbar icon, **Open full panel**), **Import**,
+Open the ACE Helper side panel (toolbar icon), **Import**,
 **Download the import template**. One row per ACE commodity line;
 shipment-level columns only need to be on the first row.
 
@@ -511,7 +511,7 @@ live session captures.
 
 ### Load the package
 
-Panel (toolbar icon, **Open full panel**), **Import**, choose
+Side panel (toolbar icon), **Import**, choose
 `filing-package.json`. Or paste the email into **Deckhand**, approve, and
 **Build filing package** for a transport-only package. The Overview says
 whether it is ready to fill; the Package tab says why not, if not.

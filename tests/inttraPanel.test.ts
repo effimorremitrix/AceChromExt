@@ -47,7 +47,7 @@ function storedPackage(): StoredPackage {
 
 async function open(): Promise<void> {
   const { startApp } = await import('../inttra-extension/src/ui/app.js');
-  await startApp('panel');
+  await startApp();
   await settle();
 }
 

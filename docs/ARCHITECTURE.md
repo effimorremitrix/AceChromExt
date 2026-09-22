@@ -249,7 +249,7 @@ layer data-only.
 | `quickfill-extension/src/paste.ts` | the one input: detect the shape, build the package, auto-resolve. Pure |
 | `quickfill-extension/src/aceShipment.ts` | package -> ACE model with no gate; the ungated twin of `shared/src/aceView.ts` |
 | `quickfill-extension/src/content/` | one content script for both portals; tallies a report to a count |
-| `src/ui/app.ts` | the shared UI, rendered in the side panel and the wide panel |
+| `src/ui/app.ts` | the whole UI of both helpers, rendered in the side panel |
 | `src/ui/liveTab.ts` | re-probing for a surface that outlives a tab switch, and the portal tab for a detached one |
 | `src/ui/lastTab.ts` | the screen the operator was last on, per surface |
 | `src/ui/importer.ts` | the XLSX parser, injected only into the panel |
@@ -337,16 +337,49 @@ value looks right and files wrong. The helper:
 Every ACE write in the codebase goes through this function. The calculator's
 insertion does too.
 
-## The three UI surfaces
+## The two UI surfaces
 
 | Surface | Who has it | Contains | Why |
 | --- | --- | --- | --- |
-| `sidepanel.html` | ACE Helper, INTTRA Helper | page status, line picker, Fill buttons, last report | docked beside the page and stays open while the operator fills it |
-| `panel.html` | ACE Helper, INTTRA Helper | import, full preview, settings, diagnostics | Chrome closes a popup when a file picker opens, and previews need width |
+| `sidepanel.html` | ACE Helper, INTTRA Helper | **everything**: overview, import, Deckhand, package, preview, mapping, fill, calculator, settings, diagnostics | docked beside the page, stays open while the operator fills it, and sized by them |
 | `popup.html` | Quickfill Helper | the one paste box, the toggle, the buttons | one click from the toolbar, and behind **Pop out**, the same page in a window |
 
-The first two render `src/ui/app.ts`. The XLSX parser is injected into the wide
-panel only, so `sidePanel.js` is ~128 kB instead of ~380 kB.
+The first renders `src/ui/app.ts` and is the only surface either of those two
+helpers has.
+
+### Why the wide panel went
+
+Until 2026-09-22 the ACE and INTTRA helpers had a SECOND surface: a
+`panel.html` opened as a browser tab, carrying Import, Preview, Mapping, the
+Calculator, Settings and Diagnostics, with an "Open full panel" button on the
+compact one. Both reasons for the split were properties of the surface the
+compact one used to be, an **action popup**:
+
+| The reason | Why it stopped being true |
+| --- | --- |
+| "Chrome closes a popup when a file picker opens" | a side panel is not an action popup. The picker opens and the panel stays, so Import works in it |
+| "previews need width" | the operator sizes a side panel themselves, and the tab strip wraps rather than hiding a screen |
+
+What the split cost was worse than what it bought. Whichever surface was open,
+the screen the operator wanted was usually the other one, a `chrome.tabs.create`
+away, in a tab that then sat behind the portal they were filling.
+
+Merging also ships **fewer bytes, not more**: one ~504 kB bundle for the ACE
+Helper instead of ~155 kB plus ~505 kB, and one ~128 kB bundle for the INTTRA
+Helper instead of two. The ACE side panel grew because SheetJS now rides in it;
+it is bundled and local, read once when the panel opens, and nothing is
+fetched.
+
+Two things the merge had to fix, both consequences of putting ten screens in a
+surface the operator may leave at 300px:
+
+- **the tab strip wraps** (`.tabs` in `extension/styles/ui.css`). Ten tabs do
+  not fit one row of a side panel. Wrapping costs a row of height; scrolling
+  sideways would have hidden Diagnostics behind a gesture nobody makes in a
+  narrow panel;
+- **the container grid table scrolls sideways** (`.grid-table` in
+  `inttra-extension/styles/inttra.css`), because it has a column per grid
+  column and is the one thing here that cannot be made narrow.
 
 ### Why none of the three is an action popup any more
 

@@ -6,7 +6,7 @@
  *
  * The pages are the same four either way, because they are mocks of ACE, not
  * of a helper. What differs is who fills them: Quickfill pastes into one box,
- * the ACE Helper imports the workbook in its panel and previews before it
+ * the ACE Helper imports the workbook in its side panel and previews before it
  * fills. HELPERS below is that difference, and the only difference.
  *
  * The pages are the test fixtures in tests/fixtures/ace-*.html, wrapped at
@@ -45,7 +45,7 @@ export const PLAYGROUND_MATCHES = ['file:///*', 'http://127.0.0.1/*', 'http://lo
  *
  * `hostPermissions` is the one real asymmetry. Quickfill asks the content
  * script where it is, so it needs no URL access and declares no host
- * permission at all. The ACE Helper's panel finds its tab BY URL
+ * permission at all. The ACE Helper's side panel finds its tab BY URL
  * (`resolveAceTab` in src/ui/tabs.ts), and Chrome hands an extension a tab's
  * url only for hosts it has permission for - so the ACE playground declares
  * the same three local patterns it injects into, and nothing else. Neither
@@ -65,7 +65,7 @@ export const HELPERS = {
     id: 'ace',
     card: 'ACE Helper (playground)',
     banner: 'ACE Helper playground',
-    bannerHow: 'Import the example workbook in the panel, read the Preview, then press Fill Current Page.',
+    bannerHow: 'Import the example workbook in the side panel, read the Preview, then press Fill Current Page.',
     description:
       'Practice build: runs only on pages opened from disk or from localhost, never on ACE. Import the example workbook and fill the four mock steps in playground/.',
     hostPermissions: PLAYGROUND_MATCHES,
@@ -263,20 +263,22 @@ Build: ${stamp}
    folder that holds \`manifest.json\` (the parent of this \`playground\`
    folder). The card reads "ACE Helper (playground)".
 2. On that card, **Details**, and turn on **Allow access to file URLs**.
-   Without it the panel cannot see a page opened from disk and will keep
+   Without it the side panel cannot see a page opened from disk and will keep
    saying "No ACE tab detected".
 3. Pin the helper to the toolbar.
 
 ## Practise
 
 1. Open \`${ACE_STEPS[0].file}\` (double-click it). Click the toolbar icon: the
-   pill in the header should now name the step instead of "No ACE tab
-   detected".
-2. **Open full panel**. On **Overview**, type \`4088\` under Shipment Reference
-   Number and press **Set starting number**. Skip this and ACE Step 1 gets the
-   invoice number instead, which is also worth seeing once.
+   side panel opens beside the page, and the pill in its header should now name
+   the step instead of "No ACE tab detected". It stays open while you click
+   into the form - that is the point of it.
+2. On **Overview**, type \`4088\` under Shipment Reference Number and press
+   **Set starting number**. Skip this and ACE Step 1 gets the invoice number
+   instead, which is also worth seeing once.
 3. **Import**, and choose \`${WORKBOOK_FILE}\` from this folder. The panel says
-   which kind of file it opened and how many commodity lines it read.
+   which kind of file it opened and how many commodity lines it read. The file
+   picker does not close the panel: it is not an action popup.
 4. **Preview**: every field with its traffic light, and the original beside the
    ACE value wherever something was transformed. This is the review gate; read
    the yellows.
@@ -286,7 +288,7 @@ Build: ${stamp}
    state, the country of destination.
 6. Steps 2 and 4 through the page tabs, **Fill Current Page** on each. On
    step 3 use **Fill Current Line** for line 1, then press **Add New Line** on
-   the page, pick line 2 in the panel, and fill again.
+   the page, pick line 2 in the side panel, and fill again.
 7. If you set a starting number: **Mark 4088 as filed** on Overview retires it
    and the next fill hands out 4089. Nothing else advances the sequence, so an
    abandoned draft leaves no gap.

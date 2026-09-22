@@ -63,12 +63,28 @@ import { isEditing, watchBrowser } from './liveTab.js';
 import { tabMemory } from './lastTab.js';
 import { ACTIVE_TAB_KEY } from '../core/store.js';
 
-export type Surface = 'side' | 'panel';
+/**
+ * There is ONE surface.
+ *
+ * Until 2026-09-22 there were two: a compact one and a wide `panel.html`
+ * opened as a browser tab, which carried Import, Preview, Mapping, the
+ * Calculator, Settings and Diagnostics. The split existed for two reasons and
+ * both are gone:
+ *
+ *   - "Chrome closes a popup when a file picker opens". That was true of an
+ *     ACTION POPUP. The side panel is not one; the picker opens and the panel
+ *     stays, so Import works here.
+ *   - "previews need width". The operator sizes a side panel themselves, and
+ *     the tab strip wraps rather than hiding a screen.
+ *
+ * What the split cost was worse than what it bought: the screen an operator
+ * wanted was usually on the other surface, one `chrome.tabs.create` away, in
+ * a tab that then sat behind the portal.
+ */
 
 type StatusTone = 'info' | 'ok' | 'warn' | 'error';
 
 interface AppState {
-  surface: Surface;
   settings: AceHelperSettings;
   /** The filer's running Shipment Reference Number. See src/core/referenceCounter.ts. */
   counter: ReferenceCounter;
@@ -103,7 +119,6 @@ let importer: ExcelImporter | null = null;
 const lastTab = tabMemory(ACTIVE_TAB_KEY);
 
 const state: AppState = {
-  surface: 'side',
   settings: { ...DEFAULT_SETTINGS },
   counter: { ...DEFAULT_COUNTER },
   data: null,
@@ -490,25 +505,22 @@ function buildRefreshButton(): HTMLElement {
 }
 
 function renderTabs(): HTMLElement {
-  const tabs: Array<{ id: string; label: string }> =
-    state.surface === 'panel'
-      ? [
-          { id: 'overview', label: 'Overview' },
-          { id: 'import', label: 'Import' },
-          { id: 'deckhand', label: 'Deckhand' },
-          { id: 'package', label: 'Package' },
-          { id: 'preview', label: 'Preview' },
-          { id: 'mapping', label: 'Mapping' },
-          { id: 'fill', label: 'Fill ACE' },
-          { id: 'calculator', label: 'Calculator' },
-          { id: 'settings', label: 'Settings' },
-          { id: 'diagnostics', label: 'Diagnostics' },
-        ]
-      : [
-          { id: 'overview', label: 'Overview' },
-          { id: 'fill', label: 'Fill ACE' },
-          { id: 'preview', label: 'Preview' },
-        ];
+  // Every screen, in one strip. The strip WRAPS (see `.tabs` in
+  // extension/styles/ui.css): ten tabs do not fit one row of a side panel, and
+  // a screen scrolled out of sight sideways is a screen the operator cannot
+  // find.
+  const tabs: Array<{ id: string; label: string }> = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'import', label: 'Import' },
+    { id: 'deckhand', label: 'Deckhand' },
+    { id: 'package', label: 'Package' },
+    { id: 'preview', label: 'Preview' },
+    { id: 'mapping', label: 'Mapping' },
+    { id: 'fill', label: 'Fill ACE' },
+    { id: 'calculator', label: 'Calculator' },
+    { id: 'settings', label: 'Settings' },
+    { id: 'diagnostics', label: 'Diagnostics' },
+  ];
 
   if (!tabs.some((tab) => tab.id === state.activeTab)) state.activeTab = tabs[0]?.id ?? 'overview';
 
@@ -535,7 +547,7 @@ function renderTabs(): HTMLElement {
  */
 function goTo(tab: string): void {
   state.activeTab = tab;
-  lastTab.write(state.surface, tab);
+  lastTab.write(tab);
   render();
 }
 
@@ -561,7 +573,7 @@ function renderOverview(): HTMLElement {
   if (!state.data) {
     section.append(
       el('p', { className: 'muted', text: 'Nothing loaded. Import an ACE workbook, or export one from QuickBooks first.' }),
-      state.surface === 'panel' ? actionButton('Import a workbook', 'import', true) : buildOpenPanelButton('Open the panel to import'),
+      actionButton('Import a workbook', 'import', true),
       // The sequence is the filer's own, not the workbook's, and seeding it is
       // a first-run act. Hiding it until an import would mean the first filing
       // is the earliest it can be set, which is a filing too late.
@@ -628,10 +640,10 @@ function renderOverview(): HTMLElement {
   // ---- Actions -----------------------------------------------------------
   const actions = el('div', { className: 'actions actions-grid' });
   actions.append(actionButton('Preview', 'preview'));
-  if (state.surface === 'panel') actions.append(actionButton('Mapping status', 'mapping'));
+  actions.append(actionButton('Mapping status', 'mapping'));
   actions.append(actionButton('Fill Current Page', 'fill', true));
   actions.append(actionButton('Fill Current Line', 'fill'));
-  if (state.surface === 'panel') actions.append(actionButton('Calculator', 'calculator'));
+  actions.append(actionButton('Calculator', 'calculator'));
 
   const clearButton = el('button', {
     className: 'button button-danger',
@@ -644,13 +656,11 @@ function renderOverview(): HTMLElement {
   section.append(el('h2', { text: 'Actions' }), actions);
 
   // ---- Diagnostics -------------------------------------------------------
-  if (state.surface === 'panel') {
-    section.append(
-      el('h2', { text: 'Diagnostics' }),
-      el('p', { className: 'small muted', text: 'Field detection, the session log, and the ACE selector table.' }),
-      actionButton('Open', 'diagnostics'),
-    );
-  }
+  section.append(
+    el('h2', { text: 'Diagnostics' }),
+    el('p', { className: 'small muted', text: 'Field detection, the session log, and the ACE selector table.' }),
+    actionButton('Open', 'diagnostics'),
+  );
 
   return section;
 }
@@ -658,13 +668,11 @@ function renderOverview(): HTMLElement {
 function renderImport(): HTMLElement {
   const section = el('section', { className: 'panel-section' });
 
+  // The importer is always injected now (src/ui/sidePanel.ts). It was optional
+  // while a second, importer-less surface existed; a side panel is not closed
+  // by a file picker, so there is no surface left that cannot import.
   if (!importer) {
-    appendAll(
-      section,
-      el('h2', { text: 'Import' }),
-      el('p', { className: 'muted', text: 'Chrome closes an extension popup when a file picker opens, so importing happens in the panel.' }),
-      buildOpenPanelButton('Open the panel to import'),
-    );
+    appendAll(section, el('h2', { text: 'Import' }), el('p', { className: 'muted', text: 'The workbook reader did not load. Reload the extension.' }));
     return section;
   }
 
@@ -820,7 +828,7 @@ function renderPreview(): HTMLElement {
       section,
       el('h2', { text: 'Preview' }),
       el('p', { className: 'muted', text: 'Nothing imported yet.' }),
-      state.surface === 'side' ? buildOpenPanelButton('Open the panel to import a workbook') : null,
+      actionButton('Import a workbook', 'import', true),
     );
     return section;
   }
@@ -868,14 +876,6 @@ function renderPreview(): HTMLElement {
   }
 
   return section;
-}
-
-function buildOpenPanelButton(label: string): HTMLElement {
-  const button = el('button', { className: 'button', text: label, attrs: { type: 'button' } });
-  button.addEventListener('click', () => {
-    void chrome.tabs.create({ url: chrome.runtime.getURL('panel.html') });
-  });
-  return button;
 }
 
 /** The ten named data quality checks, directly above the Fill buttons. */
@@ -936,8 +936,7 @@ function renderFill(): HTMLElement {
   );
 
   if (!state.data) {
-    section.append(el('p', { className: 'muted', text: 'Import a spreadsheet first.' }));
-    if (state.surface === 'side') section.append(buildOpenPanelButton('Open the panel to import'));
+    section.append(el('p', { className: 'muted', text: 'Import a spreadsheet first.' }), actionButton('Import a workbook', 'import', true));
     return section;
   }
 
@@ -1636,21 +1635,22 @@ function render(): void {
       break;
   }
 
-  if (state.surface === 'side') {
-    const open = buildOpenPanelButton('Open full panel (import, preview, mapping, diagnostics)');
-    open.classList.add('button-small');
-    root.append(el('footer', { className: 'app-footer' }, [open]));
-  }
-
   renderStatus();
 }
 
-export async function startApp(surface: Surface, excelImporter: ExcelImporter | null = null): Promise<void> {
-  state.surface = surface;
+export async function startApp(excelImporter: ExcelImporter | null = null): Promise<void> {
   importer = excelImporter;
-  // With nothing loaded, the panel's first screen is the one thing there is to
-  // do. This is where Phase 1 opened, and it stays there.
-  state.activeTab = surface === 'panel' && importer ? 'import' : 'overview';
+  // Overview, loaded or not.
+  //
+  // The wide panel opened on Import when it had nothing, because Import was
+  // the one thing IT could do. This surface can do everything, and its
+  // Overview is the hub: with nothing loaded it offers Import as its primary
+  // button, and it carries the Shipment Reference Number block, which a filer
+  // seeds on the day they install - before any import exists. Opening on
+  // Import would put that block one tab away from the person who most needs
+  // it, which is the 2026-09-19 failure in a new costume
+  // (tests/panelOverview.test.ts).
+  state.activeTab = 'overview';
 
   render();
 
@@ -1661,20 +1661,15 @@ export async function startApp(surface: Surface, excelImporter: ExcelImporter | 
   await refreshLog();
   await refreshAceTab();
 
-  // Something is already imported, so the hub is more use than the file picker.
-  if (state.data) state.activeTab = 'overview';
-
-  // Where the operator actually was wins over both defaults above. A screen
-  // this state has no tab for is dropped by renderTabs, so a remembered
-  // 'mapping' cannot strand the side panel on a screen it does not show.
-  const remembered = await lastTab.read(surface);
+  // Where the operator actually was wins over both defaults above.
+  const remembered = await lastTab.read();
   if (remembered) state.activeTab = remembered;
 
   render();
 
-  // Both surfaces now outlive the tab they are describing: the side panel is
-  // beside the page while the operator switches tabs, and the panel is a tab
-  // of its own. Neither may go on describing the ACE step it was opened on.
+  // The side panel outlives the tab it is describing: it is beside the page
+  // while the operator switches tabs, so it may not go on describing the ACE
+  // step it was opened on.
   watchBrowser(async () => {
     await refreshAceTab();
     // Refreshed either way; the paint waits while the operator is in a box, so

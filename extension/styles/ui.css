@@ -26,7 +26,7 @@ body {
   background: var(--surface-alt);
 }
 
-/* Three surfaces, three sizings.
+/* Two surfaces, two sizings.
 
    `surface-popup` is a real action popup and is still what the Quickfill
    Helper opens: Chrome gives it no scrollbar of its own, so it is pinned to a
@@ -35,12 +35,13 @@ body {
    `surface-side` (the ACE and INTTRA side panels) and `surface-detached` (the
    Quickfill pop-out window) are sized by the operator and scroll natively, so
    neither is pinned or clamped. 300px is the narrowest Chrome will make a side
-   panel; everything wider is the operator's choice. */
+   panel; everything wider is the operator's choice. The `surface-panel` rule
+   that used to cap a 960px tab went with the tab: the side panel carries every
+   screen now, at whatever width the operator gives it. */
 body.surface-popup { width: 420px; }
 body.surface-popup #root { max-height: 580px; overflow-y: auto; }
 body.surface-side, body.surface-detached { min-width: 300px; }
 body.surface-side #root, body.surface-detached #root { padding-bottom: 12px; }
-body.surface-panel #root { max-width: 960px; margin: 0 auto; padding-bottom: 40px; }
 
 #root { display: flex; flex-direction: column; }
 
@@ -55,10 +56,19 @@ body.surface-panel #root { max-width: 960px; margin: 0 auto; padding-bottom: 40p
 .page-chip { display: flex; align-items: center; gap: 6px; }
 
 /* ---- tabs ---- */
-.tabs { display: flex; gap: 2px; background: var(--surface); border-bottom: 1px solid var(--line); padding: 0 8px; position: sticky; top: 41px; z-index: 4; }
+/* The strip WRAPS, and that is load-bearing now that one surface carries every
+   screen: ten tabs do not fit one row of a side panel. Wrapping costs a row of
+   height and keeps all ten on screen; scrolling sideways would have hidden
+   Diagnostics behind a gesture nobody makes in a 350px panel. */
+.tabs {
+  display: flex; flex-wrap: wrap; row-gap: 0; column-gap: 2px;
+  background: var(--surface); border-bottom: 1px solid var(--line); padding: 0 8px;
+  position: sticky; top: 41px; z-index: 4;
+}
 .tab {
   appearance: none; border: 0; background: transparent; color: var(--ink-muted);
-  padding: 9px 12px; font: inherit; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent;
+  padding: 9px 10px; font: inherit; font-weight: 600; font-size: 12px; cursor: pointer;
+  border-bottom: 2px solid transparent; white-space: nowrap;
 }
 .tab:hover { color: var(--ink); }
 .tab-active { color: var(--navy); border-bottom-color: var(--blue); }
