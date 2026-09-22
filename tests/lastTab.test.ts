@@ -8,13 +8,15 @@
  *
  * Two claims worth pinning, both of which only bite on a real install:
  *
- *   - the memory is PER SURFACE. The wide panel has tabs the side panel does
- *     not (Import, Mapping status, Calculator, Settings); one shared memory
- *     would keep sending the side panel to a screen it cannot show;
+ *   - the two extensions do not share a key. One helper's Containers screen is
+ *     not the other's;
  *   - it is chrome.storage.session, the memory-backed area, never local. A
  *     screen remembered from last week opens onto a shipment this session no
  *     longer has, and it is not a setting the operator chose, so it does not
  *     belong beside the settings.
+ *
+ * It used to be keyed per surface as well. That went with the wide panel on
+ * 2026-09-22: one surface, one remembered screen.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,40 +58,39 @@ afterEach(() => {
 
 describe('tabMemory', () => {
   it('has nothing to say before the operator has chosen a screen', async () => {
-    expect(await tabMemory('aceHelper.activeTab').read('side')).toBeNull();
+    expect(await tabMemory('aceHelper.activeTab').read()).toBeNull();
   });
 
   it('gives back the screen the operator chose', async () => {
     const memory = tabMemory('aceHelper.activeTab');
-    memory.write('side', 'fill');
+    memory.write('fill');
     await settle();
 
-    expect(await memory.read('side')).toBe('fill');
+    expect(await memory.read()).toBe('fill');
   });
 
-  it('keeps the two surfaces apart', async () => {
+  it('holds one screen, and the last one wins', async () => {
     const memory = tabMemory('aceHelper.activeTab');
-    memory.write('side', 'fill');
+    memory.write('fill');
     await settle();
-    memory.write('panel', 'mapping');
+    memory.write('mapping');
     await settle();
 
-    expect(await memory.read('side')).toBe('fill');
-    expect(await memory.read('panel')).toBe('mapping');
+    expect(await memory.read()).toBe('mapping');
   });
 
   it('keeps the two extensions apart', async () => {
-    tabMemory('aceHelper.activeTab').write('side', 'fill');
+    tabMemory('aceHelper.activeTab').write('fill');
     await settle();
-    tabMemory('inttraHelper.activeTab').write('side', 'containers');
+    tabMemory('inttraHelper.activeTab').write('containers');
     await settle();
 
-    expect(await tabMemory('aceHelper.activeTab').read('side')).toBe('fill');
-    expect(await tabMemory('inttraHelper.activeTab').read('side')).toBe('containers');
+    expect(await tabMemory('aceHelper.activeTab').read()).toBe('fill');
+    expect(await tabMemory('inttraHelper.activeTab').read()).toBe('containers');
   });
 
   it('writes to the session area only, never to the settings area', async () => {
-    tabMemory('aceHelper.activeTab').write('side', 'fill');
+    tabMemory('aceHelper.activeTab').write('fill');
     await settle();
 
     expect(Object.keys(session)).toEqual(['aceHelper.activeTab']);
@@ -99,7 +100,7 @@ describe('tabMemory', () => {
   it('is a no-op rather than a throw where there is no storage at all', async () => {
     vi.stubGlobal('chrome', {});
     const memory = tabMemory('aceHelper.activeTab');
-    expect(() => memory.write('side', 'fill')).not.toThrow();
-    expect(await memory.read('side')).toBeNull();
+    expect(() => memory.write('fill')).not.toThrow();
+    expect(await memory.read()).toBeNull();
   });
 });

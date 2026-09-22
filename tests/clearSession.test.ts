@@ -54,7 +54,7 @@ describe('the ACE Helper session area', () => {
 
     await setImport({ shipment: { commodities: [] }, validation: [], notes: [], selectedLine: 1 } as never);
     await logEvent('import', 'read a workbook');
-    tabMemory(ACTIVE_TAB_KEY).write('side', 'fill');
+    tabMemory(ACTIVE_TAB_KEY).write('fill');
     for (let turn = 0; turn < 12; turn += 1) await Promise.resolve();
 
     // Three keys, so the test would notice a clear that silently stopped
@@ -72,7 +72,7 @@ describe('the ACE Helper session area', () => {
     const { ACTIVE_TAB_KEY } = await import('../src/core/store.js');
     const { tabMemory } = await import('../src/ui/lastTab.js');
 
-    tabMemory(ACTIVE_TAB_KEY).write('side', 'fill');
+    tabMemory(ACTIVE_TAB_KEY).write('fill');
     for (let turn = 0; turn < 12; turn += 1) await Promise.resolve();
 
     // A memory written under one key and cleared under another is exactly the
@@ -93,7 +93,7 @@ describe('the INTTRA Helper session area', () => {
 
     await setStoredPackage({ ...emptyStoredPackage(), sourceName: 'filing-package.json' });
     await logEvent('import', 'read a package');
-    tabMemory(ACTIVE_TAB_KEY).write('side', 'containers');
+    tabMemory(ACTIVE_TAB_KEY).write('containers');
     for (let turn = 0; turn < 12; turn += 1) await Promise.resolve();
 
     expect(Object.keys(session).sort()).toHaveLength(3);

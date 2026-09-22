@@ -27,18 +27,16 @@ npm run verify      # typecheck + tests + template + all builds + all bundle che
 ```
 
 `npm run verify` writes the ACE Helper to `dist/`, the INTTRA Helper to
-`dist-inttra/` (same layout: `manifest.json`, `sidepanel.html`, `panel.html`,
-`styles/`, `inttraContent.js`, `sidePanel.js`, `panel.js`, `serviceWorker.js`,
-`icons/`), and the Quickfill Helper to `dist-quickfill/` (no panel and no side
+`dist-inttra/` (same layout: `manifest.json`, `sidepanel.html`, `styles/`,
+`inttraContent.js`, `sidePanel.js`, `serviceWorker.js`, `icons/`), and the Quickfill Helper to `dist-quickfill/` (no panel and no side
 panel; just `manifest.json`, `popup.html`, `styles/`, `quickfillContent.js`,
 `popup.js`, `serviceWorker.js`, `icons/`):
 
 ```
 dist/
   manifest.json
-  sidepanel.html  panel.html      styles/ui.css
-  sidePanel.js    panel.js
-  aceContent.js   serviceWorker.js
+  sidepanel.html  styles/ui.css
+  sidePanel.js    aceContent.js   serviceWorker.js
   icons/          templates/ACE_Import_Template.xlsx
 ```
 
@@ -80,7 +78,9 @@ Individual steps, if you prefer:
 5. Pin "ACE Helper" to the toolbar. Its icon opens a **side panel**, docked to
    the right of the page: it stays open while you click into the ACE form, and
    across a tab switch, until you close it. It is not a popup, and there is
-   nothing to reopen after every field.
+   nothing to reopen after every field. Every screen is in it - import,
+   preview, mapping, the calculator, settings, diagnostics - on a tab strip
+   that wraps to as many rows as it needs. There is no second window to open.
 6. For the INTTRA Helper, repeat with the `dist-inttra/` folder. Same side
    panel, same behaviour.
 7. For the Quickfill Helper, repeat with the `dist-quickfill/` folder. Its icon
@@ -156,7 +156,7 @@ each header changes with every build; if it did not, the reload did not take.
 
 Reloading the card is what orphans an open tab: Chrome injects a content script
 when a page **loads**, so a portal tab that was open across the reload keeps
-running nothing, and the helper's side panel or wide panel cannot reach it. It looks like
+running nothing, and the helper's side panel cannot reach it. It looks like
 an ordinary page, which is why this is worth knowing. **The Quickfill card is
 the exception**: its popup starts its own content script in a tab that is not
 running one, so a rebuild costs no page reload and no open modal

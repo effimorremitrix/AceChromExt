@@ -47,7 +47,7 @@ asserts that and that no content-script file calls `.click()` at all.
 rather than adding to it: the manifest has no `default_popup`, and the toolbar
 icon opens `sidepanel.html` docked beside the portal. Chrome destroys a popup
 on its first loss of focus, which on Create Shipping Instruction is the first
-click into the form. `docs/ARCHITECTURE.md`, "The three UI surfaces".
+click into the form. `docs/ARCHITECTURE.md`, "The two UI surfaces".
 
 No `<all_urls>`, no `tabs`, no `scripting`, no network permission; the
 extension-page CSP pins `connect-src` to `'none'`. **Confirm the hostname of
@@ -81,7 +81,7 @@ inttra-extension/src/
     filler.ts                  Fill Current Page for the form screens
     automationPolicy.ts        what is never pressed
   core/                        settings, session store, messages, overrides store
-  ui/                          the side panel and the wide panel
+  ui/                          the side panel: every screen, one surface
 ```
 
 Shared with the ACE Helper, by import rather than by copy: the selector
@@ -176,8 +176,8 @@ clipboard, in both helpers, and on the live portal it is the route:
 
 It also says what it did: the headings pasted in order, which of them are
 blank because no package column feeds them, and whether the order is the
-grid's or the default. The wide panel and the side panel show that beside the
-paste instruction. For the manifest of 2026-09-17 against the live header row the
+grid's or the default. The Containers screen shows that beside the paste
+instruction. For the manifest of 2026-09-17 against the live header row the
 first two rows are:
 
 ```
@@ -212,7 +212,7 @@ in the Package tab (where it is recorded as manual) or in INTTRA.
 
 1. `npm run build:inttra`, then `chrome://extensions` -> Developer mode ->
    Load unpacked -> `dist-inttra/`.
-2. Open the panel (toolbar icon -> Open full panel). **Import** a
+2. Open the side panel (toolbar icon). **Import** a
    `filing-package.json` from the ACE Helper's Package tab or from
    `ace-export package`; or paste the carrier's email into **Deckhand**,
    approve it, and **Build filing package**.

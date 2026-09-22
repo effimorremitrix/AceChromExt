@@ -223,11 +223,16 @@ try {
   panel.on('console', (message) => {
     if (message.type() === 'error') pageErrors.push(`panel console: ${message.text()}`);
   });
-  await panel.goto(`chrome-extension://${extensionId}/panel.html`, { waitUntil: 'load' });
+  // `sidepanel.html` is the whole helper now: the wide `panel.html` was merged
+  // into it on 2026-09-22. Chrome's own side panel cannot be driven by
+  // Playwright, but the page behind it is an ordinary extension page, so the
+  // screens are exercised by opening it in a tab. That is the same document
+  // Chrome docks - same bundle, same code path, same tab strip.
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`, { waitUntil: 'load' });
   await panel.waitForTimeout(600);
 
-  // The panel opens on Import when nothing is loaded. If a previous run left
-  // data in the session, it opens on Overview instead - so go to Import.
+  // It always opens on Overview now. Import is a tab away, and it is a tab
+  // this surface has whether or not anything is loaded.
   if (!(await panel.locator('#file-input').count())) {
     await panel.click('text=Import');
     await panel.waitForTimeout(300);

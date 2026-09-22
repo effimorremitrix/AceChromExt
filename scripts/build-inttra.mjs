@@ -27,7 +27,6 @@ const watch = process.argv.includes('--watch');
 const CLASSIC_ENTRIES = {
   inttraContent: 'inttra-extension/src/content/inttraContent.ts',
   sidePanel: 'inttra-extension/src/ui/sidePanel.ts',
-  panel: 'inttra-extension/src/ui/panel.ts',
 };
 
 const MODULE_ENTRIES = {
@@ -36,7 +35,7 @@ const MODULE_ENTRIES = {
 
 function copyStatic() {
   mkdirSync(dist, { recursive: true });
-  for (const name of ['manifest.json', 'panel.html', 'sidepanel.html']) cpSync(join(source, name), join(dist, name));
+  for (const name of ['manifest.json', 'sidepanel.html']) cpSync(join(source, name), join(dist, name));
   cpSync(join(source, 'icons'), join(dist, 'icons'), { recursive: true });
   mkdirSync(join(dist, 'styles'), { recursive: true });
   cpSync(join(root, 'extension', 'styles', 'ui.css'), join(dist, 'styles', 'ui.css'));

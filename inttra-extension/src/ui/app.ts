@@ -35,11 +35,14 @@ import { tabMemory } from '../../../src/ui/lastTab.js';
 import { gridPasteBlock, type GridPasteBlock } from '../content/gridWriter.js';
 import { resolveInttraTab, sendToBackground, sendToTab, type InttraTab } from './tabs.js';
 
-export type Surface = 'side' | 'panel';
+/**
+ * There is ONE surface. See src/ui/app.ts for why the wide `panel.html` went:
+ * a side panel is not an action popup, so the file picker no longer closes it,
+ * and the screen the operator wanted was always on the other surface.
+ */
 type StatusTone = 'info' | 'ok' | 'warn' | 'error';
 
 interface AppState {
-  surface: Surface;
   settings: InttraHelperSettings;
   stored: StoredPackage;
   tab: InttraTab | null;
@@ -60,7 +63,6 @@ interface AppState {
 }
 
 const state: AppState = {
-  surface: 'side',
   settings: { ...DEFAULT_INTTRA_SETTINGS },
   stored: emptyStoredPackage(),
   tab: null,
@@ -444,23 +446,19 @@ function renderHeader(): HTMLElement {
 }
 
 function renderTabs(): HTMLElement {
-  const tabs: Array<{ id: string; label: string }> =
-    state.surface === 'panel'
-      ? [
-          { id: 'overview', label: 'Overview' },
-          { id: 'import', label: 'Import' },
-          { id: 'deckhand', label: 'Deckhand' },
-          { id: 'package', label: 'Package' },
-          { id: 'fill', label: 'Fill INTTRA' },
-          { id: 'containers', label: 'Containers' },
-          { id: 'settings', label: 'Settings' },
-          { id: 'diagnostics', label: 'Diagnostics' },
-        ]
-      : [
-          { id: 'overview', label: 'Overview' },
-          { id: 'fill', label: 'Fill INTTRA' },
-          { id: 'containers', label: 'Containers' },
-        ];
+  // Every screen, in one strip that WRAPS (`.tabs` in extension/styles/ui.css):
+  // eight tabs do not fit one row of a side panel, and a screen scrolled out
+  // of sight sideways is a screen the operator cannot find.
+  const tabs: Array<{ id: string; label: string }> = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'import', label: 'Import' },
+    { id: 'deckhand', label: 'Deckhand' },
+    { id: 'package', label: 'Package' },
+    { id: 'fill', label: 'Fill INTTRA' },
+    { id: 'containers', label: 'Containers' },
+    { id: 'settings', label: 'Settings' },
+    { id: 'diagnostics', label: 'Diagnostics' },
+  ];
   if (!tabs.some((tab) => tab.id === state.activeTab)) state.activeTab = tabs[0]?.id ?? 'overview';
   const nav = el('nav', { className: 'tabs', attrs: { role: 'tablist' } });
   for (const tab of tabs) {
@@ -481,19 +479,13 @@ function renderTabs(): HTMLElement {
  */
 function goTo(tab: string): void {
   state.activeTab = tab;
-  lastTab.write(state.surface, tab);
+  lastTab.write(tab);
   render();
 }
 
 function actionButton(label: string, tab: string, primary = false): HTMLElement {
   const button = el('button', { className: `button${primary ? ' button-primary' : ''}`, text: label, attrs: { type: 'button' } });
   button.addEventListener('click', () => goTo(tab));
-  return button;
-}
-
-function openPanelButton(label: string): HTMLElement {
-  const button = el('button', { className: 'button', text: label, attrs: { type: 'button' } });
-  button.addEventListener('click', () => void chrome.tabs.create({ url: chrome.runtime.getURL('panel.html') }));
   return button;
 }
 
@@ -508,7 +500,7 @@ function renderOverview(): HTMLElement {
   if (!current) {
     section.append(
       el('p', { className: 'muted', text: 'Nothing loaded. Import a filing-package.json, or paste the carrier email into Deckhand and build a package.' }),
-      state.surface === 'panel' ? el('div', { className: 'actions' }, [actionButton('Import a package', 'import', true), actionButton('Deckhand', 'deckhand')]) : openPanelButton('Open the panel to import'),
+      el('div', { className: 'actions' }, [actionButton('Import a package', 'import', true), actionButton('Deckhand', 'deckhand')]),
     );
     return section;
   }
@@ -532,7 +524,7 @@ function renderOverview(): HTMLElement {
     el('ul', { className: 'status-list' }, lines.map((line) => el('li', { className: `status-line status-${line.status}` }, [el('span', { className: 'status-mark', text: tick(line.status) }), el('span', { text: line.text })]))),
   );
   const actions = el('div', { className: 'actions actions-grid' }, [
-    ...(state.surface === 'panel' ? [actionButton('Package', 'package')] : []),
+    actionButton('Package', 'package'),
     actionButton('Fill Current Page', 'fill', true),
     actionButton('Container grid', 'containers'),
   ]);
@@ -684,8 +676,10 @@ function renderFill(): HTMLElement {
   );
   const current = pkg();
   if (!current) {
-    section.append(el('p', { className: 'muted', text: 'Load or build a filing package first.' }));
-    if (state.surface === 'side') section.append(openPanelButton('Open the panel'));
+    section.append(
+      el('p', { className: 'muted', text: 'Load or build a filing package first.' }),
+      el('div', { className: 'actions' }, [actionButton('Import a package', 'import', true), actionButton('Deckhand', 'deckhand')]),
+    );
     return section;
   }
   const ready = readyToFill();
@@ -1134,38 +1128,27 @@ function render(): void {
       root.append(renderFill());
       break;
   }
-  if (state.surface === 'side') {
-    const open = openPanelButton('Open full panel (import, Deckhand, package, diagnostics)');
-    open.classList.add('button-small');
-    root.append(el('footer', { className: 'app-footer' }, [open]));
-  }
   renderStatus();
 }
 
-export async function startApp(surface: Surface): Promise<void> {
-  state.surface = surface;
-  state.activeTab = surface === 'panel' ? 'import' : 'overview';
+export async function startApp(): Promise<void> {
+  // Overview, loaded or not: it is the hub, and with nothing loaded it offers
+  // Import and Deckhand as its own buttons. See src/ui/app.ts.
+  state.activeTab = 'overview';
   render();
   state.settings = await loadInttraSettings();
   state.overrides = await loadInttraOverrides();
   await refreshStored();
   await refreshLog();
   await refreshTab();
-  if (state.stored.package) state.activeTab = 'overview';
-
-  // Where the operator actually was wins over the default above. A screen this
-  // state has no tab for is dropped by the tab strip, so a remembered
-  // 'package' cannot strand the side panel on a screen it does not show.
-  const remembered = await lastTab.read(surface);
+  // Where the operator actually was wins over the default above.
+  const remembered = await lastTab.read();
   if (remembered) state.activeTab = remembered;
 
   render();
 
-  // Both surfaces now outlive the tab they are describing: the side panel is
-  // beside the page while the operator switches tabs, and the panel is a tab
-  // of its own. Neither may go on describing the screen it was opened on -
-  // and on this portal that matters twice over, because the header names the
-  // tab it addresses.
+  // The side panel outlives the tab it is describing, and on this portal that
+  // matters twice over, because the header names the tab it addresses.
   watchBrowser(async () => {
     await refreshTab();
     // Refreshed either way; the paint waits while the operator is in a box, so

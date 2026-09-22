@@ -407,7 +407,7 @@ There is no flag, no permission and no API that keeps one open. The only fix is
 a surface Chrome does not destroy.
 
 The ACE and INTTRA helpers answer with a side panel and the `sidePanel`
-permission (`docs/ARCHITECTURE.md`, "The three UI surfaces"). **Quickfill does
+permission (`docs/ARCHITECTURE.md`, "The two UI surfaces"). **Quickfill does
 not, and this is the decision, not an oversight:**
 
 | | Side panel | Pop-out window (chosen) |
